@@ -1,0 +1,4 @@
+numbalsoda
+numpy
+numba
+matplotlib
