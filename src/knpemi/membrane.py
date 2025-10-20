@@ -1,36 +1,29 @@
-import knpemidg.dlt_dof_extraction as dlt
-import dolfin as df
+import dolfinx
 import numpy as np
-
 from numbalsoda import lsoda
 
 class MembraneModel():
     '''ODE on membrane defined by tagged facet function'''
-    def __init__(self, ode, facet_f, tag, V):
+    def __init__(self, ode, ft, tag, Q):
         '''
         Facets where facet_f[facet] == tag are governed by this ode whose 
         source terms will be taken from V
         '''
-
-        mesh = facet_f.mesh()
-        assert mesh.topology().dim()-1 == facet_f.dim()
         assert isinstance(tag, int)
-        # ODE will talk to PDE via a H(div)-trace function - we need to
-        # know which indices of that function will be used for the communication
-        assert dlt.is_dlt_scalar(V)
-        self.V = V
 
-        self.facets, indices = dlt.get_indices(V, facet_f, (tag, ))
+        # get indices for given tag
+        indices = ft.find(tag)
         self.indices = indices.flatten()
 
-        self.dof_locations = V.tabulate_dof_coordinates()[self.indices]
-        # For every spatial point there is an ODE with states/parameters which need
-        # to be tracked
+        # get location of degrees of freedom for indices for given tag
+        self.dof_locations = Q.tabulate_dof_coordinates()[self.indices]
+
+        # number of points where ODEs is to be solved
         nodes = len(self.indices)
         self.nodes = nodes
 
+        # get states and parameters for the ODEs
         self.states = np.array([ode.init_state_values() for _ in range(nodes)])
-
         self.parameters = np.array([ode.init_parameter_values() for _ in range(nodes)])
 
         self.tag = tag
@@ -38,7 +31,7 @@ class MembraneModel():
         self.prefix = ode.__name__
         self.time = 0
 
-        df.info(f'\t{self.prefix} Number of ODE points on the membrane {nodes}')
+        print(f'\t{self.prefix} Number of ODE points on the membrane {nodes}')
 
     # --- Setting ODE state/parameter based on a FEM function
     def set_state(self, which, u, locator=None):
@@ -91,9 +84,9 @@ class MembraneModel():
             stimulus_locator = lambda x: True
         stimulus_mask = np.fromiter(map(stimulus_locator, self.dof_locations), dtype=bool)
 
-        df.info(f'\t{self.prefix} Stepping {self.nodes} ODEs')
+        print(f'\t{self.prefix} Stepping {self.nodes} ODEs')
 
-        timer = df.Timer('ODE step LSODA')
+        timer = dolfinx.common.Timer('ODE step LSODA')
         timer.start()
         tsteps = np.array([self.time, self.time+dt])
         for row, is_stimulated in enumerate(stimulus_mask):  # Local 
@@ -114,7 +107,7 @@ class MembraneModel():
             self.states[row, :] = new_state[-1]
         self.time = tsteps[-1]
         dt = timer.stop()
-        df.info(f'\t{self.prefix} Stepped {self.nodes} ODES in {dt}s')
+        print(f'\t{self.prefix} Stepped {self.nodes} ODES in {dt}s')
 
         return self.states
 
@@ -127,13 +120,11 @@ class MembraneModel():
         }[what]
         the_index = get_index(which)
 
-        assert self.V.ufl_element() == u.function_space().ufl_element()
-
         lidx = np.arange(self.nodes)
         if locator is not None:
             lidx = lidx[np.fromiter(map(locator, self.dof_locations), dtype=bool)]
 
-        source = u.vector().get_local()
+        source = u.x.array[:]
         if len(lidx) > 0:
             destination[lidx, the_index] = source[self.indices[lidx]]
         return self.states
@@ -146,18 +137,16 @@ class MembraneModel():
         }[what]
         the_index = get_index(which)
 
-        assert self.V.ufl_element() == u.function_space().ufl_element()
-
         lidx = np.arange(self.nodes)
         if locator is not None:
             lidx = lidx[np.fromiter(map(locator, self.dof_locations), dtype=bool)]
 
-        destination = u.vector().get_local()
+        destination = u.x.array[:]
 
         if len(lidx) > 0:
             destination[self.indices[lidx]] = source[lidx, the_index]
-        u.vector().set_local(destination)
-        df.as_backend_type(u.vector()).update_ghost_values()
+
+        u.x.array[:] = destination
 
         return u
 
@@ -171,7 +160,7 @@ class MembraneModel():
         lidx = np.arange(self.nodes)
         if locator is not None:
             lidx = lidx[np.fromiter(map(locator, self.dof_locations), dtype=bool)]
-        df.info(f'\t{self.prefix} Set {what} for {len(lidx)} ODES')
+        print(f'\t{self.prefix} Set {what} for {len(lidx)} ODES')
 
         if len(lidx) == 0: return destination
 
@@ -183,45 +172,78 @@ class MembraneModel():
                 destination[row, col] = get_value(x)
         return destination
 
-# --------------------------------------------------------------------
 
-if __name__ == '__main__':
-    import tentusscher_panfilov_2006_M_cell as ode
-    from facet_plot import vtk_plot
+if __name__=="__main__":
+    from mpi4py import MPI
+    from dolfinx import mesh, fem
+    import scifem
+    import mm_hh as ode
 
-    mesh = df.UnitSquareMesh(5, 5)
-    V = df.FunctionSpace(mesh, 'Discontinuous Lagrange Trace', 0)
-    u = df.Function(V)
+    comm = MPI.COMM_WORLD
 
-    x, y = V.tabulate_dof_coordinates().T
-    u.vector().set_local(np.where(x*(1-x)*y*(1-y) < 1E-10, 1, 0))
+    domain = mesh.create_unit_square(
+        comm, 10, 10, ghost_mode=mesh.GhostMode.shared_facet
+    )
 
-    facet_f = df.MeshFunction('size_t', mesh, mesh.topology().dim()-1, 0)
-    # df.DomainBoundary().mark(facet_f, 1)
-    tag = 0
+    cell_map = domain.topology.index_map(domain.topology.dim)
+    num_cells_local = cell_map.size_local + cell_map.num_ghosts
+    markers = np.full(num_cells_local, 1, dtype=np.int32)
 
-    membrane = MembraneModel(ode, facet_f=facet_f, tag=tag, V=V)
+    markers[
+        dolfinx.mesh.locate_entities(domain, domain.topology.dim, lambda x: x[0] < 0.6)
+    ] = 2
 
-    membrane.set_membrane_potential(u)
-    membrane.set_parameter_values({'g_Kr': lambda x: 20}, locator=lambda x: df.near(x[0], 0))
+    ct = dolfinx.mesh.meshtags(
+        domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32), markers
+    )
 
-    stimulus = {'stim_amplitude': 0.1,
-                'stim_period': 0.2,
-                'stim_duration': 0.1,
+    interface_facets = scifem.mesh.find_interface(ct, (1,), (2,))
+
+    ft = dolfinx.mesh.meshtags(
+        domain,
+        domain.topology.dim - 1,
+        interface_facets,
+        np.full(interface_facets.shape, 1, dtype=np.int32),
+    )
+    ft.name = "facettag"
+
+    gamma, gamma_to_parent, _, _, _ = scifem.mesh.extract_submesh(domain, ft, 1)
+
+    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "parent.xdmf", "w") as xdmf:
+        xdmf.write_mesh(domain)
+        xdmf.write_meshtags(ct, domain.geometry)
+        xdmf.write_meshtags(ft, domain.geometry)
+    xdmf.close()
+
+    cell_map = gamma.topology.index_map(gamma.topology.dim)
+    num_cells_local = cell_map.size_local + cell_map.num_ghosts
+    markers = np.full(num_cells_local, 1, dtype=np.int32)
+
+    ct = dolfinx.mesh.meshtags(
+        domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32), markers
+    )
+
+    Q = fem.functionspace(gamma, ("CG", 1))
+    phi_M = fem.Function(Q)
+    phi_M.x.array[:] = -74.38609374462003
+
+    membrane = MembraneModel(ode, ct, 1, Q)
+
+    #membrane.set_membrane_potential(phi_M)
+
+    stimulus = {'stim_amplitude': 0.0,
+                'stim_period': 0.0,
+                'stim_duration': 0.0,
                 'stim_start': 0}
     stimulus = None
 
     V_index = ode.state_indices('V')
     potential_history = []
 
-    vtk_plot(u, facet_f, (tag, ), path=f'test_ode_t{membrane.time}.vtk')    
-    for _ in range(100):
-        membrane.step_lsoda(dt=0.01, stimulus=stimulus)
-
+    for _ in range(1000):
+        membrane.step_lsoda(dt=0.0001, stimulus=stimulus)
         potential_history.append(1*membrane.states[:, V_index])
-
-        membrane.get_membrane_potential(u)
-        vtk_plot(u, facet_f, (tag, ), path=f'test_ode_t{membrane.time}.vtk')        
+        #membrane.get_membrane_potential(phi_M)
 
     potential_history = np.array(potential_history)
 
@@ -229,11 +251,4 @@ if __name__ == '__main__':
 
     plt.figure()
     plt.plot(potential_history[:, 2])
-    plt.show()
-
-    # TODO:
-    # - consider a test where we have dy/dt = A(x)y with y(t=0) = y0
-    # - after stepping u should be fine
-    # - add forcing:  dy/dt = A(x)y + f(t) with y(t=0) = y0
-    # - things are currently quite slow -> multiprocessing?
-    # - rely on cbc.beat?
+    plt.savefig("plot_2.png")

@@ -18,8 +18,8 @@ from mpi4py import MPI
 import numpy as np
 import scifem
 
-a = [1, 1]
-b = [61, 3]
+a = [1e-6, 1e-6]
+b = [61e-6, 3e-6]
 
 # lower left point
 x_L = a[0]; y_L = a[1]
@@ -47,7 +47,7 @@ def main(output_path, resolution_factor):
     n = [nx, ny]
 
     # Define the corners of the rectangle
-    p = [np.array([0.0, 0.0]), np.array([62.0, 4.0])]
+    p = [np.array([0.0, 0.0]), np.array([62.0e-6, 4.0e-6])]
 
     # Create the mesh
     mesh = dolfinx.mesh.create_rectangle(
@@ -106,9 +106,6 @@ def main(output_path, resolution_factor):
         mesh, tdim - 1, np.arange(num_facets_local, dtype=np.int32), marker
     )
     ft.name = "facet_marker"
-
-    # Convert mesh to unit meter (m)
-    mesh.geometry.x[:] *= 1e-6
 
     # Define the output filename
     xdmf_filename = f"{output_path}mesh_{resolution_factor}.xdmf"

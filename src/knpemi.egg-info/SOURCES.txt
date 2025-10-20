@@ -1,7 +1,6 @@
 README.md
 pyproject.toml
 src/knpemi/__init__.py
-src/knpemi/dlt_dof_extraction.py
 src/knpemi/emiWeakForm.py
 src/knpemi/initialize_knpemi.py
 src/knpemi/initialize_membrane.py
@@ -9,7 +8,6 @@ src/knpemi/knpWeakForm.py
 src/knpemi/knpemiSolver.py
 src/knpemi/membrane.py
 src/knpemi/solver.py
-src/knpemi/update_knpemi.py
 src/knpemi/utils.py
 src/knpemi.egg-info/PKG-INFO
 src/knpemi.egg-info/SOURCES.txt

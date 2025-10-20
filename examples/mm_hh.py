@@ -12,7 +12,7 @@ def init_state_values(**values):
     n_init = 0.1882020248041632         # gating variable n
     m_init = 0.016648440745822956       # gating variable m
     h_init = 0.8542015627820805         # gating variable h
-    phi_M_init = -0.07438609374462003   # membrane potential (V)
+    phi_M_init = -74.38609374462003     # membrane potential (mV)
 
     init_values = np.array([m_init, h_init, n_init, phi_M_init], dtype=np.float64)
 
@@ -35,22 +35,30 @@ def init_parameter_values(**values):
     """
 
     # Membrane parameters
-    g_Na_bar = 1200         # Na max conductivity (S/m**2)
-    g_K_bar = 360           # K max conductivity (S/m**2)
-    g_leak_Na = 2.0*0.5     # Na leak conductivity (S/m**2)
-    g_leak_K  = 8.0*0.5     # K leak conductivity (S/m**2)
+    g_Na_bar = 120          # Na max conductivity (mS/cm**2)
+    g_K_bar = 36            # K max conductivity (mS/cm**2)
+    g_leak_Na = 0.1         # Na leak conductivity (mS/cm**2)
+    g_leak_K  = 0.4         # K leak conductivity (mS/cm**2)
 
-    m_K = 2                 # threshold ECS K (mol/m**3)
-    m_Na = 7.7              # threshold ICS Na (mol/m**3)
-    I_max = 0.449           # max pump strength (A/m**2)
+    m_K = 2                 # threshold ECS K (mol/cm**3)
+    m_Na = 7.7              # threshold ICS Na (mol/cm**3)
+    I_max = 50.0            # max pump strength (A/cm**2)
+
+    K_e = 3.32
+    Na_i = 12.83
+
+    E_Na = -53.23236322443255
+    E_K = 93.46115007798299
+    E_Cl = 70.97802159265801
+
+    Cm = 1.0
 
     # Set initial parameter values
     init_values = np.array([g_Na_bar, g_K_bar, \
                             g_leak_Na, g_leak_K, \
-                            0, 0, 0, 0, \
-                            0, 0, 0, 0, 0,
-                            m_K, m_Na, I_max, 0], dtype=np.float64)
-
+                            E_Na, E_K, Cm, 0, \
+                            0, 0, 0, K_e, Na_i,
+                            m_K, m_Na, I_max, E_Cl], dtype=np.float64)
 
     # Parameter indices and limit checker
     param_ind = dict([("g_Na_bar", 0), ("g_K_bar", 1),
@@ -123,22 +131,22 @@ def rhs_numba(t, states, values, parameters):
     """
 
     # Expressions for the m gate component
-    alpha_m = 0.1e3 * (25. - 1.0e3*(states[3] + 65.0e-3))/(math.exp((25. - 1.0e3*(states[3] + 65.0e-3))/10.) - 1)
-    beta_m = 4.e3*math.exp(- 1.0e3*(states[3] + 65.0e-3)/18.)
+    alpha_m = 0.1 * (25. - 1.0*(states[3] + 65.0))/(math.exp((25. - 1.0*(states[3] + 65.0))/10.) - 1)
+    beta_m = 4.*math.exp(- 1.0*(states[3] + 65.0)/18.)
     values[0] = (1 - states[0])*alpha_m - states[0]*beta_m
 
     # Expressions for the h gate component
-    alpha_h = 0.07e3*math.exp(- 1.0e3*(states[3] + 65.0e-3)/20.)
-    beta_h = 1.e3/(math.exp((30.- 1.0e3*(states[3] + 65.0e-3))/10.) + 1)
+    alpha_h = 0.07*math.exp(- 1.0*(states[3] + 65.0)/20.)
+    beta_h = 1./(math.exp((30.- 1.0*(states[3] + 65.0))/10.) + 1)
     values[1] = (1 - states[1])*alpha_h - states[1]*beta_h
 
     # Expressions for the n gate component
-    alpha_n = 0.01e3*(10.- 1.0e3*(states[3] + 65.0e-3))/(math.exp((10.- 1.0e3*(states[3] + 65.0e-3))/10.) - 1.)
-    beta_n = 0.125e3*math.exp(- 1.0e3*(states[3] + 65.0e-3) /80.)
+    alpha_n = 0.01*(10.- 1.0*(states[3] + 65.0))/(math.exp((10.- 1.0*(states[3] + 65.0))/10.) - 1.)
+    beta_n = 0.125*math.exp(- 1.0*(states[3] + 65.0) /80.)
     values[2] = (1 - states[2])*alpha_n - states[2]*beta_n
 
     # Expressions for the Membrane component
-    i_Stim = parameters[7] * np.exp(-np.mod(t, 0.03)/0.002)*(t < 125e-3)
+    i_Stim = parameters[7] * np.exp(-np.mod(t, 0.03)/0.002)*(t < 125)
 
     i_pump = parameters[15] / ((1 + parameters[13] / parameters[11]) ** 2 \
            * (1 + parameters[14] / parameters[12]) ** 3)

@@ -1,62 +1,103 @@
-from knpemi.utils import interface_normal, plus, minus, pcws_constant_project
 import numpy as np
-from dolfin import *
+import dolfinx
+import scifem
 
-JUMP = lambda f, n: minus(f, n) - plus(f, n)
+from ufl import (
+    inner,
+    grad,
+    TestFunctions,
+    TrialFunctions,
+    MixedFunctionSpace,
+    Measure,
+    ln,
+)
 
-def create_measures(mesh, subdomains, surfaces):
+interior_marker = 1
+exterior_marker = 0
+
+i_res = "+" if interior_marker < exterior_marker else "-"
+e_res = "-" if interior_marker < exterior_marker else "+"
+
+def create_measures(meshes, ct, ft, ct_g):
+
+    mesh = meshes['mesh']
+
+    gamma_tags = np.unique(ct_g.values)
+
     # define measures
-    dx = Measure('dx', domain=mesh, subdomain_data=subdomains)
-    ds = Measure('ds', domain=mesh, subdomain_data=surfaces)
-    dS = Measure('dS', domain=mesh, subdomain_data=surfaces)
+    dx = Measure('dx', domain=mesh, subdomain_data=ct)
+    ds = Measure('ds', domain=mesh, subdomain_data=ft)
 
-    return (dx, dS, ds)
+    dS = {}
 
-def create_functions_emi(mesh, degree=1):
-    # create function space for potential (phi)
-    V = FunctionSpace(mesh, "DG", 1)
-    # define function space of piecewise constants on interface gamma for solution to ODEs
-    Q = FunctionSpace(mesh, 'Discontinuous Lagrange Trace', 0)
+    for tag in gamma_tags:
+        ordered_integration_data = scifem.compute_interface_data(ct, ct_g.find(tag))
+        dS_tag = Measure("dS", domain=mesh,
+                    subdomain_data=[(tag,
+                    ordered_integration_data.flatten())])
+        dS[tag] = dS_tag
+
+    return dx, dS, ds
+
+def create_functions_emi(meshes, degree=1):
+
+    mesh_e = meshes["mesh_e"]
+    mesh_i = meshes["mesh_i"]
+    mesh_g = meshes["mesh_g"]
+
+    # create functions spaces for phi_e and phi_i over Omega_e and Omega_i respectively
+    V_e = dolfinx.fem.functionspace(mesh_e, ("CG", degree))
+    V_i = dolfinx.fem.functionspace(mesh_i, ("CG", degree))
+
+    # create function space over gamma for membrane potential (phi_M)
+    Q = dolfinx.fem.functionspace(mesh_g, ("CG", degree))
 
     # current potential
-    phi = Function(V)
+    phi_e = dolfinx.fem.Function(V_e)
+    phi_i = dolfinx.fem.Function(V_i)
     # previous membrane potential
-    phi_M_prev_PDE = Function(Q)
+    phi_M_prev_PDE = dolfinx.fem.Function(Q)
+
+    # name functions (convenient when writing results to file)
+    phi_e.name = "phi_e"
+    phi_i.name = "phi_i"
+    phi_M_prev_PDE.name = "phi_m"
+
+    phi = {'e':phi_e, 'i':phi_i}
 
     return phi, phi_M_prev_PDE
 
-def initialize(ion_list, c_prev, physical_params, n_g, Q):
-    """ calculate tissue conductance """
+def initialize_varform(ion_list, c_prev, physical_params):
+    """ Calculate kappa (tissue conductance) and set Nernst potentials """
+    # Initialize
+    kappa_e = 0; kappa_i = 0
 
-    # initialize
-    kappa = 0
-
-    # get physical parameters
+    # Get physical parameters
     F = physical_params['F']
     R = physical_params['R']
     psi = physical_params['psi']
     temperature = physical_params['temperature']
 
     for idx, ion in enumerate(ion_list):
-        if idx == len(ion_list) - 1:
-            # get eliminated concentrations from previous global step
-            c_ = ion_list[-1]['c']
-        else:
-            # get concentrations from previous global step
-            c_ = split(c_prev)[idx]
+        # Determine the function source based on the index
+        is_last = (idx == len(ion_list) - 1)
 
-        # calculate and set Nernst potential for current ion (+ is ECS, - is ICS)
-        E = R * temperature / (F * ion['z']) * ln(plus(c_, n_g) / minus(c_, n_g))
-        ion['E'] = pcws_constant_project(E, Q)
+        c_e = ion_list[-1]['c_e'] if is_last else c_prev['e'][idx]
+        c_i = ion_list[-1]['c_i'] if is_last else c_prev['i'][idx]
 
-        # global kappa
-        kappa += F * ion['z'] * ion['z'] * ion['D'] * psi * c_
+        # Calculate and set Nernst potential for current ion (+ is ECS, - is ICS)
+        ion['E'] = R * temperature / (F * ion['z']) * ln(c_i(i_res) / c_e(e_res))
+
+        # Add contribution to kappa (tissue conductance)
+        kappa_e += F * ion['z'] * ion['z'] * ion['D'][0] * psi * c_e
+        kappa_i += F * ion['z'] * ion['z'] * ion['D'][1] * psi * c_i
+
+    kappa = {'e':kappa_e, 'i':kappa_i}
 
     return kappa
 
 
-def get_lhs_emi(kappa, u, v, dx, dS, hA, n, n_g, tau_emi, \
-        physical_params, mem_models):
+def get_lhs_emi(kappa, u, v, dx, dS, physical_params, mem_models):
     """ setup variational form for the emi system """
 
     C_phi = physical_params['C_phi']
@@ -66,22 +107,27 @@ def get_lhs_emi(kappa, u, v, dx, dS, hA, n, n_g, tau_emi, \
     R = physical_params['R']
     temperature = physical_params['temperature']
 
+    kappa_e = kappa['e']
+    kappa_i = kappa['i']
+
+    # get test and trial functions for each of the sub-domains
+    u_e = u['e']; u_i = u['i']
+    v_e = v['e']; v_i = v['i']
+
     # equation potential (drift terms)
-    a = inner(kappa*grad(u), grad(v)) * dx \
-      - inner(dot(avg(kappa*grad(u)), n('+')), jump(v)) * dS(0) \
-      - inner(dot(avg(kappa*grad(v)), n('+')), jump(u)) * dS(0) \
-      + tau_emi/avg(hA) * inner(avg(kappa)*jump(u), jump(v)) * dS(0)
+    a = inner(kappa_e * grad(u_e), grad(v_e)) * dx(0) \
+      + inner(kappa_i * grad(u_i), grad(v_i)) * dx(1) \
 
     for mm in mem_models:
         # get tag
         tag = mm['ode'].tag
         # add coupling term at interface
-        a += C_phi * inner(jump(u), jump(v))*dS(tag)
+        a += C_phi * (u_i(i_res) - u_e(e_res)) * v_i(i_res) * dS[tag] \
+           + C_phi * (u_e(e_res) - u_i(i_res)) * v_e(e_res) * dS[tag]
 
     return a
 
-def get_rhs_emi(c_prev, v, dx, dS, n, n_g, ion_list, physical_params, \
-        phi_M_prev_PDE, mem_models):
+def get_rhs_emi(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE, mem_models):
     """ setup variational form for the emi system """
 
     C_phi = physical_params['C_phi']
@@ -91,23 +137,23 @@ def get_rhs_emi(c_prev, v, dx, dS, n, n_g, ion_list, physical_params, \
     R = physical_params['R']
     temperature = physical_params['temperature']
 
+    v_e = v['e']
+    v_i = v['i']
+
     # initialize
     L = 0
 
     for idx, ion in enumerate(ion_list):
+        # Determine the function source based on the index
+        is_last = (idx == len(ion_list) - 1)
 
-        if idx == len(ion_list) - 1:
-            # get eliminated concentrations from previous global step
-            c_k_ = ion_list[-1]['c']
-        else:
-            # get concentrations from previous global step
-            c_k_ = split(c_prev)[idx]
+        c_e_ = ion_list[-1]['c_e'] if is_last else c_prev['e'][idx]
+        c_i_ = ion_list[-1]['c_i'] if is_last else c_prev['i'][idx]
 
         # Add terms rhs (diffusive terms)
-        L += - F * ion['z'] * inner((ion['D'])*grad(c_k_), grad(v)) * dx \
-             + F * ion['z'] * inner(dot(avg((ion['D'])*grad(c_k_)), n('+')), jump(v)) * dS(0) \
+        L += - F * ion['z'] * inner((ion['D'][0])*grad(c_e_), grad(v_e)) * dx(0) \
+             - F * ion['z'] * inner((ion['D'][1])*grad(c_i_), grad(v_i)) * dx(1) \
 
-    #if mms is None:
     # coupling condition at interface with splitting
     g_robin_emi = [phi_M_prev_PDE]*len(mem_models)
     #else:
@@ -118,11 +164,13 @@ def get_rhs_emi(c_prev, v, dx, dS, n, n_g, ion_list, physical_params, \
         # get tag
         tag = mm['ode'].tag
         # add robin condition at interface
-        L += C_phi * inner(avg(g_robin_emi[jdx]), JUMP(v, n_g)) * dS(tag)
+        L += C_phi * inner(g_robin_emi[jdx], v_e(e_res)) * dS[tag] \
+           - C_phi * inner(g_robin_emi[jdx], v_i(i_res)) * dS[tag]
 
     return L
 
-def get_preconditioner(V, mesh, a, kappa):
+
+def get_preconditioner(V, mesh, a, kappa_e, kappa_i):
 
    # setup preconditioner EMI
     up, vp = TrialFunction(V), TestFunction(V)
@@ -140,49 +188,51 @@ def get_preconditioner(V, mesh, a, kappa):
     # scaled mess matrix
     Lp = Constant(max(x_max - x_min))
     # self.B_emi is singular so we add (scaled) mass matrix
-    mass = kappa*(1/Lp**2)*inner(up, vp)*dx
+    mass = kappa_e*(1/Lp**2)*inner(up, vp)*dx
 
     B = a + mass
 
     return B
 
 
-def emi_system(mesh, subdomains, surfaces, physical_params, ion_list, c_prev,
-        phi, phi_M_prev_PDE, mem_models, degree=1):
-    """ create and return EMI weak formulation """
+def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
+        phi, phi_M_prev_PDE, c_prev, degree=1):
+    """ Create and return EMI weak formulation """
 
-    # create facet area and normals
-    n = FacetNormal(mesh)
-    n_g = interface_normal(subdomains, mesh)
-    hA = CellDiameter(mesh)
+    phi_e = phi['e']
+    phi_i = phi['i']
 
-    # DG penalty parameters
-    gdim = mesh.geometry().dim()
-    tau_emi = Constant(20*gdim*degree)
+    # Create measures
+    dx, dS, ds = create_measures(meshes, ct, ft, ct_g)
 
-    # create measures
-    dx, dS, ds = create_measures(mesh, subdomains, surfaces)
+    # Get function space
+    V_e = phi_e.function_space
+    V_i = phi_i.function_space
+    # Create mixed function space for potentials (phi)
+    W = MixedFunctionSpace(*[V_e, V_i])
 
-    # get function space
-    V = phi.function_space()
-    Q = phi_M_prev_PDE.function_space()
+    # Test and trial functions
+    u_e, u_i = TrialFunctions(W)
+    v_e, v_i = TestFunctions(W)
 
-    # test and trial functions
-    u = TrialFunction(V)
-    v = TestFunction(V)
+    u = {'e':u_e, 'i':u_i}
+    v = {'e':v_e, 'i':v_i}
 
-    # get tissue conductance and set Nernst potentials
-    kappa = initialize(ion_list, c_prev, physical_params, n_g, Q)
+    # Get tissue conductance and set Nernst potentials
+    kappa = initialize_varform(
+            ion_list, c_prev, physical_params
+    )
 
-    lhs = get_lhs_emi(kappa,
-                      u, v,
-                      dx, dS, hA,
-                      n, n_g, tau_emi,
-                      physical_params, mem_models)
+    a = get_lhs_emi(
+            kappa, u, v, dx, dS, physical_params, mem_models
+    )
 
-    rhs = get_rhs_emi(c_prev, v, dx, dS, n, n_g, \
-                      ion_list, physical_params, phi_M_prev_PDE, mem_models)
+    L = get_rhs_emi(
+            c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE, mem_models
+    )
 
-    precond = get_preconditioner(V, mesh, lhs, kappa)
+    # get function space at gamma for membrane potential
+    #V = phi_M_prev_PDE.function_space
+    #precond = get_preconditioner(V, mesh, lhs, kappa_e, kappa_i)
 
-    return lhs, rhs, precond, n_g
+    return a, L

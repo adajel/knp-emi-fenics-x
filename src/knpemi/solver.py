@@ -1,4 +1,4 @@
-from dolfin import *
+import dolfinx
 import numpy as np
 import sys
 import os

@@ -1,50 +1,102 @@
-from dolfin import *
-from knpemidg.utils import interface_normal, plus, minus, pcws_constant_project
+import dolfinx
+import scifem
+import numpy as np
 
-JUMP = lambda f, n: minus(f, n) - plus(f, n)
+from ufl import (
+    inner,
+    grad,
+    TestFunctions,
+    TrialFunctions,
+    FacetNormal,
+    MixedFunctionSpace,
+    Measure,
+)
 
-def create_measures(mesh, subdomains, surfaces):
-    # define measures
-    dx = Measure('dx', domain=mesh, subdomain_data=subdomains)
-    ds = Measure('ds', domain=mesh, subdomain_data=surfaces)
-    dS = Measure('dS', domain=mesh, subdomain_data=surfaces)
+interior_marker = 1
+exterior_marker = 0
 
-    return (dx, dS, ds)
+i_res = "+" if interior_marker < exterior_marker else "-"
+e_res = "-" if interior_marker < exterior_marker else "+"
 
-def create_functions_knp(mesh, ion_list, degree=1):
+def create_measures(meshes, ct, ft, ct_g):
+    # Get mesh and interface/membrane tags associated with the membrane models
+    mesh = meshes['mesh']
+    gamma_tags = np.unique(ct_g.values)
 
-    # number of ions to solve for
+    # Define measures
+    dx = Measure('dx', domain=mesh, subdomain_data=ct)
+    ds = Measure('ds', domain=mesh, subdomain_data=ft)
+    dS = {}
+
+    # Create gamma measures for each tag associated with a membrane model
+    for tag in gamma_tags:
+        ordered_integration_data = scifem.compute_interface_data(ct, ct_g.find(tag))
+        # Define measure
+        dGamma = Measure(
+            "dS",
+            domain=mesh,
+            subdomain_data=[(tag, ordered_integration_data.flatten())],
+            subdomain_id=tag,
+        )
+        # Add to dictionary of gamma measures
+        dS[tag] = dGamma
+
+    return dx, ds, dS
+
+def create_functions_knp(meshes, ion_list, degree=1):
+
+    mesh_e = meshes['mesh_e']
+    mesh_i = meshes['mesh_i']
+
+    # Number of ions to solve for
     N_ions = len(ion_list[:-1])
 
-    # set up finite element space for concentrations (c)
-    PK_knp = FiniteElement('DG', mesh.ufl_cell(), degree)
-    ME = MixedElement([PK_knp]*N_ions)
-    V = FunctionSpace(mesh, ME)
+    # Create mixed space for extra and intracellular concentrations
+    V_e = dolfinx.fem.functionspace(mesh_e, ("CG", degree))
+    V_i = dolfinx.fem.functionspace(mesh_i, ("CG", degree))
+    W = MixedFunctionSpace(* ([V_e] * N_ions + [V_i] * N_ions))
 
-    # function for current and previous solution (concentrations) to knp
-    c = Function(V)
-    c_prev = Function(V)
+    # Functions for current extra and intracellular concentrations
+    c_e = [dolfinx.fem.Function(V_e)] * N_ions
+    c_i = [dolfinx.fem.Function(V_i)] * N_ions
+    c = {'e':c_e, 'i':c_i}
 
-    # initialize function for eliminated ion specific
-    ion_list[-1]['c'] = interpolate(Constant(0), V.sub(N_ions - 1).collapse())
+    # Name functions (convenient when writing results to file)
+    for f_e, f_i, ion in zip(c_e, c_i, ion_list):
+        ion_name = ion['name']
+        # Assign names
+        f_e.name = f"c_{ion_name}_e"
+        f_i.name = f"c_{ion_name}_i"
+
+    # Functions for previous extra and intracellular concentrations
+    c_e_prev = [dolfinx.fem.Function(V_e)] * N_ions
+    c_i_prev = [dolfinx.fem.Function(V_i)] * N_ions
+    c_prev = {'e':c_e_prev, 'i':c_i_prev}
+
+    # Initialize function for eliminated ion species
+    ion_list[-1]['c_e'] = dolfinx.fem.Function(V_e)
+    ion_list[-1]['c_i'] = dolfinx.fem.Function(V_i)
 
     return c, c_prev
 
-def initialize(ion_list, mem_models, c_prev):
-    """ calculate sum of alpha_sum and total ionic current """
-
-    alpha_sum = 0
+def initialize_varform(ion_list, mem_models, c_e_prev, c_i_prev):
+    """ Calculate sum of alpha_sum and total ionic current """
+    alpha_e_sum = 0
+    alpha_i_sum = 0
 
     for idx, ion in enumerate(ion_list):
         if idx == len(ion_list) - 1:
             # get eliminated concentrations from previous global step
-            c_k_ = ion_list[-1]['c']
+            c_e_ = ion_list[-1]['c_e']
+            c_i_ = ion_list[-1]['c_i']
         else:
             # get concentrations from previous global step
-            c_k_ = split(c_prev)[idx]
+            c_e_ = c_e_prev[idx]
+            c_i_ = c_i_prev[idx]
 
         # update alpha
-        alpha_sum += ion['D'] * ion['z'] * ion['z'] * c_k_
+        alpha_e_sum += ion['D'][0] * ion['z'] * ion['z'] * c_e_
+        alpha_i_sum += ion['D'][1] * ion['z'] * ion['z'] * c_i_
 
     # sum of ion specific channel currents for each membrane tag
     I_ch = [0]*len(mem_models)
@@ -56,95 +108,87 @@ def initialize(ion_list, mem_models, c_prev):
             # update total channel current for each tag
             I_ch[jdx] += mm['I_ch_k'][key]
 
-    return alpha_sum, I_ch
+    return alpha_e_sum, alpha_i_sum, I_ch
 
-def create_lhs_knp(us, vs, dx, dS, n, n_g, hA, tau_knp, phi, c_prev, ion_list,
-        physical_parameters, dt):
+def create_lhs_knp(u, v, phi, dx, dS, ion_list, physical_parameters, dt):
     """ setup variational form for the knp system """
 
     # get psi
     psi = physical_parameters['psi']
+    phi_e = phi['e']
+    phi_i = phi['i']
 
     # initialize form
     a = 0
 
+    # loop over ions
     for idx, ion in enumerate(ion_list[:-1]):
-        # get trial and test functions
-        u = us[idx]
-        v = vs[idx]
+
+        # get extra and intracellular trial and test functions
+        u_e = u['e'][idx]; v_e = v['e'][idx]
+        u_i = u['i'][idx]; v_i = v['i'][idx]
 
         # get valence and diffusion coefficients
-        z = ion['z']; D = ion['D']
+        z = ion['z']
+        D_e = ion['D'][0]
+        D_i = ion['D'][1]
 
-        # upwinding: We first define function un returning:
-        #       dot(u,n)    if dot(u, n) >  0
-        #       0           if dot(u, n) <= 0
-        #
-        # We would like to upwind s.t.
-        #   c('+') is chosen if dot(u, n('+')) > 0,
-        #   c('-') is chosen if dot(u, n('+')) < 0.
-        #
-        # The expression:
-        #       un('+')*c('+') - un('-')*c('-') = jump(un*c)
-        #
-        # give this. Given n('+') = -n('-'), we have that:
-        #   dot(u, n('+')) > 0
-        #   dot(u, n('-')) < 0.
-        # As such, if dot(u, n('+')) > 0, we have that:
-        #   un('+') is dot(u, n), and
-        #   un('-') = 0.
-        # and the expression above becomes un('+')*c('+') - 0*c('-') =
-        # un('+')*c('+').
+        # equation ion concentration diffusive + advective terms ECS contribution
+        a += 1.0/dt * u_e * v_e * dx(0) \
+           + inner(D_e * grad(u_e), grad(v_e)) * dx(0) \
+           + z * psi * inner(D_e * u_e * grad(phi_e), grad(v_e)) * dx(0)
 
-        # define upwind help function
-        un = 0.5*(dot(D * grad(phi), n) + abs(dot(D * grad(phi), n)))
-
-        # equation ion concentration diffusive term with SIP (symmetric)
-        a += 1.0/dt * u * v * dx \
-           + inner(D * grad(u), grad(v)) * dx \
-           - inner(dot(avg(D * grad(u)), n('+')), jump(v)) * dS(0) \
-           - inner(dot(avg(D * grad(v)), n('+')), jump(u)) * dS(0) \
-           + tau_knp/avg(hA) * inner(jump(D * u), jump(v)) * dS(0)
-
-        # drift (advection) terms + upwinding
-        a += + z * psi * inner(D * u * grad(phi), grad(v)) * dx \
-             - z * psi * jump(v) * jump(un * u) * dS(0)
+        # equation ion concentration diffusive + advective terms ICS contribution
+        a += 1.0/dt * u_i * v_i * dx(1) \
+           + inner(D_i * grad(u_i), grad(v_i)) * dx(1) \
+           + z * psi * inner(D_i * u_i * grad(phi_i), grad(v_i)) * dx(1)
 
     return a
 
-def create_rhs_knp(vs, dx, dS, n, n_g, ion_list, c_prev, phi_M_prev_PDE,
-                   alpha_sum, dt, mem_models, I_ch, physical_parameters, phi):
-    """ setup variational form for the knp system """
+def create_rhs_knp(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
+        physical_parameters, ion_list, mem_models, I_ch, alpha_e_sum,
+        alpha_i_sum, dt):
+    """ setup right hand side of variational form for KNP system """
 
     psi = physical_parameters['psi']        # combination of physical constants
     C_phi = physical_parameters['C_phi']    # physical parameters
     C_M = physical_parameters['C_M']        # membrane capacitance
     F = physical_parameters['F']            # Faraday's constant
 
+    phi_e = phi['e']
+    phi_i = phi['i']
+
     # initialize form
     L = 0
 
     for idx, ion in enumerate(ion_list[:-1]):
-        # get trial and test functions
-        v = vs[idx]
+        # get extra and intracellular test functions
+        v_e = v['e'][idx]; v_i = v['i'][idx]
 
         # get previous concentration
-        c_ = split(c_prev)[idx]
+        c_e_ = c_e_prev[idx]
+        c_i_ = c_i_prev[idx]
 
         # get valence and diffusion coefficients
-        z = ion['z']; D = ion['D']
+        z = ion['z']
+        D_e = ion['D'][0]
+        D_i = ion['D'][1]
 
-        # add terms for approximating time derivative
-        L += 1.0/dt * c_ * v * dx
-        # add src terms for ion injection ECS
-        L += ion['f_source'] * v * dx(0)
+        # approximating time derivative extra and intracellular contribution
+        L += 1.0/dt * c_e_ * v_e * dx(0)
+        L += 1.0/dt * c_i_ * v_i * dx(1)
+
+        # add src terms for ion injection in extracellular space
+        L += ion['f_source'] * v_e * dx(0)
 
         #if mms is None:
         # calculate alpha
-        alpha = D * z * z * c_ / alpha_sum
+        alpha_e = D_e * z * z * c_e_ / alpha_e_sum
+        alpha_i = D_i * z * z * c_i_ / alpha_i_sum
 
         # calculate coupling coefficient
-        C = alpha * C_M / (F * z * dt)
+        C_e = alpha_e(e_res) * C_M / (F * z * dt)
+        C_i = alpha_i(i_res) * C_M / (F * z * dt)
 
         # loop through each membrane model
         for jdx, mm in enumerate(mem_models):
@@ -153,63 +197,85 @@ def create_rhs_knp(vs, dx, dS, n, n_g, ion_list, c_prev, phi_M_prev_PDE,
             tag = mm['ode'].tag
 
             # robin condition with splitting
-            g_robin_knp = phi_M_prev_PDE \
-                        - dt / (C_M * alpha) * mm['I_ch_k'][ion['name']] \
-                        + (dt / C_M) * I_ch[jdx]
+            g_robin_knp_e = phi_M_prev_PDE \
+                          - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']] \
+                          + (dt / C_M) * I_ch[jdx]
+
+            g_robin_knp_i = phi_M_prev_PDE \
+                          - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']] \
+                          + (dt / C_M) * I_ch[jdx]
+ 
             #else:
             # original robin condition (without splitting)
             #g_robin_knp = self.phi_M_prev_PDE \
             #            - self.dt / (C_M * alpha) * mm['I_ch_k'][ion['name']]
 
             # add coupling condition at interface
-            L += JUMP(C * g_robin_knp * v, n_g) * dS(tag)
+            L -= C_e * g_robin_knp_e * v_e(e_res) * dS[tag]
+            L += C_i * g_robin_knp_i * v_i(i_res) * dS[tag]
 
             # add coupling terms on interface gamma
-            L += - jump(phi) * jump(C) * avg(v) * dS(tag) \
-                 - jump(phi) * avg(C) * jump(v) * dS(tag)
+            L -= C_i * inner(phi_i(i_res), v_i(i_res)) * dS[tag]
+            L += C_i * inner(phi_e(e_res), v_i(i_res)) * dS[tag]
+            L -= C_e * inner(phi_i(i_res), v_e(e_res)) * dS[tag]
+            L += C_e * inner(phi_e(e_res), v_e(e_res)) * dS[tag]
 
     return L
 
-def knp_system(mesh, subdomains, surfaces, physical_parameters, ion_list,
-              mem_models, phi, phi_M_prev_PDE, dt, c,
-              c_prev, degree=1):
+def knp_system(
+        meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
+        phi, phi_M_prev_PDE, c, c_prev, dt, degree=1
+    ):
 
-    # number of ions to solve for
+    # Extract functions for solution concentrations
+    c_e = c['e']
+    c_i = c['i']
+
+    # Extract functions for previous concentrations
+    c_e_prev = c_prev['e']
+    c_i_prev = c_prev['i']
+
+    # Number of ions to solve for
     N_ions = len(ion_list[:-1])
 
-    # facet area and normal
-    n = FacetNormal(mesh)
-    hA = CellDiameter(mesh)
-    n_g = interface_normal(subdomains, mesh)
+    # Create measures
+    dx, ds, dS = create_measures(
+            meshes, ct, ft, ct_g
+    )
 
-    # DG penalty parameters
-    gdim = mesh.geometry().dim()
-    tau_knp = Constant(20*gdim*degree)
+    # Get extra and intracellular function-spaces
+    V_e = c_e[0].function_space
+    V_i = c_i[0].function_space
 
-    dx, dS, ds = create_measures(mesh, subdomains, surfaces)
+    # Create mixed space (for each ion in each subspace)
+    W = MixedFunctionSpace(* ([V_e] * N_ions + [V_i] * N_ions))
 
-    V = c.function_space()
+    # Create trial and test functions
+    us = TrialFunctions(W)
+    vs = TestFunctions(W)
 
-    us = TrialFunctions(V)
-    vs = TestFunctions(V)
+    # Order functions in extra and intracellular lists
+    u_e = us[:N_ions]; u_i = us[N_ions:2 * N_ions]
+    v_e = vs[:N_ions]; v_i = vs[N_ions:2 * N_ions]
+    # ... and gather in dictionary
+    u = {'e':u_e, 'i':u_i}
+    v = {'e':v_e, 'i':v_i}
 
-    # initialize variational formulation
-    alpha_sum, I_ch = initialize(ion_list, mem_models, c_prev)
+    # Initialize variational formulation
+    alpha_e_sum, alpha_i_sum, I_ch = initialize_varform(
+            ion_list, mem_models, c_e_prev, c_i_prev
+    )
 
-    # get left hand side knp system
-    lhs = create_lhs_knp(us, vs,
-                      dx, dS,
-                      n, n_g,
-                      hA, tau_knp,
-                      phi, c_prev, ion_list, physical_parameters, dt)
+    # Create left hand side knp system
+    a = create_lhs_knp(
+            u, v, phi, dx, dS, ion_list, physical_parameters, dt
+    )
 
-    # get right hand side knp system
-    rhs =  create_rhs_knp(vs,
-                          dx, dS,
-                          n, n_g,
-                          ion_list,
-                          c_prev, phi_M_prev_PDE,
-                          alpha_sum, dt, mem_models,
-                          I_ch, physical_parameters, phi)
+    # Create right hand side knp system
+    L = create_rhs_knp(
+            v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
+            physical_parameters, ion_list, mem_models, I_ch, alpha_e_sum,
+            alpha_i_sum, dt
+    )
 
-    return lhs, rhs
+    return a, L
