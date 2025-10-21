@@ -19,17 +19,15 @@ i_res = "+" if interior_marker < exterior_marker else "-"
 e_res = "-" if interior_marker < exterior_marker else "+"
 
 def create_measures(meshes, ct, ft, ct_g):
-
     mesh = meshes['mesh']
-
     gamma_tags = np.unique(ct_g.values)
 
-    # define measures
+    # Define measures
     dx = Measure('dx', domain=mesh, subdomain_data=ct)
     ds = Measure('ds', domain=mesh, subdomain_data=ft)
-
     dS = {}
 
+    # Define measures on membrane interface gamma
     for tag in gamma_tags:
         ordered_integration_data = scifem.compute_interface_data(ct, ct_g.find(tag))
         dS_tag = Measure("dS", domain=mesh,
@@ -67,7 +65,8 @@ def create_functions_emi(meshes, degree=1):
 
     return phi, phi_M_prev_PDE
 
-def initialize_varform(ion_list, c_prev, physical_params):
+
+def initialize_variables(ion_list, c_prev, physical_params):
     """ Calculate kappa (tissue conductance) and set Nernst potentials """
     # Initialize
     kappa_e = 0; kappa_i = 0
@@ -126,6 +125,7 @@ def get_lhs_emi(kappa, u, v, dx, dS, physical_params, mem_models):
            + C_phi * (u_e(e_res) - u_i(i_res)) * v_e(e_res) * dS[tag]
 
     return a
+
 
 def get_rhs_emi(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE, mem_models):
     """ setup variational form for the emi system """
@@ -219,7 +219,7 @@ def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
     v = {'e':v_e, 'i':v_i}
 
     # Get tissue conductance and set Nernst potentials
-    kappa = initialize_varform(
+    kappa = initialize_variables(
             ion_list, c_prev, physical_params
     )
 

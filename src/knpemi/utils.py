@@ -1,4 +1,5 @@
 import dolfinx
+from knpemi.membrane import MembraneModel
 
 def set_initial_conditions(ion_list, c_prev):
     """ Set initial conditions given by constants """

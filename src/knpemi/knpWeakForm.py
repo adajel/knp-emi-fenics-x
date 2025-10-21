@@ -18,6 +18,7 @@ exterior_marker = 0
 i_res = "+" if interior_marker < exterior_marker else "-"
 e_res = "-" if interior_marker < exterior_marker else "+"
 
+
 def create_measures(meshes, ct, ft, ct_g):
     # Get mesh and interface/membrane tags associated with the membrane models
     mesh = meshes['mesh']
@@ -42,6 +43,7 @@ def create_measures(meshes, ct, ft, ct_g):
         dS[tag] = dGamma
 
     return dx, ds, dS
+
 
 def create_functions_knp(meshes, ion_list, degree=1):
 
@@ -79,7 +81,8 @@ def create_functions_knp(meshes, ion_list, degree=1):
 
     return c, c_prev
 
-def initialize_varform(ion_list, mem_models, c_e_prev, c_i_prev):
+
+def initialize_variables(ion_list, mem_models, c_e_prev, c_i_prev):
     """ Calculate sum of alpha_sum and total ionic current """
     alpha_e_sum = 0
     alpha_i_sum = 0
@@ -109,6 +112,7 @@ def initialize_varform(ion_list, mem_models, c_e_prev, c_i_prev):
             I_ch[jdx] += mm['I_ch_k'][key]
 
     return alpha_e_sum, alpha_i_sum, I_ch
+
 
 def create_lhs_knp(u, v, phi, dx, dS, ion_list, physical_parameters, dt):
     """ setup variational form for the knp system """
@@ -144,6 +148,7 @@ def create_lhs_knp(u, v, phi, dx, dS, ion_list, physical_parameters, dt):
            + z * psi * inner(D_i * u_i * grad(phi_i), grad(v_i)) * dx(1)
 
     return a
+
 
 def create_rhs_knp(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
         physical_parameters, ion_list, mem_models, I_ch, alpha_e_sum,
@@ -222,6 +227,7 @@ def create_rhs_knp(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
 
     return L
 
+
 def knp_system(
         meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
         phi, phi_M_prev_PDE, c, c_prev, dt, degree=1
@@ -262,7 +268,7 @@ def knp_system(
     v = {'e':v_e, 'i':v_i}
 
     # Initialize variational formulation
-    alpha_e_sum, alpha_i_sum, I_ch = initialize_varform(
+    alpha_e_sum, alpha_i_sum, I_ch = initialize_variables(
             ion_list, mem_models, c_e_prev, c_i_prev
     )
 

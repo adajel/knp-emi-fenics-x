@@ -2,12 +2,10 @@ from knpemi.emiWeakForm import emi_system, create_functions_emi
 from knpemi.knpWeakForm import knp_system, create_functions_knp
 from knpemi.utils import set_initial_conditions, setup_membrane_model
 
-from knpemi.knpemiSolver import create_solver_emi
-from knpemi.knpemiSolver import create_solver_knp
-from knpemi.knpemiSolver import solve_emi
-from knpemi.knpemiSolver import solve_knp
+from knpemi.emiSolver import solve_emi, create_solver_emi
+from knpemi.knpSolver import solve_knp, create_solver_knp
 
-from knpemi.script import interpolate_to_submesh, compute_interface_data
+#from knpemi.script import interpolate_to_submesh, compute_interface_data
 
 import mm_hh as mm_hh
 
@@ -26,7 +24,7 @@ exterior_marker = 0
 i_res = "+" if interior_marker < exterior_marker else "-"
 e_res = "-" if interior_marker < exterior_marker else "+"
 
-def update_variables_ode(ode_model, c_prev, phi_M_prev_PDE, ion_list, k):
+def update_ode_variables(ode_model, c_prev, phi_M_prev_PDE, ion_list, k):
     """ Update parameters in ODE solver (based on previous PDEs step)
         specific to membrane model
     """
@@ -80,8 +78,8 @@ def update_variables_ode(ode_model, c_prev, phi_M_prev_PDE, ion_list, k):
 
     return
 
-def update_variables_pde(c_prev, c, phi, phi_M_prev_PDE, physical_parameters, ion_list,
-        interface_to_parent, ct):
+def update_pde_variables(c_prev, c, phi, phi_M_prev_PDE, physical_parameters, ion_list,
+        interface_to_parent, ct, cells_e, cells_i):
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
 
@@ -107,6 +105,7 @@ def update_variables_pde(c_prev, c, phi, phi_M_prev_PDE, physical_parameters, io
     phi_i_gamma = dolfinx.fem.Function(Q)
     phi_e_gamma = dolfinx.fem.Function(Q)
 
+    """
     interface_integration_entities = compute_interface_data(ct, interface_to_parent)
     mapped_entities = interface_integration_entities.copy()
 
@@ -127,32 +126,43 @@ def update_variables_pde(c_prev, c, phi, phi_M_prev_PDE, physical_parameters, io
 
     # Scatter
     phi_M_prev_PDE.x.scatter_forward()
+    """
 
-    # add contribution from background charge / immobile ions to eliminated ion
-    c_elim = - (1.0 / ion_list[-1]['z']) * rho
+    # Add contribution from background charge / immobile ions to eliminated ion
+    c_e_elim_sum = - (1.0 / ion_list[-1]['z']) * rho[0]
+    c_i_elim_sum = - (1.0 / ion_list[-1]['z']) * rho[1]
 
-    # update Nernst potentials for next global time level
+    # Update Nernst potentials for next global time level
     for idx, ion in enumerate(ion_list[:-1]):
-        # get current solution concentration
-        c_k_ = split(c_prev)[idx]
-        # update Nernst potential
-        E = R * temperature / (F * ion['z']) * ln(plus(c_k_, n_g) / minus(c_k_, n_g))
-        ion['E'].assign(pcws_constant_project(E, Q))
+        # Get previous extra and intracellular concentrations
+        c_e = c_prev['e'][idx]
+        c_i = c_prev['i'][idx]
+        # Update Nernst potential
+        ion['E'] = R * temperature / (F * ion['z']) * ln(c_i(i_res) / c_e(e_res))
 
-        # add ion specific contribution to eliminated ion concentration
-        c_elim += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_k_
+        # Add ion specific contribution to eliminated ion concentration
+        c_e_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_e
+        c_i_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_i
 
-    # update eliminated ion concentration
-    ion_list[-1]['c'].assign(project(c_elim, V.sub(N_ions - 1).collapse()))
+    # Interpolate eliminated ion concentration sum onto function spaces
+    V_e = c['e'][0].function_space
+    V_i = c['i'][1].function_space
+    c_e_elim = dolfinx.fem.Function(V_e)
+    c_i_elim = dolfinx.fem.Function(V_i)
 
-    # update Nernst potential for eliminated ion
-    E = R * temperature / (F * ion_list[-1]['z']) * ln(plus(ion_list[-1]['c'], n_g) / minus(ion_list[-1]['c'], n_g))
-    ion_list[-1]['E'].assign(pcws_constant_project(E, Q))
+    expr_e = dolfinx.fem.Expression(c_e_elim_sum, V_e.element.interpolation_points)
+    expr_i = dolfinx.fem.Expression(c_i_elim_sum, V_i.element.interpolation_points)
+
+    # Update eliminated ion concentrations
+    ion_list[-1]['c_e'].x.array[:] = c_e_elim.x.array
+    ion_list[-1]['c_i'].x.array[:] = c_i_elim.x.array
+    # Update Nernst potential for eliminated ion concentrations
+    ion_list[-1]['E'] = R * temperature / (F * ion['z']) * ln(c_i_elim(i_res) / c_e_elim(e_res))
 
     return
 
 
-def write_to_file(xdmf, phi, c, ion_list):
+def write_to_file(xdmf, phi, c, ion_list, t):
     # Write results to file
     xdmf.write_function(phi['e'], t=float(t))
     xdmf.write_function(phi['i'], t=float(t))
@@ -169,12 +179,12 @@ def write_to_file(xdmf, phi, c, ion_list):
     return
 
 
-def solve_odes(mem_models, c_prev, phi_M_prev_PDE, ion_list, k):
+def solve_odes(mem_models, c_prev, phi_M_prev_PDE, ion_list, stim_params, dt, k):
     # Solve ODEs (membrane models) for each membrane tag
     for mem_model in mem_models:
         # Update ODE variables based on PDEs output
         ode_model = mem_model['ode']
-        update_variables_ode(ode_model, c_prev, phi_M_prev_PDE,ion_list, k)
+        update_ode_variables(ode_model, c_prev, phi_M_prev_PDE,ion_list, k)
         # Solve ODEs
         ode_model.step_lsoda(
                 dt=dt,
@@ -234,6 +244,14 @@ def solve_system():
     )
 
     meshes = {"mesh":mesh, "mesh_e":mesh_e, "mesh_i":mesh_i, "mesh_g":mesh_g}
+
+    #cell_map_e = mesh_e.topology.index_map(mesh_e.topology.dim)
+    #num_cells_local_e = cell_map_e.size_local + cell_map_e.num_ghosts
+    #cell_map_i = mesh_i.topology.index_map(mesh_i.topology.dim)
+    #num_cells_local_i = cell_map_i.size_local + cell_map_i.num_ghosts
+
+    cells_e = ct.find(0)#dolfinx.mesh.locate_entities(mesh_e, mesh_e.topology.dim, lambda x: True)
+    cells_i = ct.find(1)#dolfinx.mesh.locate_entities(mesh_i, mesh_i.topology.dim, lambda x: True)
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -303,21 +321,21 @@ def solve_system():
     # Create ions (channel conductivity is set below for each model)
     Na = {'c_init':Na_init,
           'bdry': dolfinx.fem.Constant(mesh_e, (0.0, 0.0)),
-          'z':1.0,
+          'z': 1.0,
           'name':'Na',
           'D':D_Na,
           'f_source':f_source_Na}
 
     K = {'c_init':K_init,
           'bdry': dolfinx.fem.Constant(mesh_e, (0.0, 0.0)),
-         'z':1.0,
+         'z': 1.0,
          'name':'K',
          'D':D_K,
          'f_source':f_source_K}
 
     Cl = {'c_init':Cl_init,
           'bdry': dolfinx.fem.Constant(mesh_e, (0.0, 0.0)),
-          'z':-1.0,
+          'z': -1.0,
           'name':'Cl',
           'D':D_Cl,
           'f_source':f_source_Cl}
@@ -355,10 +373,11 @@ def solve_system():
     mem_models = setup_membrane_model(stim_params, physical_parameters,
             ode_models, ct_g, phi_M_prev_PDE.function_space, ion_list)
 
+    # TODO do we need this?
     # For each ODE model, set variables (based on initial conditions in PDEs)
     for mem_model in mem_models:
         ode_model = mem_model['ode']
-        update_variables_ode(ode_model, c_prev, phi_M_prev_PDE, ion_list, 0)
+        update_ode_variables(ode_model, c_prev, phi_M_prev_PDE, ion_list, 0)
 
     # Create variational form emi problem
     a_emi, L_emi = emi_system(
@@ -406,30 +425,27 @@ def solve_system():
             print(f'solving for t={float(t)}')
 
             # Write results from previous time step to file
-            write_to_file(xdmf, phi, ck, ion_list)
+            write_to_file(xdmf, phi, c, ion_list, t)
 
             # Solve ODEs
-            solve_odes(mem_models, c_prev, phi_M_prev_PDE, ion_list, k)
+            solve_odes(
+                    mem_models, c_prev, phi_M_prev_PDE, ion_list, stim_params, dt, k
+            )
 
             # Solve PDEs
             solve_emi(phi, a_emi, L_emi, solver_options_emi, entity_maps)
             solve_knp(c, a_knp, L_knp, solver_options_knp, entity_maps)
 
             # update PDE variables
-            update_variables_pde(
+            update_pde_variables(
                     c_prev, c, phi, phi_M_prev_PDE, physical_parameters,
-                    ion_list, interface_to_parent, ct
+                    ion_list, interface_to_parent, ct, cells_e, cells_i
             )
 
             # update time
             t.value = float(t + dt)
 
     xdmf.close()
-
-    import matplotlib.pyplot as plt
-    plt.figure()
-    plt.plot(mem_pot_point)
-    plt.show()
 
 if __name__ == "__main__":
     solve_system()
