@@ -229,19 +229,19 @@ if __name__=="__main__":
 
     membrane = MembraneModel(ode, ct, 1, Q)
 
-    #membrane.set_membrane_potential(phi_M)
+    membrane.set_membrane_potential(phi_M)
 
-    stimulus = {'stim_amplitude': 0.0,
-                'stim_period': 0.0,
-                'stim_duration': 0.0,
+    stimulus = {'stim_amplitude': 150.0,
+                'stim_period': 2.0,
+                'stim_duration': 2.0,
                 'stim_start': 0}
     stimulus = None
 
     V_index = ode.state_indices('V')
     potential_history = []
 
-    for _ in range(1000):
-        membrane.step_lsoda(dt=0.0001, stimulus=stimulus)
+    for _ in range(2000):
+        membrane.step_lsoda(dt=0.01, stimulus=stimulus)
         potential_history.append(1*membrane.states[:, V_index])
         #membrane.get_membrane_potential(phi_M)
 

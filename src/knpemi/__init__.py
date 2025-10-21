@@ -8,8 +8,7 @@ from knpemi.emiWeakForm import create_functions_emi
 from knpemi.knpWeakForm import knp_system
 from knpemi.knpWeakForm import create_functions_knp
 
-from knpemi.initialize_knpemi import set_initial_conditions
-from knpemi.initialize_membrane import setup_membrane_model
+from knpemi.utils import set_initial_conditions, setup_membrane_model
 
 from knpemi.knpemiSolver import solve_emi
 from knpemi.knpemiSolver import solve_knp

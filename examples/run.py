@@ -1,7 +1,6 @@
 from knpemi.emiWeakForm import emi_system, create_functions_emi
 from knpemi.knpWeakForm import knp_system, create_functions_knp
-from knpemi.initialize_knpemi import set_initial_conditions
-from knpemi.initialize_membrane import setup_membrane_model
+from knpemi.utils import set_initial_conditions, setup_membrane_model
 
 from knpemi.knpemiSolver import create_solver_emi
 from knpemi.knpemiSolver import create_solver_knp
@@ -27,7 +26,7 @@ exterior_marker = 0
 i_res = "+" if interior_marker < exterior_marker else "-"
 e_res = "-" if interior_marker < exterior_marker else "+"
 
-def update_ode(ode_model, c_prev, phi_M_prev_PDE, ion_list, k):
+def update_variables_ode(ode_model, c_prev, phi_M_prev_PDE, ion_list, k):
     """ Update parameters in ODE solver (based on previous PDEs step)
         specific to membrane model
     """
@@ -81,7 +80,7 @@ def update_ode(ode_model, c_prev, phi_M_prev_PDE, ion_list, k):
 
     return
 
-def update_pde(c_prev, c, phi, phi_M_prev_PDE, physical_parameters, ion_list,
+def update_variables_pde(c_prev, c, phi, phi_M_prev_PDE, physical_parameters, ion_list,
         interface_to_parent, ct):
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
@@ -152,6 +151,43 @@ def update_pde(c_prev, c, phi, phi_M_prev_PDE, physical_parameters, ion_list,
 
     return
 
+
+def write_to_file(xdmf, phi, c, ion_list):
+    # Write results to file
+    xdmf.write_function(phi['e'], t=float(t))
+    xdmf.write_function(phi['i'], t=float(t))
+
+    for idx in range(len(ion_list)):
+        # Determine the function source based on the index
+        is_last = (idx == len(ion_list) - 1)
+        c_i = ion_list[-1]['c_i'] if is_last else c['i'][idx]
+        c_e = ion_list[-1]['c_e'] if is_last else c['e'][idx]
+
+        # Write the functions to file
+        (xdmf.write_function(f, t=float(t)) for f in (c_i, c_e))
+
+    return
+
+
+def solve_odes(mem_models, c_prev, phi_M_prev_PDE, ion_list, k):
+    # Solve ODEs (membrane models) for each membrane tag
+    for mem_model in mem_models:
+        # Update ODE variables based on PDEs output
+        ode_model = mem_model['ode']
+        update_variables_ode(ode_model, c_prev, phi_M_prev_PDE,ion_list, k)
+        # Solve ODEs
+        ode_model.step_lsoda(
+                dt=dt,
+                stimulus=stim_params['stimulus'],
+                stimulus_locator=stim_params['stimulus_locator']
+        )
+        # Update PDE variables based on ODE output
+        ode_model.get_membrane_potential(phi_M_prev_PDE)
+        for ion, I_ch_k in mem_model['I_ch_k'].items():
+            ode_model.get_parameter("I_ch_" + ion, I_ch_k)
+
+    return
+
 def read_mesh(mesh_file):
 
     # Set ghost mode
@@ -171,28 +207,6 @@ def read_mesh(mesh_file):
         ft = xdmf.read_meshtags(mesh, name='facet_marker')
 
     return mesh, ct, ft
-
-def solve_ODEs(phi_M_prev_PDE, c_prev, ion_list, mem_models, stim_params, k, dt):
-    # Get stimuli
-    stimulus = stim_params['stimulus']
-    stimulus_locator = stim_params['stimulus_locator']
-
-    # Solve ODEs (membrane models) for each membrane tag
-    for mem_model in mem_models:
-        # Update parameters in ODE solver (based on previous PDEs step)
-        ode_model = mem_model['ode']
-        update_ode(ode_model, c_prev, phi_M_prev_PDE,ion_list, k)
-
-        # Solve ODEs
-        ode_model.step_lsoda(dt=dt, \
-            stimulus=stimulus, stimulus_locator=stimulus_locator)
-
-        # Update PDE functions based on ODE output
-        ode_model.get_membrane_potential(phi_M_prev_PDE)
-
-        for ion, I_ch_k in mem_model['I_ch_k'].items():
-            # Update src terms for next PDE step based on ODE output
-            ode_model.get_parameter("I_ch_" + ion, I_ch_k)
 
 def solve_system():
     """ Solve system (PDEs and ODEs) """
@@ -223,18 +237,18 @@ def solve_system():
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
-    dt = 1.0e-4                         # global time step (s)
-    Tstop = 1.0e-2                      # global end time (s)
+    dt = 0.1                            # global time step (ms)
+    Tstop = 10                          # global end time (ms)
     n_steps_ODE = 25                    # number of ODE steps
 
     # Physical parameters
-    C_M = 0.02                          # capacitance
-    temperature = 300.0                 # temperature (K)
-    F = 96485.0                         # Faraday's constant (C/mol)
-    R = 8.314                           # Gas Constant (J/(K*mol))
-    D_Na = 1.33e-9                      # diffusion coefficients Na (m/s)
-    D_K = 1.96e-9                       # diffusion coefficients K (m/s)
-    D_Cl = 2.03e-9                      # diffusion coefficients Cl (m/s)
+    C_M = 2.00                          # capacitance
+    temperature = 300.0e3               # temperature (mK)
+    F = 96485.0e3                       # Faraday's constant (mC/mol)
+    R = 8.314e3                         # Gas Constant (mJ/(K*mol))
+    D_Na = 1.33e-8                      # diffusion coefficients Na (cm/ms)
+    D_K = 1.96e-8                       # diffusion coefficients K (cm/ms)
+    D_Cl = 2.03e-8                      # diffusion coefficients Cl (cm/ms)
     psi = F / (R * temperature)         # shorthand
     C_phi = C_M / dt                    # shorthand
 
@@ -325,18 +339,6 @@ def solve_system():
     # Dictionary with membrane models (key is facet tag, value is ode model)
     ode_models = {1: mm_hh}
 
-    # Set solver parameters EMI (True is direct, and False is iterate)
-    direct_emi = False
-    rtol_emi = 1E-5
-    atol_emi = 1E-40
-    threshold_emi = 0.9
-
-    # Set solver parameters KNP (True is direct, and False is iterate)
-    direct_knp = False
-    rtol_knp = 1E-7
-    atol_knp = 1E-40
-    threshold_knp = 0.75
-
     phi, phi_M_prev_PDE = create_functions_emi(meshes, degree=1)
     c, c_prev = create_functions_knp(meshes, ion_list, degree=1)
 
@@ -353,10 +355,10 @@ def solve_system():
     mem_models = setup_membrane_model(stim_params, physical_parameters,
             ode_models, ct_g, phi_M_prev_PDE.function_space, ion_list)
 
-    # For each ODE model, set parameters from initial conditions in PDE model
+    # For each ODE model, set variables (based on initial conditions in PDEs)
     for mem_model in mem_models:
         ode_model = mem_model['ode']
-        update_ode(ode_model, c_prev, phi_M_prev_PDE, ion_list, 0)
+        update_variables_ode(ode_model, c_prev, phi_M_prev_PDE, ion_list, 0)
 
     # Create variational form emi problem
     a_emi, L_emi = emi_system(
@@ -394,44 +396,27 @@ def solve_system():
             direct_knp, rtol_knp, atol_knp, threshold_knp
     )
 
-    # initialize save files
+    # Initialize file for saving results
     xdmf_filename = "results/results.xdmf"
-
-    mem_pot_point = []
-
     # Create an XDMFFile object to save results
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, xdmf_filename, "w") as xdmf:
         xdmf.write_mesh(mesh)
 
-        # Time loop for solving PDE/ODE system
         for k in range(int(round(Tstop/float(dt)))):
-            # write results to file
-            xdmf.write_function(phi['e'], t=float(t))
-            xdmf.write_function(phi['i'], t=float(t))
-
-            for idx in range(len(ion_list)):
-                # Determine the function source based on the index
-                is_last = (idx == len(ion_list) - 1)
-
-                c_i = ion_list[-1]['c_i'] if is_last else c['i'][idx]
-                c_e = ion_list[-1]['c_e'] if is_last else c['e'][idx]
-
-                # Write the functions to file
-                (xdmf.write_function(f, t=float(t)) for f in (c_i, c_e))
-
-            # Solve system
             print(f'solving for t={float(t)}')
 
-            # Solve ODEs
-            #solve_ODEs(phi_M_prev_PDE, c_prev, ion_list, mem_models, stim_params, k, dt)
+            # Write results from previous time step to file
+            write_to_file(xdmf, phi, ck, ion_list)
 
-            #mem_pot_point.append(phi_M_prev_PDE.x.array[1]*1.0e3)
+            # Solve ODEs
+            solve_odes(mem_models, c_prev, phi_M_prev_PDE, ion_list, k)
 
             # Solve PDEs
             solve_emi(phi, a_emi, L_emi, solver_options_emi, entity_maps)
             solve_knp(c, a_knp, L_knp, solver_options_knp, entity_maps)
 
-            update_pde(
+            # update PDE variables
+            update_variables_pde(
                     c_prev, c, phi, phi_M_prev_PDE, physical_parameters,
                     ion_list, interface_to_parent, ct
             )
