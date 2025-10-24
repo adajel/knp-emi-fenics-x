@@ -2,8 +2,8 @@ from knpemi.emiWeakForm import emi_system, create_functions_emi
 from knpemi.knpWeakForm import knp_system, create_functions_knp
 from knpemi.utils import set_initial_conditions, setup_membrane_model
 
-from knpemi.emiSolver import solve_emi, create_solver_emi
-from knpemi.knpSolver import solve_knp, create_solver_knp
+from knpemi.emiSolver import create_solver_emi
+from knpemi.knpSolver import create_solver_knp
 
 #from knpemi.script import interpolate_to_submesh, compute_interface_data
 
@@ -23,6 +23,8 @@ exterior_marker = 0
 
 i_res = "+" if interior_marker < exterior_marker else "-"
 e_res = "-" if interior_marker < exterior_marker else "+"
+
+comm = MPI.COMM_WORLD
 
 def update_ode_variables(ode_model, c_prev, phi_M_prev_PDE, ion_list, k):
     """ Update parameters in ODE solver (based on previous PDEs step)
@@ -203,7 +205,7 @@ def read_mesh(mesh_file):
     # Set ghost mode
     ghost_mode = dolfinx.mesh.GhostMode.shared_facet
 
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, mesh_file, 'r') as xdmf:
+    with dolfinx.io.XDMFFile(comm, mesh_file, 'r') as xdmf:
         # Read mesh and cell tags
         mesh = xdmf.read_mesh(ghost_mode=ghost_mode)
         ct = xdmf.read_meshtags(mesh, name='cell_marker')
@@ -215,6 +217,8 @@ def read_mesh(mesh_file):
 
         # Read facets
         ft = xdmf.read_meshtags(mesh, name='facet_marker')
+
+    xdmf.close()
 
     return mesh, ct, ft
 
@@ -394,31 +398,15 @@ def solve_system():
     # Specify entity maps for each sub-mesh to ensure correct assembly
     entity_maps = [interface_to_parent, exterior_to_parent, interior_to_parent]
 
-    # Set solver parameters for emi solver
-    direct_emi = True
-    rtol_emi = 1.0
-    atol_emi = 1.0
-    threshold_emi = 1.0
     # Create solver emi problem
-    solver_options_emi = create_solver_emi(
-            direct_emi, rtol_emi, atol_emi, threshold_emi
-    )
-
-    # Set solver parameters for knp solver
-    direct_knp = True
-    rtol_knp = 1.0
-    atol_knp = 1.0
-    threshold_knp = 1.0
+    problem_emi = create_solver_emi(a_emi, L_emi, phi, entity_maps, comm)
     # Create solver knp problem
-    direct_knp = True
-    solver_options_knp = create_solver_knp(
-            direct_knp, rtol_knp, atol_knp, threshold_knp
-    )
+    problem_knp = create_solver_knp(a_knp, L_knp, c, entity_maps, comm)
 
     # Initialize file for saving results
     xdmf_filename = "results/results.xdmf"
     # Create an XDMFFile object to save results
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, xdmf_filename, "w") as xdmf:
+    with dolfinx.io.XDMFFile(comm, xdmf_filename, "w") as xdmf:
         xdmf.write_mesh(mesh)
 
         for k in range(int(round(Tstop/float(dt)))):
@@ -433,8 +421,8 @@ def solve_system():
             )
 
             # Solve PDEs
-            solve_emi(phi, a_emi, L_emi, solver_options_emi, entity_maps)
-            solve_knp(c, a_knp, L_knp, solver_options_knp, entity_maps)
+            problem_emi.solve()
+            problem_knp.solve()
 
             # update PDE variables
             update_pde_variables(

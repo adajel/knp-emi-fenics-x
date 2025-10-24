@@ -5,11 +5,13 @@ import scifem
 from ufl import (
     inner,
     grad,
+    dot,
     TestFunctions,
     TrialFunctions,
     MixedFunctionSpace,
     Measure,
     ln,
+    extract_blocks
 )
 
 interior_marker = 1
@@ -25,14 +27,18 @@ def create_measures(meshes, ct, ft, ct_g):
     # Define measures
     dx = Measure('dx', domain=mesh, subdomain_data=ct)
     ds = Measure('ds', domain=mesh, subdomain_data=ft)
-    dS = {}
 
+    dS = {}
     # Define measures on membrane interface gamma
+    interface_marker = 4
+    #ordered_integration_data = scifem.compute_interface_data(ct, ct_g.find(interface_marker))
+    ordered_integration_data = scifem.compute_interface_data(ct, ft.find(interface_marker))
     for tag in gamma_tags:
-        ordered_integration_data = scifem.compute_interface_data(ct, ct_g.find(tag))
-        dS_tag = Measure("dS", domain=mesh,
-                    subdomain_data=[(tag,
-                    ordered_integration_data.flatten())])
+        dS_tag = Measure("dS",
+                    domain=mesh,
+                    subdomain_data=[(tag, ordered_integration_data.flatten())],
+                    subdomain_id=tag,
+                    )
         dS[tag] = dS_tag
 
     return dx, dS, ds
@@ -66,7 +72,7 @@ def create_functions_emi(meshes, degree=1):
     return phi, phi_M_prev_PDE
 
 
-def initialize_variables(ion_list, c_prev, physical_params):
+def initialize_variables(ion_list, c_prev, physical_params, mem_models):
     """ Calculate kappa (tissue conductance) and set Nernst potentials """
     # Initialize
     kappa_e = 0; kappa_i = 0
@@ -93,10 +99,21 @@ def initialize_variables(ion_list, c_prev, physical_params):
 
     kappa = {'e':kappa_e, 'i':kappa_i}
 
-    return kappa
+    # sum of ion specific channel currents for each membrane tag
+    I_ch = [0]*len(mem_models)
+
+    # loop though membrane models to set total ionic current
+    for jdx, mm in enumerate(mem_models):
+        # loop through ion species
+        for key, value in mm['I_ch_k'].items():
+            # update total channel current for each tag
+            I_ch[jdx] += mm['I_ch_k'][key]
+
+    return kappa, I_ch
 
 
-def get_lhs_emi(kappa, u, v, dx, dS, physical_params, mem_models):
+def get_lhs(kappa, u, v, dx, dS, physical_params, mem_models, 
+        splitting_scheme):
     """ setup variational form for the emi system """
 
     C_phi = physical_params['C_phi']
@@ -127,7 +144,8 @@ def get_lhs_emi(kappa, u, v, dx, dS, physical_params, mem_models):
     return a
 
 
-def get_rhs_emi(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE, mem_models):
+def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE,
+        mem_models, I_ch, splitting_scheme):
     """ setup variational form for the emi system """
 
     C_phi = physical_params['C_phi']
@@ -154,50 +172,87 @@ def get_rhs_emi(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE, me
         L += - F * ion['z'] * inner((ion['D'][0])*grad(c_e_), grad(v_e)) * dx(0) \
              - F * ion['z'] * inner((ion['D'][1])*grad(c_i_), grad(v_i)) * dx(1) \
 
-    # coupling condition at interface with splitting
-    g_robin_emi = [phi_M_prev_PDE]*len(mem_models)
-    #else:
+    if splitting_scheme:
+        # robin condition with PDE/ODE splitting scheme
+        g_robin = [phi_M_prev_PDE]*len(mem_models)
+    else:
         # original robin condition (without splitting)
-        #g_robin_emi = [self.phi_M_prev_PDE - (1 / C_phi) * I for I in self.I_ch]
+        g_robin = [phi_M_prev_PDE - (1 / C_phi) * I for I in I_ch]
 
     for jdx, mm in enumerate(mem_models):
         # get tag
         tag = mm['ode'].tag
         # add robin condition at interface
-        L += C_phi * inner(g_robin_emi[jdx], v_e(e_res)) * dS[tag] \
-           - C_phi * inner(g_robin_emi[jdx], v_i(i_res)) * dS[tag]
+        L += C_phi * inner(g_robin[jdx], v_e(e_res)) * dS[tag] \
+           - C_phi * inner(g_robin[jdx], v_i(i_res)) * dS[tag]
 
     return L
 
+def add_mms_terms(a, L, v, dx, dS, ds, I_ch, phi_M_prev_PDE,
+        mms, physical_params, mem_models, ion_list):
 
-def get_preconditioner(V, mesh, a, kappa_e, kappa_i):
+    C_phi = physical_params['C_phi']
+    F = physical_params['F']
+    """
+    #-----------------------------------------------------------------------
+    # Remove robin splitting terms from variational formulation (to be replaced
+    # with MMS terms below)
 
-   # setup preconditioner EMI
-    up, vp = TrialFunction(V), TestFunction(V)
+    # original robin condition (without splitting)
+    g_robin = [phi_M_prev_PDE - (1 / C_phi) * I for I in I_ch]
 
-    # scale mass matrix to get condition number independent from domain length
-    gdim = mesh.geometry().dim()
+    for jdx, mm in enumerate(mem_models):
+        # get tag
+        tag = mm['ode'].tag
+        # add robin condition at interface
+        L -= C_phi * inner(g_robin[jdx], v['e'](e_res)) * dS[tag] \
+           - C_phi * inner(g_robin[jdx], v['i'](i_res)) * dS[tag]
+    #-----------------------------------------------------------------------
+    """
 
-    for axis in range(gdim):
-        x_min = mesh.coordinates().min(axis=0)
-        x_max = mesh.coordinates().max(axis=0)
+    f_flux = mms['f_flux_phi']
+    g_robin = mms['g_robin_phi']
 
-        x_min = np.array([MPI.min(mesh.mpi_comm(), xi) for xi in x_min])
-        x_max = np.array([MPI.max(mesh.mpi_comm(), xi) for xi in x_max])
+    L = 0
 
-    # scaled mess matrix
-    Lp = Constant(max(x_max - x_min))
-    # self.B_emi is singular so we add (scaled) mass matrix
-    mass = kappa_e*(1/Lp**2)*inner(up, vp)*dx
+    # Add MMS term for g_robin
+    # ... add robin condition at interface
+    for mm in mem_models:
+        # get tag
+        tag = mm['ode'].tag
+        # add robin MMS condition at interface
+        #L += C_phi * inner(g_robin, v['i'](i_res)) * dS[tag] \
+           #- C_phi * inner(g_robin, v['e'](e_res)) * dS[tag]
 
-    B = a + mass
+        print("tag mem model", tag)
 
-    return B
+        # MMS specific: we don't have normal cont. of I_M across interface
+        #L += inner(f_flux, v['e'](e_res)) * dS[tag]
+
+    f_phi_e = mms['f_phi_e']
+    f_phi_i = mms['f_phi_i']
+    n = mms['n']
+
+    # MMS specific: add MMS source terms to bulk
+    L += f_phi_e * v['e'] * dx(0) \
+       + f_phi_i * v['i'] * dx(1)
+
+    # MMS specific: add neumann boundary conditions
+    #for ion in ion_list:
+        # MMS specific: add neumann boundary terms (not zero in MMS case)
+        #L += - F * ion['z'] * dot(ion['bdry'], n) * v['e'] * ds
+
+    g = mms['neumann_emi']
+    L += -inner(g, v['e']) * ds
+
+    return a, L
 
 
 def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
-        phi, phi_M_prev_PDE, c_prev, degree=1):
+        phi, phi_M_prev_PDE, c_prev, degree=1, splitting_scheme=True, mms=None):
     """ Create and return EMI weak formulation """
+
+    MMS_FLAG = False if mms is None else True
 
     phi_e = phi['e']
     phi_i = phi['i']
@@ -209,30 +264,44 @@ def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
     V_e = phi_e.function_space
     V_i = phi_i.function_space
     # Create mixed function space for potentials (phi)
-    W = MixedFunctionSpace(*[V_e, V_i])
+    W = MixedFunctionSpace(V_e, V_i)
 
     # Test and trial functions
-    u_e, u_i = TrialFunctions(W)
-    v_e, v_i = TestFunctions(W)
+    ue, ui = TrialFunctions(W)
+    ve, vi = TestFunctions(W)
 
-    u = {'e':u_e, 'i':u_i}
-    v = {'e':v_e, 'i':v_i}
+    u = {'e':ue, 'i':ui}
+    v = {'e':ve, 'i':vi}
 
     # Get tissue conductance and set Nernst potentials
-    kappa = initialize_variables(
-            ion_list, c_prev, physical_params
+    kappa, I_ch = initialize_variables(
+            ion_list, c_prev, physical_params, mem_models
     )
 
-    a = get_lhs_emi(
-            kappa, u, v, dx, dS, physical_params, mem_models
+    # TODO
+    kappa_e = dolfinx.fem.Constant(meshes['mesh_e'], 1.0)
+    kappa_i = dolfinx.fem.Constant(meshes['mesh_i'], 2.0)
+    kappa['e'] = kappa_e
+    kappa['i'] = kappa_i
+    # TODO
+
+    # if MMS (i.e. no ODEs to solve), set splitting_scheme to false
+    if MMS_FLAG: splitting_scheme = False
+
+    # get standard variational formulation
+    a = get_lhs(
+            kappa, u, v, dx, dS, physical_params, mem_models,
+            splitting_scheme
+        )
+
+
+    L = get_rhs(
+            c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE,
+            mem_models, I_ch, splitting_scheme
     )
 
-    L = get_rhs_emi(
-            c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE, mem_models
-    )
+    # add terms specific to mms test
+    if MMS_FLAG: a, L = add_mms_terms(a, L, v, dx, dS, ds, I_ch, 
+            phi_M_prev_PDE, mms, physical_params, mem_models, ion_list)
 
-    # get function space at gamma for membrane potential
-    #V = phi_M_prev_PDE.function_space
-    #precond = get_preconditioner(V, mesh, lhs, kappa_e, kappa_i)
-
-    return a, L
+    return a, L, dx

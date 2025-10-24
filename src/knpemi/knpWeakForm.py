@@ -10,6 +10,7 @@ from ufl import (
     FacetNormal,
     MixedFunctionSpace,
     Measure,
+    dot,
 )
 
 interior_marker = 1
@@ -17,7 +18,6 @@ exterior_marker = 0
 
 i_res = "+" if interior_marker < exterior_marker else "-"
 e_res = "-" if interior_marker < exterior_marker else "+"
-
 
 def create_measures(meshes, ct, ft, ct_g):
     # Get mesh and interface/membrane tags associated with the membrane models
@@ -42,7 +42,7 @@ def create_measures(meshes, ct, ft, ct_g):
         # Add to dictionary of gamma measures
         dS[tag] = dGamma
 
-    return dx, ds, dS
+    return dx, dS, ds
 
 
 def create_functions_knp(meshes, ion_list, degree=1):
@@ -114,7 +114,7 @@ def initialize_variables(ion_list, mem_models, c_e_prev, c_i_prev):
     return alpha_e_sum, alpha_i_sum, I_ch
 
 
-def create_lhs_knp(u, v, phi, dx, dS, ion_list, physical_parameters, dt):
+def create_lhs(u, v, phi, dx, dS, ion_list, physical_parameters, dt, splitting_scheme):
     """ setup variational form for the knp system """
 
     # get psi
@@ -150,9 +150,9 @@ def create_lhs_knp(u, v, phi, dx, dS, ion_list, physical_parameters, dt):
     return a
 
 
-def create_rhs_knp(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
+def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
         physical_parameters, ion_list, mem_models, I_ch, alpha_e_sum,
-        alpha_i_sum, dt):
+        alpha_i_sum, dt, splitting_scheme):
     """ setup right hand side of variational form for KNP system """
 
     psi = physical_parameters['psi']        # combination of physical constants
@@ -201,25 +201,26 @@ def create_rhs_knp(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
             # get facet tag
             tag = mm['ode'].tag
 
-            # robin condition with splitting
-            g_robin_knp_e = phi_M_prev_PDE \
-                          - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']] \
-                          + (dt / C_M) * I_ch[jdx]
+            if splitting_scheme:
+                # robin condition terms with splitting
+                g_robin_e = phi_M_prev_PDE \
+                              - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']] \
+                              + (dt / C_M) * I_ch[jdx]
+                g_robin_i = phi_M_prev_PDE \
+                              - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']] \
+                              + (dt / C_M) * I_ch[jdx]
+            else:
+                # original robin condition terms (without splitting)
+                g_robin_e = phi_M_prev_PDE \
+                              - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']]
+                g_robin_i = phi_M_prev_PDE \
+                              - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
 
-            g_robin_knp_i = phi_M_prev_PDE \
-                          - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']] \
-                          + (dt / C_M) * I_ch[jdx]
- 
-            #else:
-            # original robin condition (without splitting)
-            #g_robin_knp = self.phi_M_prev_PDE \
-            #            - self.dt / (C_M * alpha) * mm['I_ch_k'][ion['name']]
+            # add robin coupling condition at interface
+            L -= C_e * g_robin_e * v_e(e_res) * dS[tag]
+            L += C_i * g_robin_i * v_i(i_res) * dS[tag]
 
-            # add coupling condition at interface
-            L -= C_e * g_robin_knp_e * v_e(e_res) * dS[tag]
-            L += C_i * g_robin_knp_i * v_i(i_res) * dS[tag]
-
-            # add coupling terms on interface gamma
+            # add coupling terms on interface
             L -= C_i * inner(phi_i(i_res), v_i(i_res)) * dS[tag]
             L += C_i * inner(phi_e(e_res), v_i(i_res)) * dS[tag]
             L -= C_e * inner(phi_i(i_res), v_e(e_res)) * dS[tag]
@@ -227,11 +228,80 @@ def create_rhs_knp(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
 
     return L
 
+def add_mms_terms(a, L, v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
+        physical_parameters, alpha_e_sum, alpha_i_sum, c_prev, dx, dS, ds):
+    #-----------------------------------------------------------------------
+    # Remove stuff from form to be replaced by MMS terms below
+    #-----------------------------------------------------------------------
+    C_M = physical_parameters['C_M']
+    F = physical_parameters['F']
 
-def knp_system(
-        meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
-        phi, phi_M_prev_PDE, c, c_prev, dt, degree=1
-    ):
+    for idx, ion in enumerate(ion_list[:-1]):
+        # loop through each membrane model
+        # get extra and intracellular test functions
+        v_e = v['e'][idx]
+        v_i = v['i'][idx]
+
+        z = ion['z']
+        D_e = ion['D'][0]
+        D_i = ion['D'][1]
+
+        # get previous concentration
+        c_e_ = c_prev['e'][idx]
+        c_i_ = c_prev['i'][idx]
+
+        alpha_e = D_e * z * z * c_e_ / alpha_e_sum
+        alpha_i = D_i * z * z * c_i_ / alpha_i_sum
+
+        # calculate coupling coefficient
+        C_e = alpha_e(e_res) * C_M / (F * z * dt)
+        C_i = alpha_i(i_res) * C_M / (F * z * dt)
+
+        for jdx, mm in enumerate(mem_models):
+            # get facet tag
+            tag = mm['ode'].tag
+
+            # original robin condition terms (without splitting)
+            g_robin_e = phi_M_prev_PDE \
+                      - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']]
+            g_robin_i = phi_M_prev_PDE \
+                      - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
+
+            # add robin coupling condition at interface
+            L += C_e * g_robin_e * v_e(e_res) * dS[tag]
+            L -= C_i * g_robin_i * v_i(i_res) * dS[tag]
+
+    #-----------------------------------------------------------------------
+    n = mms['n']
+    for idx, ion in enumerate(ion_list[:-1]):
+        v_e = v['e'][idx]
+        v_i = v['i'][idx]
+        # get mms data
+        g_robin_e = ion['g_robin_e']
+        g_robin_i = ion['g_robin_i']
+
+        for jdx, mm in enumerate(mem_models):
+            # get facet tag
+            tag = mm['ode'].tag
+
+            # add robin coupling condition at interface
+            L -= g_robin_e[tag] * v_e(e_res) * dS[tag]
+            L += g_robin_i[tag] * v_i(i_res) * dS[tag]
+
+        # MMS specific: add ICS source terms (ECS already added in create_rhs)
+        L += inner(ion['f_i'], v_i)*dx(1)
+
+        # MMS specific: add neumann contribution
+        L += - dot(ion['bdry'], n) * v_e * ds
+
+    return a, L
+
+def knp_system(meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
+        phi, phi_M_prev_PDE, c, c_prev, dt, degree=1, splitting_scheme=True, 
+        mms=None):
+    """ Create and return EMI weak formulation """
+
+    MMS_FLAG = False if mms is None else True
 
     # Extract functions for solution concentrations
     c_e = c['e']
@@ -245,7 +315,7 @@ def knp_system(
     N_ions = len(ion_list[:-1])
 
     # Create measures
-    dx, ds, dS = create_measures(
+    dx, dS, ds = create_measures(
             meshes, ct, ft, ct_g
     )
 
@@ -272,16 +342,25 @@ def knp_system(
             ion_list, mem_models, c_e_prev, c_i_prev
     )
 
+    # if MMS (i.e. no ODEs to solve), set splitting_scheme to false
+    if MMS_FLAG: splitting_scheme = False
+
     # Create left hand side knp system
-    a = create_lhs_knp(
-            u, v, phi, dx, dS, ion_list, physical_parameters, dt
+    a = create_lhs(
+            u, v, phi, dx, dS, ion_list, physical_parameters, dt,
+            splitting_scheme
     )
 
     # Create right hand side knp system
-    L = create_rhs_knp(
+    L = create_rhs(
             v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
             physical_parameters, ion_list, mem_models, I_ch, alpha_e_sum,
-            alpha_i_sum, dt
+            alpha_i_sum, dt, splitting_scheme
     )
+
+    # add terms specific to mms test
+    if MMS_FLAG: a, L = add_mms_terms(a, L, v, mem_models, ion_list, mms,
+            phi_M_prev_PDE, dt, physical_parameters, alpha_e_sum, alpha_i_sum,
+            c_prev, dx, dS, ds)
 
     return a, L

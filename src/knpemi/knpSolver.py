@@ -4,26 +4,19 @@ from ufl import (
     extract_blocks,
 )
 
-def create_solver_knp(direct, rtol, atol, threshold):
-    """ Setup solver for the emi sub-problem """
-    if direct:
-        petsc_options = {
+def create_solver_knp(a, L, c, entity_maps, comm):
+    """ Setup solver for the knp sub-problem """
+    # Extract extra and intracellular concentrations
+    c_e = c['e']
+    c_i = c['i']
+
+    petsc_options = {
                 "ksp_type": "preonly",
                 "pc_type": "lu",
                 "pc_factor_mat_solver_type": "mumps",
                 "ksp_monitor": None,
                 "ksp_error_if_not_converged": True,
-        }
-    else:
-        print("Iterative solver not implemented")
-        sys.exit(0)
-
-    return petsc_options
-
-def solve_knp(c, a, L, petsc_options, entity_maps, bc=None):
-    """ solve emi system using either a direct or iterative solver """
-    c_e = c['e']
-    c_i = c['i']
+    }
 
     # Extract extra and intracellular potentials
     problem = dolfinx.fem.petsc.LinearProblem(
@@ -35,6 +28,4 @@ def solve_knp(c, a, L, petsc_options, entity_maps, bc=None):
             entity_maps=entity_maps,
     )
 
-    problem.solve()
-
-    return
+    return problem

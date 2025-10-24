@@ -117,5 +117,7 @@ def main(output_path, resolution_factor):
         xdmf.write_meshtags(ct, mesh.geometry)
         xdmf.write_meshtags(ft, mesh.geometry)
 
+    xdmf.close()
+
 if __name__=="__main__":
     main("meshes/2D/", 2)
