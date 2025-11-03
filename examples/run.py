@@ -7,10 +7,7 @@ from knpemi.knpSolver import create_solver_knp
 
 from knpemi.utils import interpolate_to_membrane
 
-#from knpemi.script import interpolate_to_submesh, compute_interface_data
-
-#import mm_hh as mm_hh
-import mm_hh_old_fen as mm_hh
+import mm_hh as mm_hh
 
 import dolfinx
 import scifem
@@ -84,12 +81,8 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
         c_prev['e'][idx].x.scatter_forward()
         c_prev['i'][idx].x.scatter_forward()
 
-    # Update membrane potential from ODE solution
-    Q = phi_M_prev.function_space
-    phi_i_gamma = dolfinx.fem.Function(Q)
-    phi_e_gamma = dolfinx.fem.Function(Q)
-
     # Update previous membrane potential (source term PDEs)
+    Q = phi_M_prev.function_space
     tr_phi_e, tr_phi_i = interpolate_to_membrane(phi_e, phi_i, Q, meshes)
     phi_M_prev.x.array[:] = tr_phi_i.x.array - tr_phi_e.x.array
     phi_M_prev.x.scatter_forward()
