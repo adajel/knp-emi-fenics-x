@@ -306,7 +306,6 @@ if not os.path.isdir('results'):
 
 # create figures
 dt = 1.0e-4
-#T = 3.0e-1
 T = 1.0e-2
 
 plot_2D_concentration(dt, T)

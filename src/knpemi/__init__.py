@@ -1,17 +1,17 @@
 from knpemi.membrane import MembraneModel
 
 from knpemi.emiWeakForm import emi_system
-from knpemi.emiWeakForm import create_functions_emi
 from knpemi.knpWeakForm import knp_system
+
+from knpemi.emiWeakForm import create_functions_emi
 from knpemi.knpWeakForm import create_functions_knp
 
-from knpemi.utils import set_initial_conditions, setup_membrane_model
+from knpemi.utils import set_initial_conditions
+from knpemi.utils import setup_membrane_model
+from knpemi.utils import interpolate_to_membrane
 
 from knpemi.emiSolver import create_solver_emi
 from knpemi.knpSolver import create_solver_knp
-
-from knpemi.script import interpolate_to_submesh
-from knpemi.script import compute_interface_data
 
 __all__ = ["MembraneModel",
            "emi_system", "knp_system",

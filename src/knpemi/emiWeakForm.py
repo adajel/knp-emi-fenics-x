@@ -60,16 +60,16 @@ def create_functions_emi(meshes, degree=1):
     phi_e = dolfinx.fem.Function(V_e)
     phi_i = dolfinx.fem.Function(V_i)
     # previous membrane potential
-    phi_M_prev_PDE = dolfinx.fem.Function(Q)
+    phi_M_prev = dolfinx.fem.Function(Q)
 
     # name functions (convenient when writing results to file)
     phi_e.name = "phi_e"
     phi_i.name = "phi_i"
-    phi_M_prev_PDE.name = "phi_m"
+    phi_M_prev.name = "phi_m"
 
     phi = {'e':phi_e, 'i':phi_i}
 
-    return phi, phi_M_prev_PDE
+    return phi, phi_M_prev
 
 
 def initialize_variables(ion_list, c_prev, physical_params, mem_models):
@@ -91,7 +91,7 @@ def initialize_variables(ion_list, c_prev, physical_params, mem_models):
         c_i = ion_list[-1]['c_i'] if is_last else c_prev['i'][idx]
 
         # Calculate and set Nernst potential for current ion (+ is ECS, - is ICS)
-        ion['E'] = R * temperature / (F * ion['z']) * ln(c_i(i_res) / c_e(e_res))
+        ion['E'] = R * temperature / (F * ion['z']) * ln(c_e(e_res) / c_i(i_res))
 
         # Add contribution to kappa (tissue conductance)
         kappa_e += F * ion['z'] * ion['z'] * ion['D'][0] * psi * c_e
@@ -144,7 +144,8 @@ def get_lhs(kappa, u, v, dx, dS, physical_params, mem_models,
     return a
 
 
-def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE,
+def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
+
         mem_models, I_ch, splitting_scheme):
     """ setup variational form for the emi system """
 
@@ -174,10 +175,10 @@ def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE,
 
     if splitting_scheme:
         # robin condition with PDE/ODE splitting scheme
-        g_robin = [phi_M_prev_PDE]*len(mem_models)
+        g_robin = [phi_M_prev]*len(mem_models)
     else:
         # original robin condition (without splitting)
-        g_robin = [phi_M_prev_PDE - (1 / C_phi) * I for I in I_ch]
+        g_robin = [phi_M_prev - (1 / C_phi) * I for I in I_ch]
 
     for jdx, mm in enumerate(mem_models):
         # get tag
@@ -188,7 +189,7 @@ def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE,
 
     return L
 
-def add_mms_terms(a, L, v, dx, dS, ds, I_ch, phi_M_prev_PDE,
+def add_mms_terms(a, L, v, dx, dS, ds, I_ch, phi_M_prev,
         mms, physical_params, mem_models, ion_list):
 
     C_phi = physical_params['C_phi']
@@ -199,7 +200,7 @@ def add_mms_terms(a, L, v, dx, dS, ds, I_ch, phi_M_prev_PDE,
     # with MMS terms below)
 
     # original robin condition (without splitting)
-    g_robin = [phi_M_prev_PDE - (1 / C_phi) * I for I in I_ch]
+    g_robin = [phi_M_prev - (1 / C_phi) * I for I in I_ch]
 
     for jdx, mm in enumerate(mem_models):
         # get tag
@@ -238,18 +239,18 @@ def add_mms_terms(a, L, v, dx, dS, ds, I_ch, phi_M_prev_PDE,
        + f_phi_i * v['i'] * dx(1)
 
     # MMS specific: add neumann boundary conditions
-    #for ion in ion_list:
+    for ion in ion_list:
         # MMS specific: add neumann boundary terms (not zero in MMS case)
-        #L += - F * ion['z'] * dot(ion['bdry'], n) * v['e'] * ds
+        L += - F * ion['z'] * dot(ion['bdry'], n) * v['e'] * ds
 
-    g = mms['neumann_emi']
-    L += -inner(g, v['e']) * ds
+    #g = mms['neumann_emi']
+    #L += inner(g, v['e']) * ds
 
     return a, L
 
 
 def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
-        phi, phi_M_prev_PDE, c_prev, degree=1, splitting_scheme=True, mms=None):
+        phi, phi_M_prev, c_prev, degree=1, splitting_scheme=True, mms=None):
     """ Create and return EMI weak formulation """
 
     MMS_FLAG = False if mms is None else True
@@ -279,10 +280,10 @@ def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
     )
 
     # TODO
-    kappa_e = dolfinx.fem.Constant(meshes['mesh_e'], 1.0)
-    kappa_i = dolfinx.fem.Constant(meshes['mesh_i'], 2.0)
-    kappa['e'] = kappa_e
-    kappa['i'] = kappa_i
+    #kappa_e = dolfinx.fem.Constant(meshes['mesh_e'], 1.0)
+    #kappa_i = dolfinx.fem.Constant(meshes['mesh_i'], 2.0)
+    #kappa['e'] = kappa_e
+    #kappa['i'] = kappa_i
     # TODO
 
     # if MMS (i.e. no ODEs to solve), set splitting_scheme to false
@@ -294,14 +295,13 @@ def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
             splitting_scheme
         )
 
-
     L = get_rhs(
-            c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev_PDE,
+            c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
             mem_models, I_ch, splitting_scheme
     )
 
     # add terms specific to mms test
-    if MMS_FLAG: a, L = add_mms_terms(a, L, v, dx, dS, ds, I_ch, 
-            phi_M_prev_PDE, mms, physical_params, mem_models, ion_list)
+    if MMS_FLAG: a, L = add_mms_terms(a, L, v, dx, dS, ds, I_ch,
+            phi_M_prev, mms, physical_params, mem_models, ion_list)
 
-    return a, L, dx
+    return a, L

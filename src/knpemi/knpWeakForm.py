@@ -59,8 +59,8 @@ def create_functions_knp(meshes, ion_list, degree=1):
     W = MixedFunctionSpace(* ([V_e] * N_ions + [V_i] * N_ions))
 
     # Functions for current extra and intracellular concentrations
-    c_e = [dolfinx.fem.Function(V_e)] * N_ions
-    c_i = [dolfinx.fem.Function(V_i)] * N_ions
+    c_e = [dolfinx.fem.Function(V_e) for i in range(N_ions)]
+    c_i = [dolfinx.fem.Function(V_i) for i in range(N_ions)]
     c = {'e':c_e, 'i':c_i}
 
     # Name functions (convenient when writing results to file)
@@ -71,13 +71,27 @@ def create_functions_knp(meshes, ion_list, degree=1):
         f_i.name = f"c_{ion_name}_i"
 
     # Functions for previous extra and intracellular concentrations
-    c_e_prev = [dolfinx.fem.Function(V_e)] * N_ions
-    c_i_prev = [dolfinx.fem.Function(V_i)] * N_ions
+    c_e_prev = [dolfinx.fem.Function(V_e) for i in range(N_ions)]
+    c_i_prev = [dolfinx.fem.Function(V_i) for i in range(N_ions)]
     c_prev = {'e':c_e_prev, 'i':c_i_prev}
+
+    # TODO temporary hack
+    # Name functions (convenient when writing results to file)
+    for f_e, f_i, ion in zip(c_e_prev, c_i_prev, ion_list):
+        ion_name = ion['name']
+        # Assign names
+        f_e.name = f"c_{ion_name}_e"
+        f_i.name = f"c_{ion_name}_i"
+    # TODO temporary hack
 
     # Initialize function for eliminated ion species
     ion_list[-1]['c_e'] = dolfinx.fem.Function(V_e)
     ion_list[-1]['c_i'] = dolfinx.fem.Function(V_i)
+
+    # Name eliminated functions (convenient when writing results to file)
+    ion_name = ion_list[-1]['name']
+    ion_list[-1]['c_e'].name = f"c_{ion_name}_e"
+    ion_list[-1]['c_i'].name = f"c_{ion_name}_i"
 
     return c, c_prev
 

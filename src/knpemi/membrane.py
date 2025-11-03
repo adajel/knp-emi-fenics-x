@@ -1,6 +1,7 @@
 import dolfinx
 import numpy as np
 from numbalsoda import lsoda
+import sys
 
 class MembraneModel():
     '''ODE on membrane defined by tagged facet function'''
@@ -14,6 +15,9 @@ class MembraneModel():
         # get indices for given tag
         indices = ft.find(tag)
         self.indices = indices.flatten()
+
+        print(indices)
+        print(self.indices)
 
         # get location of degrees of freedom for indices for given tag
         self.dof_locations = Q.tabulate_dof_coordinates()[self.indices]
@@ -205,42 +209,56 @@ if __name__=="__main__":
         interface_facets,
         np.full(interface_facets.shape, 1, dtype=np.int32),
     )
-    ft.name = "facettag"
 
-    gamma, gamma_to_parent, _, _, _ = scifem.mesh.extract_submesh(domain, ft, 1)
+    ft.name = "facet_tag"
+    gamma, g_to_parent, g_vertex_to_parent, _, _ = scifem.mesh.extract_submesh(domain, ft, 1)
 
+    """
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, "parent.xdmf", "w") as xdmf:
         xdmf.write_mesh(domain)
-        xdmf.write_meshtags(ct, domain.geometry)
-        xdmf.write_meshtags(ft, domain.geometry)
+        xdmf.write_meshtags(ct, domain.Geometry)
+        xdmf.write_meshtags(ft, domain.Geometry)
     xdmf.close()
+    """
 
     cell_map = gamma.topology.index_map(gamma.topology.dim)
     num_cells_local = cell_map.size_local + cell_map.num_ghosts
     markers = np.full(num_cells_local, 1, dtype=np.int32)
 
-    ct = dolfinx.mesh.meshtags(
-        domain, domain.topology.dim, np.arange(num_cells_local, dtype=np.int32), markers
+    # Transfer mesh tags from ft to tags for gamma mesh on interface
+    ct_g, _ = scifem.transfer_meshtags_to_submesh(
+            ft, gamma, g_vertex_to_parent, g_to_parent
     )
+
+
+    # get indices for given tag
+    #indices = ft.find(1)
+    #Q = fem.functionspace(domain, ("CG", 1))
+    #dof_locations = Q.tabulate_dof_coordinates()[indices]
+    #print(dof_locations)
+
+    #indices = ct_g.find(1)
+    #Q = fem.functionspace(gamma, ("CG", 1))
+    #dof_locations = Q.tabulate_dof_coordinates()[indices]
+    #print(dof_locations)
+
+    #sys.exit(0)
 
     Q = fem.functionspace(gamma, ("CG", 1))
     phi_M = fem.Function(Q)
     phi_M.x.array[:] = -74.38609374462003
 
-    membrane = MembraneModel(ode, ct, 1, Q)
+    membrane = MembraneModel(ode, ct_g, 1, Q)
 
     membrane.set_membrane_potential(phi_M)
 
-    stimulus = {'stim_amplitude': 150.0,
-                'stim_period': 2.0,
-                'stim_duration': 2.0,
-                'stim_start': 0}
+    stimulus = {'stim_amplitude': 100.0}
     stimulus = None
 
     V_index = ode.state_indices('V')
     potential_history = []
 
-    for _ in range(2000):
+    for _ in range(3000):
         membrane.step_lsoda(dt=0.01, stimulus=stimulus)
         potential_history.append(1*membrane.states[:, V_index])
         #membrane.get_membrane_potential(phi_M)

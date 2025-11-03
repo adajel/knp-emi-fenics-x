@@ -4,11 +4,10 @@ from mpi4py import MPI
 
 from ufl import (
     extract_blocks,
-    MixedFunctionSpace,
 )
 
 
-def create_solver_emi(a, L, phi, entity_maps, comm):
+def create_solver_emi(a, L, phi, entity_maps, comm, bcs=None):
     """ solve emi system using either a direct or iterative solver """
     petsc_options = {
             "ksp_type": "preonly",
@@ -26,18 +25,23 @@ def create_solver_emi(a, L, phi, entity_maps, comm):
             extract_blocks(a),
             extract_blocks(L),
             u=[phi_e, phi_i],
+            bcs=bcs,
             petsc_options=petsc_options,
             petsc_options_prefix="emi_direct_",
             entity_maps=entity_maps,
     )
 
-    # Extract assembled rhs and lhs of system
+    # TODO, make copy to asses if nullspace
     #A.assemble()
     #assert nullspace.test(A)
 
-    # Set nullspace
-    A = problem.A
-    nullspace = PETSc.NullSpace().create(constant=True, comm=comm)
-    A.setNullSpace(nullspace)
+    # If no Dirichlet conditions (i.e. pure Neumann problem), A is singular 
+    # and we need to inform the solver about the null-space
+    if bcs is None:
+
+        # Set nullspace
+        A = problem.A
+        nullspace = PETSc.NullSpace().create(constant=True, comm=comm)
+        A.setNullSpace(nullspace)
 
     return problem
