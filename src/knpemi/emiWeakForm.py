@@ -11,7 +11,13 @@ from ufl import (
     MixedFunctionSpace,
     Measure,
     ln,
-    extract_blocks
+    extract_blocks,
+    FacetNormal,
+    SpatialCoordinate,
+    div,
+    cos,
+    sin,
+    pi,
 )
 
 interior_marker = 1
@@ -30,7 +36,7 @@ def create_measures(meshes, ct, ft, ct_g):
 
     dS = {}
     # Define measures on membrane interface gamma
-    interface_marker = 4
+    interface_marker = 1
     #ordered_integration_data = scifem.compute_interface_data(ct, ct_g.find(interface_marker))
     ordered_integration_data = scifem.compute_interface_data(ct, ft.find(interface_marker))
     for tag in gamma_tags:
@@ -143,9 +149,7 @@ def get_lhs(kappa, u, v, dx, dS, physical_params, mem_models,
 
     return a
 
-
 def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
-
         mem_models, I_ch, splitting_scheme):
     """ setup variational form for the emi system """
 
@@ -189,68 +193,54 @@ def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
 
     return L
 
-def add_mms_terms(a, L, v, dx, dS, ds, I_ch, phi_M_prev,
+def get_rhs_mms(v, dx, dS, ds, dt, n, I_ch, phi_M_prev, c_prev,
         mms, physical_params, mem_models, ion_list):
 
     C_phi = physical_params['C_phi']
     F = physical_params['F']
-    """
-    #-----------------------------------------------------------------------
-    # Remove robin splitting terms from variational formulation (to be replaced
-    # with MMS terms below)
+    psi = physical_params['psi']
+    C_M = physical_params['C_M']
+    R = physical_params['R']
+    temperature = physical_params['temperature']
 
-    # original robin condition (without splitting)
-    g_robin = [phi_M_prev - (1 / C_phi) * I for I in I_ch]
+    v_e = v['e']
+    v_i = v['i']
 
-    for jdx, mm in enumerate(mem_models):
-        # get tag
-        tag = mm['ode'].tag
-        # add robin condition at interface
-        L -= C_phi * inner(g_robin[jdx], v['e'](e_res)) * dS[tag] \
-           - C_phi * inner(g_robin[jdx], v['i'](i_res)) * dS[tag]
-    #-----------------------------------------------------------------------
-    """
-
-    f_flux = mms['f_flux_phi']
-    g_robin = mms['g_robin_phi']
-
+    # initialize
     L = 0
 
-    # Add MMS term for g_robin
-    # ... add robin condition at interface
-    for mm in mem_models:
-        # get tag
-        tag = mm['ode'].tag
-        # add robin MMS condition at interface
-        #L += C_phi * inner(g_robin, v['i'](i_res)) * dS[tag] \
-           #- C_phi * inner(g_robin, v['e'](e_res)) * dS[tag]
+    # not MMS specific,
+    for idx, ion in enumerate(ion_list):
+        # Determine the function source based on the index
+        is_last = (idx == len(ion_list) - 1)
 
-        print("tag mem model", tag)
+        c_e_ = ion_list[-1]['c_e'] if is_last else c_prev['e'][idx]
+        c_i_ = ion_list[-1]['c_i'] if is_last else c_prev['i'][idx]
 
-        # MMS specific: we don't have normal cont. of I_M across interface
-        #L += inner(f_flux, v['e'](e_res)) * dS[tag]
+        # Add terms rhs (diffusive terms)
+        L += - F * ion['z'] * inner((ion['D'][0])*grad(c_e_), grad(v_e)) * dx(0) \
+             - F * ion['z'] * inner((ion['D'][1])*grad(c_i_), grad(v_i)) * dx(1) \
 
-    f_phi_e = mms['f_phi_e']
-    f_phi_i = mms['f_phi_i']
-    n = mms['n']
+    # MMS specific source terms
+    # EMI source terms for potentials
+    L += inner(mms['f_phi_e'], v_e) * dx(0) # Equation for phi_e
+    L += inner(mms['f_phi_i'], v_i) * dx(1) # Equation for phi_i
 
-    # MMS specific: add MMS source terms to bulk
-    L += f_phi_e * v['e'] * dx(0) \
-       + f_phi_i * v['i'] * dx(1)
-
-    # MMS specific: add neumann boundary conditions
+    # Add Neumann term (zero in physiological simulation)
     for ion in ion_list:
-        # MMS specific: add neumann boundary terms (not zero in MMS case)
-        L += - F * ion['z'] * dot(ion['bdry'], n) * v['e'] * ds
+        L += F * ion['z'] * dot(ion['J_k_e'], n) * v_e * ds
 
-    #g = mms['neumann_emi']
-    #L += inner(g, v['e']) * ds
+    # Add robin terms (i.e. source term for equation for phi_M)
+    # TODO
+    #L += C_phi * inner(mms['f_phi_m'], v_e(e_res) - v_i(i_res)) * dS[1]
+    L += C_phi * inner(mms['f_phi_m'], v_i(i_res) - v_e(e_res)) * dS[1]
+    # Enforcing correction for I_m
+    L -= inner(mms['f_I_M'], v_e(e_res)) * dS[1]
 
-    return a, L
-
+    return L
 
 def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
-        phi, phi_M_prev, c_prev, degree=1, splitting_scheme=True, mms=None):
+        phi, phi_M_prev, c_prev, dt, degree=1, splitting_scheme=True, mms=None):
     """ Create and return EMI weak formulation """
 
     MMS_FLAG = False if mms is None else True
@@ -267,6 +257,8 @@ def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
     # Create mixed function space for potentials (phi)
     W = MixedFunctionSpace(V_e, V_i)
 
+    n = FacetNormal(meshes['mesh'])
+
     # Test and trial functions
     ue, ui = TrialFunctions(W)
     ve, vi = TestFunctions(W)
@@ -278,13 +270,6 @@ def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
     kappa, I_ch = initialize_variables(
             ion_list, c_prev, physical_params, mem_models
     )
-
-    # TODO
-    #kappa_e = dolfinx.fem.Constant(meshes['mesh_e'], 1.0)
-    #kappa_i = dolfinx.fem.Constant(meshes['mesh_i'], 2.0)
-    #kappa['e'] = kappa_e
-    #kappa['i'] = kappa_i
-    # TODO
 
     # if MMS (i.e. no ODEs to solve), set splitting_scheme to false
     if MMS_FLAG: splitting_scheme = False
@@ -301,7 +286,25 @@ def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
     )
 
     # add terms specific to mms test
-    if MMS_FLAG: a, L = add_mms_terms(a, L, v, dx, dS, ds, I_ch,
-            phi_M_prev, mms, physical_params, mem_models, ion_list)
+    if MMS_FLAG: L = get_rhs_mms(v, dx, dS, ds, dt, n, I_ch,
+            phi_M_prev, c_prev, mms, physical_params, mem_models, ion_list)
 
-    return a, L
+    # Create Dirichlet BC
+    omega_e = meshes['mesh_e']
+    e_vertex_to_parent = meshes['e_vertex_to_parent']
+    exterior_to_parent = meshes['e_to_parent']
+    boundary_marker = 5
+    sub_tag, _ = scifem.transfer_meshtags_to_submesh(
+        ft, omega_e, e_vertex_to_parent, exterior_to_parent
+    )
+
+    omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
+    bc_dofs = dolfinx.fem.locate_dofs_topological(
+        V_e, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
+    )
+
+    u_bc = dolfinx.fem.Function(V_e)
+    u_bc.interpolate(lambda x: np.sin(np.pi * x[0]) * np.sin(np.pi * x[1]))
+    bc = dolfinx.fem.dirichletbc(u_bc, bc_dofs)
+
+    return a, L, dx, bc

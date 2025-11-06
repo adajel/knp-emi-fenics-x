@@ -9,6 +9,7 @@ from ufl import (
 
 def create_solver_emi(a, L, phi, entity_maps, comm, bcs=None):
     """ solve emi system using either a direct or iterative solver """
+
     petsc_options = {
             "ksp_type": "preonly",
             "pc_type": "lu",
@@ -22,23 +23,22 @@ def create_solver_emi(a, L, phi, entity_maps, comm, bcs=None):
 
     # Extract extra and intracellular potentials
     problem = dolfinx.fem.petsc.LinearProblem(
-            extract_blocks(a),
-            extract_blocks(L),
-            u=[phi_e, phi_i],
-            bcs=bcs,
-            petsc_options=petsc_options,
-            petsc_options_prefix="emi_direct_",
-            entity_maps=entity_maps,
+              extract_blocks(a),
+              extract_blocks(L),
+              u=[phi_e, phi_i],
+              bcs=bcs,
+              petsc_options=petsc_options,
+              petsc_options_prefix="emi_direct_",
+              entity_maps=entity_maps,
     )
 
     # TODO, make copy to asses if nullspace
     #A.assemble()
     #assert nullspace.test(A)
 
-    # If no Dirichlet conditions (i.e. pure Neumann problem), A is singular 
+    # If no Dirichlet conditions (i.e. pure Neumann problem), A is singular
     # and we need to inform the solver about the null-space
     if bcs is None:
-
         # Set nullspace
         A = problem.A
         nullspace = PETSc.NullSpace().create(constant=True, comm=comm)

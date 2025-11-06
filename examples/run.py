@@ -232,8 +232,8 @@ def solve_system():
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
 
-    dt = 1.0e-4                            # global time step (ms)
-    Tstop = 1.0e-2                          # global end time (ms)
+    dt = 1.0e-4                         # global time step (ms)
+    Tstop = 2.0e-3                      # global end time (ms)
     n_steps_ODE = 25                    # number of ODE steps
 
     # Physical parameters
@@ -338,7 +338,7 @@ def solve_system():
     ion_list = [K, Cl, Na]
 
     # Membrane parameters
-    g_syn_bar = 10                     # synaptic conductivity (S/m**2)
+    g_syn_bar = 0                     # synaptic conductivity (S/m**2)
 
     # Set stimulus ODE
     stimulus = {'stim_amplitude': g_syn_bar}
@@ -376,7 +376,7 @@ def solve_system():
             ode_models, ct_g, phi_M_prev.function_space, ion_list)
 
     # Create variational form emi problem
-    a_emi, L_emi = emi_system(
+    a_emi, L_emi, dx = emi_system(
             meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
             phi, phi_M_prev, c_prev
     )

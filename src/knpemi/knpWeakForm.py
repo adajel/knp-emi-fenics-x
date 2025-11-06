@@ -11,6 +11,7 @@ from ufl import (
     MixedFunctionSpace,
     Measure,
     dot,
+    FacetNormal,
 )
 
 interior_marker = 1
@@ -243,70 +244,94 @@ def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
     return L
 
 def add_mms_terms(a, L, v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
-        physical_parameters, alpha_e_sum, alpha_i_sum, c_prev, dx, dS, ds):
+        physical_parameters, alpha_e_sum, alpha_i_sum, c_prev, phi, dx, dS, ds, n):
     #-----------------------------------------------------------------------
-    # Remove stuff from form to be replaced by MMS terms below
-    #-----------------------------------------------------------------------
-    C_M = physical_parameters['C_M']
-    F = physical_parameters['F']
+
+    psi = physical_parameters['psi']        # combination of physical constants
+    C_phi = physical_parameters['C_phi']    # physical parameters
+    C_M = physical_parameters['C_M']        # membrane capacitance
+    F = physical_parameters['F']            # Faraday's constant
+
+    phi_e = phi['e']
+    phi_i = phi['i']
+
+    # initialize form
+    L = 0
 
     for idx, ion in enumerate(ion_list[:-1]):
-        # loop through each membrane model
         # get extra and intracellular test functions
-        v_e = v['e'][idx]
-        v_i = v['i'][idx]
-
-        z = ion['z']
-        D_e = ion['D'][0]
-        D_i = ion['D'][1]
+        v_e = v['e'][idx]; v_i = v['i'][idx]
 
         # get previous concentration
         c_e_ = c_prev['e'][idx]
         c_i_ = c_prev['i'][idx]
 
-        alpha_e = D_e * z * z * c_e_ / alpha_e_sum
-        alpha_i = D_i * z * z * c_i_ / alpha_i_sum
+        # get valence and diffusion coefficients
+        z = ion['z']
+        D_e = ion['D'][0]
+        D_i = ion['D'][1]
 
-        # calculate coupling coefficient
-        C_e = alpha_e(e_res) * C_M / (F * z * dt)
-        C_i = alpha_i(i_res) * C_M / (F * z * dt)
+        # approximating time derivative extra and intracellular contribution
+        L += 1.0/dt * c_e_ * v_e * dx(0)
+        L += 1.0/dt * c_i_ * v_i * dx(1)
 
+        # Ionic channels WHAT IS THIS ??????????
+        for gamma_tag in gamma_tags:
+            L -= 1/(F*z) * (- alpha_i(i_res)*C_M*phi_m_prev) * vki(i_res) * dS(gamma_tag)
+            L += 1/(F*z) * (- alpha_e(e_res)*C_M*phi_m_prev) * vke(e_res) * dS(gamma_tag)
+
+
+        # -------------------------------------------------------
+        # MMS stuff
+        # add src terms for ion injection in extracellular space
+        # Source terms
+        L += inner(ion['f_e'], v_e) * dx(0)
+        L += inner(ion['f_i'], v_i) * dx(1)
+
+        # Robin condition on gamma
+        L += ion['C_e'] * inner(ion['f_I_m'], v_e(e_res)) * dS[1] \
+           - ion['C_i'] * inner(ion['f_I_m'], v_i(i_res)) * dS[1]
+
+        # Enforcing correction for I_m, assuming gM_k = gM / N_ions
+        L -= inner(mms['f_gamma'], v_e(e_res)) * dS[1]
+
+        # Exterior boundary terms (zero in "physical problem")
+        L -=  dt * dot(ion['J_k_e'], n) * v_e * ds # Equation for k_e
+        # -------------------------------------------------------
+
+        # loop through each membrane model
         for jdx, mm in enumerate(mem_models):
+
             # get facet tag
             tag = mm['ode'].tag
 
-            # original robin condition terms (without splitting)
-            g_robin_e = phi_M_prev_PDE \
-                      - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']]
-            g_robin_i = phi_M_prev_PDE \
-                      - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
+            if splitting_scheme:
+                # robin condition terms with splitting
+                g_robin_e = phi_M_prev_PDE \
+                              - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']] \
+                              + (dt / C_M) * I_ch[jdx]
+                g_robin_i = phi_M_prev_PDE \
+                              - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']] \
+                              + (dt / C_M) * I_ch[jdx]
+            else:
+                # original robin condition terms (without splitting)
+                g_robin_e = phi_M_prev_PDE \
+                              - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']]
+                g_robin_i = phi_M_prev_PDE \
+                              - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
 
             # add robin coupling condition at interface
-            L += C_e * g_robin_e * v_e(e_res) * dS[tag]
-            L -= C_i * g_robin_i * v_i(i_res) * dS[tag]
+            L -= C_e * g_robin_e * v_e(e_res) * dS[tag]
+            L += C_i * g_robin_i * v_i(i_res) * dS[tag]
 
-    #-----------------------------------------------------------------------
-    n = mms['n']
-    for idx, ion in enumerate(ion_list[:-1]):
-        v_e = v['e'][idx]
-        v_i = v['i'][idx]
-        # get mms data
-        g_robin_e = ion['g_robin_e']
-        g_robin_i = ion['g_robin_i']
+            # add coupling terms on interface
+            L -= C_i * inner(phi_i(i_res), v_i(i_res)) * dS[tag]
+            L += C_i * inner(phi_e(e_res), v_i(i_res)) * dS[tag]
+            L -= C_e * inner(phi_i(i_res), v_e(e_res)) * dS[tag]
+            L += C_e * inner(phi_e(e_res), v_e(e_res)) * dS[tag]
 
-        for jdx, mm in enumerate(mem_models):
-            # get facet tag
-            tag = mm['ode'].tag
 
-            # add robin coupling condition at interface
-            L -= g_robin_e[tag] * v_e(e_res) * dS[tag]
-            L += g_robin_i[tag] * v_i(i_res) * dS[tag]
 
-        # MMS specific: add ICS source terms (ECS already added in create_rhs)
-        L += inner(ion['f_i'], v_i)*dx(1)
-
-        # MMS specific: add neumann contribution
-        L += - dot(ion['bdry'], n) * v_e * ds
 
     return a, L
 
@@ -344,6 +369,8 @@ def knp_system(meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
     us = TrialFunctions(W)
     vs = TestFunctions(W)
 
+    n = FacetNormal(meshes['mesh'])
+
     # Order functions in extra and intracellular lists
     u_e = us[:N_ions]; u_i = us[N_ions:2 * N_ions]
     v_e = vs[:N_ions]; v_i = vs[N_ions:2 * N_ions]
@@ -375,6 +402,6 @@ def knp_system(meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
     # add terms specific to mms test
     if MMS_FLAG: a, L = add_mms_terms(a, L, v, mem_models, ion_list, mms,
             phi_M_prev_PDE, dt, physical_parameters, alpha_e_sum, alpha_i_sum,
-            c_prev, dx, dS, ds)
+            c_prev, phi, dx, dS, ds, n)
 
-    return a, L
+    return a, L, dx
