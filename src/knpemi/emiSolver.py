@@ -18,6 +18,7 @@ def create_solver_emi(a, L, phi, entity_maps, comm, bcs=None):
             "ksp_error_if_not_converged": True,
         }
 
+    # Extract extra and intracellular potentials
     phi_e = phi['e']
     phi_i = phi['i']
 

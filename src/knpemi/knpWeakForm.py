@@ -32,7 +32,8 @@ def create_measures(meshes, ct, ft, ct_g):
 
     # Create gamma measures for each tag associated with a membrane model
     for tag in gamma_tags:
-        ordered_integration_data = scifem.compute_interface_data(ct, ct_g.find(tag))
+        #ordered_integration_data = scifem.compute_interface_data(ct, ct_g.find(tag))
+        ordered_integration_data = scifem.compute_interface_data(ct, ft.find(tag))
         # Define measure
         dGamma = Measure(
             "dS",
@@ -57,11 +58,15 @@ def create_functions_knp(meshes, ion_list, degree=1):
     # Create mixed space for extra and intracellular concentrations
     V_e = dolfinx.fem.functionspace(mesh_e, ("CG", degree))
     V_i = dolfinx.fem.functionspace(mesh_i, ("CG", degree))
-    W = MixedFunctionSpace(* ([V_e] * N_ions + [V_i] * N_ions))
+
+    V_list_e = [V_e.clone() for _ in range(N_ions)]
+    V_list_i = [V_i.clone() for _ in range(N_ions)]
+
+    W = MixedFunctionSpace(*(V_list_e + V_list_i))
 
     # Functions for current extra and intracellular concentrations
-    c_e = [dolfinx.fem.Function(V_e) for i in range(N_ions)]
-    c_i = [dolfinx.fem.Function(V_i) for i in range(N_ions)]
+    c_e = [dolfinx.fem.Function(V_e) for V in V_list_e]
+    c_i = [dolfinx.fem.Function(V_i) for V in V_list_i]
     c = {'e':c_e, 'i':c_i}
 
     # Name functions (convenient when writing results to file)
@@ -72,8 +77,8 @@ def create_functions_knp(meshes, ion_list, degree=1):
         f_i.name = f"c_{ion_name}_i"
 
     # Functions for previous extra and intracellular concentrations
-    c_e_prev = [dolfinx.fem.Function(V_e) for i in range(N_ions)]
-    c_i_prev = [dolfinx.fem.Function(V_i) for i in range(N_ions)]
+    c_e_prev = [dolfinx.fem.Function(V_e) for V_e in V_list_e]
+    c_i_prev = [dolfinx.fem.Function(V_i) for V_i in V_list_i]
     c_prev = {'e':c_e_prev, 'i':c_i_prev}
 
     # TODO temporary hack
@@ -201,7 +206,6 @@ def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
         # add src terms for ion injection in extracellular space
         L += ion['f_source'] * v_e * dx(0)
 
-        #if mms is None:
         # calculate alpha
         alpha_e = D_e * z * z * c_e_ / alpha_e_sum
         alpha_i = D_i * z * z * c_i_ / alpha_i_sum
@@ -212,40 +216,37 @@ def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
 
         # loop through each membrane model
         for jdx, mm in enumerate(mem_models):
-
             # get facet tag
             tag = mm['ode'].tag
 
             if splitting_scheme:
                 # robin condition terms with splitting
                 g_robin_e = phi_M_prev_PDE \
-                              - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']] \
-                              + (dt / C_M) * I_ch[jdx]
+                          - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']] \
+                          + (dt / C_M) * I_ch[jdx]
                 g_robin_i = phi_M_prev_PDE \
-                              - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']] \
-                              + (dt / C_M) * I_ch[jdx]
+                          - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']] \
+                          + (dt / C_M) * I_ch[jdx]
             else:
                 # original robin condition terms (without splitting)
                 g_robin_e = phi_M_prev_PDE \
-                              - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']]
+                          - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']]
                 g_robin_i = phi_M_prev_PDE \
-                              - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
+                          - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
 
             # add robin coupling condition at interface
-            L -= C_e * g_robin_e * v_e(e_res) * dS[tag]
-            L += C_i * g_robin_i * v_i(i_res) * dS[tag]
+            L += - C_e * g_robin_e * v_e(e_res) * dS[tag] \
+                 + C_i * g_robin_i * v_i(i_res) * dS[tag]
 
             # add coupling terms on interface
-            L -= C_i * inner(phi_i(i_res), v_i(i_res)) * dS[tag]
-            L += C_i * inner(phi_e(e_res), v_i(i_res)) * dS[tag]
-            L -= C_e * inner(phi_i(i_res), v_e(e_res)) * dS[tag]
-            L += C_e * inner(phi_e(e_res), v_e(e_res)) * dS[tag]
+            L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag] \
+               - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag]
 
     return L
 
-def add_mms_terms(a, L, v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
-        physical_parameters, alpha_e_sum, alpha_i_sum, c_prev, phi, dx, dS, ds, n):
-    #-----------------------------------------------------------------------
+
+def get_rhs_mms(v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
+        physical_parameters, c_prev, phi, dx, dS, ds, n):
 
     psi = physical_parameters['psi']        # combination of physical constants
     C_phi = physical_parameters['C_phi']    # physical parameters
@@ -260,7 +261,8 @@ def add_mms_terms(a, L, v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
 
     for idx, ion in enumerate(ion_list[:-1]):
         # get extra and intracellular test functions
-        v_e = v['e'][idx]; v_i = v['i'][idx]
+        v_e = v['e'][idx]
+        v_i = v['i'][idx]
 
         # get previous concentration
         c_e_ = c_prev['e'][idx]
@@ -270,73 +272,39 @@ def add_mms_terms(a, L, v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
         z = ion['z']
         D_e = ion['D'][0]
         D_i = ion['D'][1]
+        C_e = ion['C'][0]
+        C_i = ion['C'][1]
 
         # approximating time derivative extra and intracellular contribution
         L += 1.0/dt * c_e_ * v_e * dx(0)
         L += 1.0/dt * c_i_ * v_i * dx(1)
 
-        # Ionic channels WHAT IS THIS ??????????
-        for gamma_tag in gamma_tags:
-            L -= 1/(F*z) * (- alpha_i(i_res)*C_M*phi_m_prev) * vki(i_res) * dS(gamma_tag)
-            L += 1/(F*z) * (- alpha_e(e_res)*C_M*phi_m_prev) * vke(e_res) * dS(gamma_tag)
+        # get facet tag
+        tag = 1
 
+        # original robin condition terms (without splitting)
+        g_robin_e = ion['f_phi_m_e']
+        g_robin_i = ion['f_phi_m_i']
+        f_I_M = mms['f_I_M']
 
-        # -------------------------------------------------------
-        # MMS stuff
-        # add src terms for ion injection in extracellular space
-        # Source terms
-        L += inner(ion['f_e'], v_e) * dx(0)
-        L += inner(ion['f_i'], v_i) * dx(1)
+        # add robin coupling condition at interface
+        L += C_i * g_robin_i * v_i(i_res) * dS[tag] \
+           - C_e * g_robin_e * v_e(e_res) * dS[tag]
 
-        # Robin condition on gamma
-        L += ion['C_e'] * inner(ion['f_I_m'], v_e(e_res)) * dS[1] \
-           - ion['C_i'] * inner(ion['f_I_m'], v_i(i_res)) * dS[1]
+        # add coupling terms on interface
+        L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag] \
+           - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag]
 
-        # Enforcing correction for I_m, assuming gM_k = gM / N_ions
-        L -= inner(mms['f_gamma'], v_e(e_res)) * dS[1]
+        L += inner(ion['f_k_e'], v_e) * dx(0)
+        L += inner(ion['f_k_i'], v_i) * dx(1)
 
-        # Exterior boundary terms (zero in "physical problem")
-        L -=  dt * dot(ion['J_k_e'], n) * v_e * ds # Equation for k_e
-        # -------------------------------------------------------
+        # MMS specific: add neumann contribution
+        L += - dot(ion['J_k_e'], n) * v_e * ds(5)
 
-        # loop through each membrane model
-        for jdx, mm in enumerate(mem_models):
-
-            # get facet tag
-            tag = mm['ode'].tag
-
-            if splitting_scheme:
-                # robin condition terms with splitting
-                g_robin_e = phi_M_prev_PDE \
-                              - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']] \
-                              + (dt / C_M) * I_ch[jdx]
-                g_robin_i = phi_M_prev_PDE \
-                              - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']] \
-                              + (dt / C_M) * I_ch[jdx]
-            else:
-                # original robin condition terms (without splitting)
-                g_robin_e = phi_M_prev_PDE \
-                              - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']]
-                g_robin_i = phi_M_prev_PDE \
-                              - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
-
-            # add robin coupling condition at interface
-            L -= C_e * g_robin_e * v_e(e_res) * dS[tag]
-            L += C_i * g_robin_i * v_i(i_res) * dS[tag]
-
-            # add coupling terms on interface
-            L -= C_i * inner(phi_i(i_res), v_i(i_res)) * dS[tag]
-            L += C_i * inner(phi_e(e_res), v_i(i_res)) * dS[tag]
-            L -= C_e * inner(phi_i(i_res), v_e(e_res)) * dS[tag]
-            L += C_e * inner(phi_e(e_res), v_e(e_res)) * dS[tag]
-
-
-
-
-    return a, L
+    return L
 
 def knp_system(meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
-        phi, phi_M_prev_PDE, c, c_prev, dt, degree=1, splitting_scheme=True, 
+        phi, phi_M_prev_PDE, c, c_prev, dt, degree=1, splitting_scheme=True,
         mms=None):
     """ Create and return EMI weak formulation """
 
@@ -354,16 +322,14 @@ def knp_system(meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
     N_ions = len(ion_list[:-1])
 
     # Create measures
-    dx, dS, ds = create_measures(
-            meshes, ct, ft, ct_g
-    )
+    dx, dS, ds = create_measures(meshes, ct, ft, ct_g)
 
     # Get extra and intracellular function-spaces
-    V_e = c_e[0].function_space
-    V_i = c_i[0].function_space
+    V_list_e = [c_e[i].function_space for i in range(N_ions)]
+    V_list_i = [c_i[i].function_space for i in range(N_ions)]
 
     # Create mixed space (for each ion in each subspace)
-    W = MixedFunctionSpace(* ([V_e] * N_ions + [V_i] * N_ions))
+    W = MixedFunctionSpace(*(V_list_e + V_list_i))
 
     # Create trial and test functions
     us = TrialFunctions(W)
@@ -400,8 +366,41 @@ def knp_system(meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
     )
 
     # add terms specific to mms test
-    if MMS_FLAG: a, L = add_mms_terms(a, L, v, mem_models, ion_list, mms,
-            phi_M_prev_PDE, dt, physical_parameters, alpha_e_sum, alpha_i_sum,
-            c_prev, phi, dx, dS, ds, n)
+    if MMS_FLAG: L = get_rhs_mms(
+            v, mem_models, ion_list, mms, phi_M_prev_PDE, dt, physical_parameters,
+            c_prev, phi, dx, dS, ds, n
+    )
+
+    # Create Dirichlet BC
+    #omega_e = meshes['mesh_e']
+    #e_vertex_to_parent = meshes['e_vertex_to_parent']
+    #exterior_to_parent = meshes['e_to_parent']
+    #boundary_marker = 5
+    #sub_tag, _ = scifem.transfer_meshtags_to_submesh(
+    #    ft, omega_e, e_vertex_to_parent, exterior_to_parent
+    #)
+
+    #V_e_a = V_list_e[0]; V_e_b = V_list_e[1]
+
+    #omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
+
+    #bc_a_dofs = dolfinx.fem.locate_dofs_topological(
+    #    V_e_a, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
+    #)
+
+    #bc_b_dofs = dolfinx.fem.locate_dofs_topological(
+    #    V_e_b, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
+    #)
+
+    #u_bc_a = dolfinx.fem.Function(V_e_a)
+    #u_bc_b = dolfinx.fem.Function(V_e_b)
+
+    #u_bc_a.interpolate(lambda x: np.sin(2 * np.pi * x[0]))# * np.sin(2 * np.pi * x[1]))
+    #u_bc_b.interpolate(lambda x: np.sin(2 * np.pi * x[0]))# * np.cos(2 * np.pi * x[1]))
+
+    #bc_a = dolfinx.fem.dirichletbc(u_bc_a, bc_a_dofs)
+    #bc_b = dolfinx.fem.dirichletbc(u_bc_b, bc_b_dofs)
+
+    #bcs = [bc_a, bc_b]
 
     return a, L, dx

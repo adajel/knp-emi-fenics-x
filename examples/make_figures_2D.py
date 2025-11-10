@@ -26,45 +26,54 @@ mpl.rcParams['image.cmap'] = 'jet'
 path = 'results/'
 
 def get_time_series(dt, T, fname, x_e, y_e, x_i, y_i):
-    # read data file
-    hdf5file = HDF5File(MPI.comm_world, fname, "r")
 
-    mesh = Mesh()
-    subdomains = MeshFunction("size_t", mesh, 2)
-    surfaces = MeshFunction("size_t", mesh, 1)
-    hdf5file.read(mesh, '/mesh', False)
-    mesh.coordinates()[:] *= 1e6
-    hdf5file.read(subdomains, '/subdomains')
-    hdf5file.read(surfaces, '/surfaces')
+    # Set ghost mode
+    ghost_mode = dolfinx.mesh.GhostMode.shared_facet
 
-    P1 = FiniteElement('CG', mesh.ufl_cell(), 1)
-    W = FunctionSpace(mesh, MixedElement(2*[P1]))
-    V = FunctionSpace(mesh, P1)
+    with dolfinx.io.XDMFFile(comm, mesh_file, 'r') as xdmf:
 
-    u = Function(W)
-    v = Function(V)
-    w = Function(V)
+        # Read mesh and cell tags
+        mesh = xdmf.read_mesh(ghost_mode=ghost_mode)
+        ct = xdmf.read_meshtags(mesh, name='cell_marker')
 
-    f_Na = Function(V)
-    f_K = Function(V)
-    f_Cl = Function(V)
-    f_phi = Function(V)
+        # Create facet entities, facet-to-cell connectivity and cell-to-cell connectivity
+        mesh.topology.create_entities(mesh.topology.dim-1)
+        mesh.topology.create_connectivity(mesh.topology.dim-1, mesh.topology.dim)
+        mesh.topology.create_connectivity(mesh.topology.dim, mesh.topology.dim)
 
-    Na_e = []
-    K_e = []
-    Cl_e = []
-    phi_e = []
+        # Read facets
+        ft = xdmf.read_meshtags(mesh, name='facet_marker')
 
-    Na_i = []
-    K_i = []
-    Cl_i = []
-    phi_i = []
+        # Create mixed space for extra and intracellular concentrations
+        V_e = dolfinx.fem.functionspace(mesh_e, ("CG", degree))
+        V_i = dolfinx.fem.functionspace(mesh_i, ("CG", degree))
 
-    for n in range(1, int(T/dt)):
-            print(n)
+        u_i = Function(V_i)
+        v_i = Function(V_i)
+        w_i = Function(V_i)
+
+        f_Na_i = Function(V)
+        f_K_i = Function(V)
+        f_Cl_i = Function(V)
+        f_phi_i = Function(V)
+
+        Na_e = []
+        K_e = []
+        Cl_e = []
+        phi_e = []
+
+        Na_i = []
+        K_i = []
+        Cl_i = []
+        phi_i = []
+
+        t = dt
+        while t <= Tstop:
+            print(t)
 
             # read file
-            hdf5file.read(u, "/concentrations/vector_" + str(n))
+            f_e.name = f"c_Na_e"
+            xdmf.read_function(u, f_name, t)
 
             # K concentrations
             assign(f_K, u.sub(0))
@@ -87,6 +96,8 @@ def get_time_series(dt, T, fname, x_e, y_e, x_i, y_i):
             assign(f_phi, w)
             phi_e.append(1.0e3*f_phi(x_e, y_e))
             phi_i.append(1.0e3*f_phi(x_i, y_i))
+
+            t += dt
 
     return Na_e, K_e, Cl_e, phi_e, Na_i, K_i, Cl_i, phi_i
 

@@ -13,6 +13,7 @@ import dolfinx
 import scifem
 from mpi4py import MPI
 import numpy as np
+import sys
 
 from ufl import (
         ln,
@@ -25,6 +26,33 @@ i_res = "+" if interior_marker < exterior_marker else "-"
 e_res = "-" if interior_marker < exterior_marker else "+"
 
 comm = MPI.COMM_WORLD
+
+def evaluate_function_in_point(mesh, u, x, y):
+
+    tdim = mesh.topology.dim
+    left_cells = dolfinx.mesh.locate_entities(mesh, tdim, lambda x: x[0] <= 100)
+
+    bb_tree = dolfinx.geometry.bb_tree(mesh, mesh.topology.dim, padding=1e-10)
+    sub_bb_tree = dolfinx.geometry.bb_tree(mesh, mesh.topology.dim, entities=left_cells, padding=1e-10)
+
+    points = np.array([[x, y, 0]], dtype=mesh.geometry.x.dtype)
+    potential_colliding_cells = dolfinx.geometry.compute_collisions_points(bb_tree, points)
+    colliding_cells = dolfinx.geometry.compute_colliding_cells(mesh, potential_colliding_cells, points)
+
+    points_on_proc = []
+    cells = []
+
+    for i, point in enumerate(points):
+        if len(colliding_cells.links(i)) > 0:
+            points_on_proc.append(point)
+            cells.append(colliding_cells.links(i)[0])
+
+    points_on_proc = np.array(points_on_proc, dtype=np.float64).reshape(-1, 3)
+    cells = np.array(cells, dtype=np.int32)
+
+    u_values = u.eval(points_on_proc, cells)
+
+    return u_values
 
 def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, meshes, k):
     """ Update parameters in ODE solver (based on previous PDEs step)
@@ -48,6 +76,10 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, meshes, k):
     ode_model.set_parameter('Na_i', Na_i)
     ode_model.set_parameter('Cl_e', Cl_e)
     ode_model.set_parameter('Cl_i', Cl_i)
+
+    #print("Set traces, from PDE to ODE")
+    #print("K_e", K_e.x.array[:])
+    #print("K_i", K_i.x.array[:])
 
     if k == 0:
         # If first time step do nothing, let initial value for phi_M
@@ -173,7 +205,13 @@ def solve_odes(mem_models, c_prev, phi_M_prev, ion_list, stim_params, dt,
 
         # Update PDE variables based on ODE output
         ode_model.get_membrane_potential(phi_M_prev)
+
+        # Update src terms for next PDE step based on ODE output
         for ion, I_ch_k in mem_model['I_ch_k'].items():
+
+            print(ion)
+            print(I_ch_k.x.array[:][10])
+
             ode_model.get_parameter("I_ch_" + ion, I_ch_k)
 
     return
@@ -233,7 +271,7 @@ def solve_system():
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
 
     dt = 1.0e-4                         # global time step (ms)
-    Tstop = 2.0e-3                      # global end time (ms)
+    Tstop = 1.0e-2                      # global end time (ms)
     n_steps_ODE = 25                    # number of ODE steps
 
     # Physical parameters
@@ -338,12 +376,12 @@ def solve_system():
     ion_list = [K, Cl, Na]
 
     # Membrane parameters
-    g_syn_bar = 0                     # synaptic conductivity (S/m**2)
+    g_syn_bar = 10                     # synaptic conductivity (S/m**2)
 
     # Set stimulus ODE
     stimulus = {'stim_amplitude': g_syn_bar}
-    #stimulus_locator = lambda x: (x[0] < 20e-6)
-    stimulus_locator = lambda x: True
+    stimulus_locator = lambda x: (x[0] < 20e-6)
+    #stimulus_locator = lambda x: True
 
     # Set membrane parameters
     stim_params = {'g_syn_bar':g_syn_bar, 'stimulus':stimulus,
@@ -378,13 +416,13 @@ def solve_system():
     # Create variational form emi problem
     a_emi, L_emi, dx = emi_system(
             meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
-            phi, phi_M_prev, c_prev
+            phi, phi_M_prev, c_prev, dt,
     )
 
     # Create variational form knp problem
-    a_knp, L_knp = knp_system(
+    a_knp, L_knp, dx = knp_system(
             meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
-            phi, phi_M_prev, c, c_prev, dt
+            phi, phi_M_prev, c, c_prev, dt,
     )
 
     # Specify entity maps for each sub-mesh to ensure correct assembly
@@ -406,8 +444,20 @@ def solve_system():
     l_n = []
     l_h = []
 
-    l_Na_i = []
-    l_Na_e = []
+    l_K_i = []
+    l_K_e = []
+
+    K_e = []
+    K_i = []
+
+    Na_e = []
+    Na_i = []
+
+    Cl_e = []
+    Cl_i = []
+
+    phi_e = []
+    phi_i = []
 
     xdmf_e = dolfinx.io.XDMFFile(mesh.comm, "results/results_e.xdmf", "w")
     xdmf_i = dolfinx.io.XDMFFile(mesh.comm, "results/results_i.xdmf", "w")
@@ -419,6 +469,13 @@ def solve_system():
     #xdmf.write_meshtags(ct, mesh.geometry)
     # write initial conditions to file
     #write_to_file(xdmf, phi, c_prev, phi_M_prev, ion_list, 0)
+
+    # at membrane of axon A (gamma)
+    x_M = 25; y_M = 3
+    # 0.05 um above axon A (ECS)
+    x_e = 25; y_e = 3.5
+    # mid point inside axon A (ICS)
+    x_i = 25; y_i = 2
 
     for k in range(int(round(Tstop/float(dt)))):
         print(f'solving for t={float(t)}')
@@ -445,6 +502,21 @@ def solve_system():
         # Write results from previous time step to file
         write_to_file(xdmf_e, xdmf_i, phi, c, phi_M_prev, ion_list, t)
 
+        K_e_val = evaluate_function_in_point(mesh_e, c['e'][0], x_e*1.0e-6, y_e*1.0e-6)
+        K_e.append(K_e_val[0])
+        K_i_val = evaluate_function_in_point(mesh_i, c['i'][0], x_i*1.0e-6, y_i*1.0e-6)
+        K_i.append(K_i_val[0])
+
+        Cl_e_val = evaluate_function_in_point(mesh_e, c['e'][1], x_e*1.0e-6, y_e*1.0e-6)
+        Cl_e.append(Cl_e_val[0])
+        Cl_i_val = evaluate_function_in_point(mesh_i, c['i'][1], x_i*1.0e-6, y_i*1.0e-6)
+        Cl_i.append(Cl_i_val[0])
+
+        Na_e_val = evaluate_function_in_point(mesh_e, ion_list[-1]['c_e'], x_e*1.0e-6, y_e*1.0e-6)
+        Na_e.append(Na_e_val[0])
+        Na_i_val = evaluate_function_in_point(mesh_i, ion_list[-1]['c_i'], x_i*1.0e-6, y_i*1.0e-6)
+        Na_i.append(Na_i_val[0])
+
         for mem_model in mem_models:
 
             Q = phi_M_prev.function_space
@@ -458,8 +530,8 @@ def solve_system():
             n = dolfinx.fem.Function(Q)
             h = dolfinx.fem.Function(Q)
 
-            Na_i_ODE = dolfinx.fem.Function(Q)
-            Na_e_ODE = dolfinx.fem.Function(Q)
+            K_i_ODE = dolfinx.fem.Function(Q)
+            K_e_ODE = dolfinx.fem.Function(Q)
             psi_ODE = dolfinx.fem.Function(Q)
 
             ode_model.get_membrane_potential(phi_M)
@@ -471,8 +543,8 @@ def solve_system():
             ode_model.get_state("n", n)
             ode_model.get_state("h", h)
 
-            ode_model.get_parameter("Na_i", Na_i_ODE)
-            ode_model.get_parameter("Na_e", Na_e_ODE)
+            ode_model.get_parameter("K_i", K_i_ODE)
+            ode_model.get_parameter("K_e", K_e_ODE)
             ode_model.get_parameter("psi", psi_ODE)
 
             l_I_Na.append(I_Na.x.array[0]*1.0e3)
@@ -484,8 +556,8 @@ def solve_system():
             l_n.append(n.x.array[0])
             l_h.append(h.x.array[0])
 
-            l_Na_i.append(Na_i_ODE.x.array[0])
-            l_Na_e.append(Na_e_ODE.x.array[0])
+            l_K_i.append(K_i_ODE.x.array[0])
+            l_K_e.append(K_e_ODE.x.array[0])
             l_psi.append(psi_ODE.x.array[0])
 
             l_I_sum.append(I_Na.x.array[0] + I_K.x.array[0])
@@ -494,6 +566,56 @@ def solve_system():
     xdmf_i.close()
 
     import matplotlib.pyplot as plt
+
+    # Concentration plots
+    fig = plt.figure(figsize=(12*0.9,12*0.9))
+    ax = plt.gca()
+
+    ax1 = fig.add_subplot(3,3,1)
+    plt.title(r'Na$^+$ concentration (ECS)')
+    plt.plot(Na_e, linewidth=3, color='b')
+
+    ax3 = fig.add_subplot(3,3,2)
+    plt.title(r'K$^+$ concentration (ECS)')
+    plt.plot(K_e, linewidth=3, color='b')
+
+    ax3 = fig.add_subplot(3,3,3)
+    plt.title(r'Cl$^-$ concentration (ECS)')
+    plt.plot(Cl_e, linewidth=3, color='b')
+
+    ax2 = fig.add_subplot(3,3,4)
+    plt.title(r'Na$^+$ concentration (ICS)')
+    plt.plot(Na_i,linewidth=3, color='r')
+
+    ax2 = fig.add_subplot(3,3,5)
+    plt.title(r'K$^+$ concentration (ICS)')
+    plt.plot(K_i,linewidth=3, color='r')
+
+    ax2 = fig.add_subplot(3,3,6)
+    plt.title(r'Cl$^-$ concentration (ICS)')
+    plt.plot(Cl_i,linewidth=3, color='r')
+
+    ax5 = fig.add_subplot(3,3,7)
+    plt.title(r'Membrane potential')
+    plt.plot(l_phi_M, linewidth=3)
+
+    ax6 = fig.add_subplot(3,3,8)
+    plt.ylabel(r'K e (mM)')
+    plt.plot(l_K_e, linewidth=3)
+
+    ax6 = fig.add_subplot(3,3,9)
+    plt.ylabel(r'K i (mM)')
+    plt.plot(l_K_i, linewidth=3)
+
+    #plt.plot(E_K, linewidth=3)
+    #plt.plot(E_Na, linewidth=3)
+
+    # make pretty
+    ax.axis('off')
+    plt.tight_layout()
+    plt.savefig('pot_con_2D.svg', format='svg')
+    plt.close()
+
     plt.figure()
     plt.plot(l_I_Na, label="Na")
     plt.plot(l_I_K, label="K")
@@ -518,8 +640,8 @@ def solve_system():
     plt.close()
 
     plt.figure()
-    plt.plot(l_Na_i)
-    plt.plot(l_Na_e)
+    plt.plot(l_K_i)
+    plt.plot(l_K_e)
     plt.savefig("con.png")
     plt.close()
 
@@ -534,3 +656,49 @@ def solve_system():
 
 if __name__ == "__main__":
     solve_system()
+
+    """
+    resolution = 2
+    mesh_path = f'meshes/mms/mesh_{resolution}.xdmf'
+    mesh, ct, ft = read_mesh(mesh_path)
+
+    # subdomain markers
+    exterior_marker = 0; interior_marker = 1,
+
+    # gamma markers
+    interface_marker = 1
+
+    mesh_i, i_to_parent, _, _, _ = scifem.extract_submesh(
+            mesh, ct, interior_marker
+    )
+
+    mesh_e, e_to_parent, e_vertex_to_parent, _, _ = scifem.extract_submesh(
+            mesh, ct, exterior_marker
+    )
+
+    mesh_g, g_to_parent, g_vertex_to_parent, _, _ = scifem.extract_submesh(
+            mesh, ft, interface_marker
+    )
+
+    degree = 1
+    V_e = dolfinx.fem.functionspace(mesh_e, ("CG", degree))
+    V_i = dolfinx.fem.functionspace(mesh_i, ("CG", degree))
+
+    u_e = dolfinx.fem.Function(V_e)
+    u_i = dolfinx.fem.Function(V_i)
+
+    u_e.x.array[:] = dolfinx.fem.Constant(mesh_e, 5.0)
+    u_i.x.array[:] = dolfinx.fem.Constant(mesh_i, 3.0)
+
+    x_i = 0.5
+    y_i = 0.5
+    x_e = 0.1
+    y_e = 0.1
+
+    val_i = evaluate_function_in_point(mesh_i, u_i, x_i, y_i)
+    val_e = evaluate_function_in_point(mesh_e, u_e, x_e, y_e)
+
+    print("val_i", val_i[0])
+    print("val_e", val_e[0])
+
+    """

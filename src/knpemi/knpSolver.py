@@ -4,11 +4,8 @@ from ufl import (
     extract_blocks,
 )
 
-def create_solver_knp(a, L, c, entity_maps, comm):
+def create_solver_knp(a, L, c, entity_maps, bcs=None):
     """ Setup solver for the knp sub-problem """
-    # Extract extra and intracellular concentrations
-    c_e = c['e']
-    c_i = c['i']
 
     petsc_options = {
                 "ksp_type": "preonly",
@@ -17,6 +14,10 @@ def create_solver_knp(a, L, c, entity_maps, comm):
                 "ksp_monitor": None,
                 "ksp_error_if_not_converged": True,
     }
+
+    # Extract extra and intracellular concentrations
+    c_e = c['e']
+    c_i = c['i']
 
     # Extract extra and intracellular potentials
     problem = dolfinx.fem.petsc.LinearProblem(

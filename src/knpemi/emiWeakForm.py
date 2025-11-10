@@ -13,11 +13,6 @@ from ufl import (
     ln,
     extract_blocks,
     FacetNormal,
-    SpatialCoordinate,
-    div,
-    cos,
-    sin,
-    pi,
 )
 
 interior_marker = 1
@@ -145,7 +140,7 @@ def get_lhs(kappa, u, v, dx, dS, physical_params, mem_models,
         tag = mm['ode'].tag
         # add coupling term at interface
         a += C_phi * (u_i(i_res) - u_e(e_res)) * v_i(i_res) * dS[tag] \
-           + C_phi * (u_e(e_res) - u_i(i_res)) * v_e(e_res) * dS[tag]
+           - C_phi * (u_i(e_res) - u_e(i_res)) * v_e(e_res) * dS[tag]
 
     return a
 
@@ -188,8 +183,7 @@ def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
         # get tag
         tag = mm['ode'].tag
         # add robin condition at interface
-        L += C_phi * inner(g_robin[jdx], v_e(e_res)) * dS[tag] \
-           - C_phi * inner(g_robin[jdx], v_i(i_res)) * dS[tag]
+        L += C_phi * inner(g_robin[jdx], v_i(i_res) - v_e(e_res)) * dS[tag]
 
     return L
 
@@ -226,16 +220,14 @@ def get_rhs_mms(v, dx, dS, ds, dt, n, I_ch, phi_M_prev, c_prev,
     L += inner(mms['f_phi_e'], v_e) * dx(0) # Equation for phi_e
     L += inner(mms['f_phi_i'], v_i) * dx(1) # Equation for phi_i
 
-    # Add Neumann term (zero in physiological simulation)
-    for ion in ion_list:
-        L += F * ion['z'] * dot(ion['J_k_e'], n) * v_e * ds
-
     # Add robin terms (i.e. source term for equation for phi_M)
-    # TODO
-    #L += C_phi * inner(mms['f_phi_m'], v_e(e_res) - v_i(i_res)) * dS[1]
     L += C_phi * inner(mms['f_phi_m'], v_i(i_res) - v_e(e_res)) * dS[1]
     # Enforcing correction for I_m
     L -= inner(mms['f_I_M'], v_e(e_res)) * dS[1]
+
+    # Add Neumann term (zero in physiological simulation)
+    for ion in ion_list:
+        L += - F * ion['z'] * dot(ion['J_k_e'], n) * v_e * ds(5)
 
     return L
 
