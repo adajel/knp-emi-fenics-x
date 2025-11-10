@@ -20,10 +20,10 @@ exterior_marker = 0
 i_res = "+" if interior_marker < exterior_marker else "-"
 e_res = "-" if interior_marker < exterior_marker else "+"
 
-def create_measures(meshes, ct, ft, ct_g):
+def create_measures(meshes, ct, ft):
     # Get mesh and interface/membrane tags associated with the membrane models
     mesh = meshes['mesh']
-    gamma_tags = np.unique(ct_g.values)
+    gamma_tags = np.unique(ft.values)
 
     # Define measures
     dx = Measure('dx', domain=mesh, subdomain_data=ct)
@@ -303,7 +303,7 @@ def get_rhs_mms(v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
 
     return L
 
-def knp_system(meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
+def knp_system(meshes, ct, ft, physical_parameters, ion_list, mem_models,
         phi, phi_M_prev_PDE, c, c_prev, dt, degree=1, splitting_scheme=True,
         mms=None):
     """ Create and return EMI weak formulation """
@@ -322,7 +322,7 @@ def knp_system(meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
     N_ions = len(ion_list[:-1])
 
     # Create measures
-    dx, dS, ds = create_measures(meshes, ct, ft, ct_g)
+    dx, dS, ds = create_measures(meshes, ct, ft)
 
     # Get extra and intracellular function-spaces
     V_list_e = [c_e[i].function_space for i in range(N_ions)]
@@ -366,41 +366,12 @@ def knp_system(meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
     )
 
     # add terms specific to mms test
-    if MMS_FLAG: L = get_rhs_mms(
+    if MMS_FLAG: 
+        L = get_rhs_mms(
             v, mem_models, ion_list, mms, phi_M_prev_PDE, dt, physical_parameters,
             c_prev, phi, dx, dS, ds, n
-    )
+        )
 
-    # Create Dirichlet BC
-    #omega_e = meshes['mesh_e']
-    #e_vertex_to_parent = meshes['e_vertex_to_parent']
-    #exterior_to_parent = meshes['e_to_parent']
-    #boundary_marker = 5
-    #sub_tag, _ = scifem.transfer_meshtags_to_submesh(
-    #    ft, omega_e, e_vertex_to_parent, exterior_to_parent
-    #)
+        return a, L, dx
 
-    #V_e_a = V_list_e[0]; V_e_b = V_list_e[1]
-
-    #omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
-
-    #bc_a_dofs = dolfinx.fem.locate_dofs_topological(
-    #    V_e_a, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
-    #)
-
-    #bc_b_dofs = dolfinx.fem.locate_dofs_topological(
-    #    V_e_b, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
-    #)
-
-    #u_bc_a = dolfinx.fem.Function(V_e_a)
-    #u_bc_b = dolfinx.fem.Function(V_e_b)
-
-    #u_bc_a.interpolate(lambda x: np.sin(2 * np.pi * x[0]))# * np.sin(2 * np.pi * x[1]))
-    #u_bc_b.interpolate(lambda x: np.sin(2 * np.pi * x[0]))# * np.cos(2 * np.pi * x[1]))
-
-    #bc_a = dolfinx.fem.dirichletbc(u_bc_a, bc_a_dofs)
-    #bc_b = dolfinx.fem.dirichletbc(u_bc_b, bc_b_dofs)
-
-    #bcs = [bc_a, bc_b]
-
-    return a, L, dx
+    return a, L

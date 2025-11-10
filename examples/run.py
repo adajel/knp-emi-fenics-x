@@ -414,14 +414,14 @@ def solve_system():
             ode_models, ct_g, phi_M_prev.function_space, ion_list)
 
     # Create variational form emi problem
-    a_emi, L_emi, dx = emi_system(
-            meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
+    a_emi, L_emi = emi_system(
+            meshes, ct, ft, physical_parameters, ion_list, mem_models,
             phi, phi_M_prev, c_prev, dt,
     )
 
     # Create variational form knp problem
-    a_knp, L_knp, dx = knp_system(
-            meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
+    a_knp, L_knp = knp_system(
+            meshes, ct, ft, physical_parameters, ion_list, mem_models,
             phi, phi_M_prev, c, c_prev, dt,
     )
 

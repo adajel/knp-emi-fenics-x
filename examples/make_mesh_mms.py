@@ -96,3 +96,5 @@ if __name__=="__main__":
     main("meshes/mms/", 100, 2)
     main("meshes/mms/", 200, 3)
     main("meshes/mms/", 400, 4)
+    main("meshes/mms/", 800, 5)
+    main("meshes/mms/", 1600, 6)

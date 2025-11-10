@@ -21,9 +21,9 @@ exterior_marker = 0
 i_res = "+" if interior_marker < exterior_marker else "-"
 e_res = "-" if interior_marker < exterior_marker else "+"
 
-def create_measures(meshes, ct, ft, ct_g):
+def create_measures(meshes, ct, ft):
     mesh = meshes['mesh']
-    gamma_tags = np.unique(ct_g.values)
+    gamma_tags = np.unique(ft.values)
 
     # Define measures
     dx = Measure('dx', domain=mesh, subdomain_data=ct)
@@ -187,7 +187,7 @@ def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
 
     return L
 
-def get_rhs_mms(v, dx, dS, ds, dt, n, I_ch, phi_M_prev, c_prev,
+def get_rhs_mms(v, dx, dS, ds, dt, n, c_prev,
         mms, physical_params, mem_models, ion_list):
 
     C_phi = physical_params['C_phi']
@@ -231,7 +231,7 @@ def get_rhs_mms(v, dx, dS, ds, dt, n, I_ch, phi_M_prev, c_prev,
 
     return L
 
-def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
+def emi_system(meshes, ct, ft, physical_params, ion_list, mem_models,
         phi, phi_M_prev, c_prev, dt, degree=1, splitting_scheme=True, mms=None):
     """ Create and return EMI weak formulation """
 
@@ -241,7 +241,7 @@ def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
     phi_i = phi['i']
 
     # Create measures
-    dx, dS, ds = create_measures(meshes, ct, ft, ct_g)
+    dx, dS, ds = create_measures(meshes, ct, ft)
 
     # Get function space
     V_e = phi_e.function_space
@@ -278,25 +278,28 @@ def emi_system(meshes, ct, ft, ct_g, physical_params, ion_list, mem_models,
     )
 
     # add terms specific to mms test
-    if MMS_FLAG: L = get_rhs_mms(v, dx, dS, ds, dt, n, I_ch,
-            phi_M_prev, c_prev, mms, physical_params, mem_models, ion_list)
+    if MMS_FLAG:
+        L = get_rhs_mms(v, dx, dS, ds, dt, n, c_prev, mms, physical_params,
+                mem_models, ion_list)
 
-    # Create Dirichlet BC
-    omega_e = meshes['mesh_e']
-    e_vertex_to_parent = meshes['e_vertex_to_parent']
-    exterior_to_parent = meshes['e_to_parent']
-    boundary_marker = 5
-    sub_tag, _ = scifem.transfer_meshtags_to_submesh(
-        ft, omega_e, e_vertex_to_parent, exterior_to_parent
-    )
+        # Create Dirichlet BC
+        omega_e = meshes['mesh_e']
+        e_vertex_to_parent = meshes['e_vertex_to_parent']
+        exterior_to_parent = meshes['e_to_parent']
+        boundary_marker = 5
+        sub_tag, _ = scifem.transfer_meshtags_to_submesh(
+            ft, omega_e, e_vertex_to_parent, exterior_to_parent
+        )
 
-    omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
-    bc_dofs = dolfinx.fem.locate_dofs_topological(
-        V_e, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
-    )
+        omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
+        bc_dofs = dolfinx.fem.locate_dofs_topological(
+            V_e, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
+        )
 
-    u_bc = dolfinx.fem.Function(V_e)
-    u_bc.interpolate(lambda x: np.sin(np.pi * x[0]) * np.sin(np.pi * x[1]))
-    bc = dolfinx.fem.dirichletbc(u_bc, bc_dofs)
+        u_bc = dolfinx.fem.Function(V_e)
+        u_bc.interpolate(lambda x: np.sin(2 * np.pi * x[0]) * np.cos(2 * np.pi * x[1]))
+        bc = dolfinx.fem.dirichletbc(u_bc, bc_dofs)
 
-    return a, L, dx, bc
+        return a, L, dx, bc
+
+    return a, L

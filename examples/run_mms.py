@@ -420,18 +420,12 @@ def solve_system(resolution):
     cell_map_g = mesh_g.topology.index_map(mesh_g.topology.dim)
     num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
 
-    # Transfer mesh tags from ct to tags for gamma mesh on interface
-    ct_g, _ = scifem.transfer_meshtags_to_submesh(
-            ft, mesh_g, g_vertex_to_parent, g_to_parent
-    )
-
     # Create variational form emi problem
     a_emi, L_emi, dx, bc = emi_system(
-            meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
+            meshes, ct, ft, physical_parameters, ion_list, mem_models,
             phi, phi_M_prev, c_prev, dt, mms=mms,
     )
 
-    """
     # ---------------------------------------
     # TODO
     V_e = phi['e'].function_space
@@ -451,11 +445,10 @@ def solve_system(resolution):
     #phi_M_prev.x.array[:] = tr_phi_i.x.array - tr_phi_e.x.array
     # TODO
     # ---------------------------------------
-    """
 
     # Create variational form knp problem
     a_knp, L_knp, dx = knp_system(
-            meshes, ct, ft, ct_g, physical_parameters, ion_list, mem_models,
+            meshes, ct, ft, physical_parameters, ion_list, mem_models,
             phi, phi_M_prev, c, c_prev, dt, mms=mms,
     )
 
@@ -463,7 +456,7 @@ def solve_system(resolution):
     entity_maps = [g_to_parent, e_to_parent, i_to_parent]
 
     # Create solver emi problem
-    problem_emi = create_solver_emi(a_emi, L_emi, phi, entity_maps, comm)
+    #problem_emi = create_solver_emi(a_emi, L_emi, phi, entity_maps, comm)
     #problem_emi = create_solver_emi(a_emi, L_emi, phi, entity_maps, comm, bcs=[bc])
     # Create solver knp problem
     problem_knp = create_solver_knp(a_knp, L_knp, c, entity_maps)
@@ -495,8 +488,8 @@ def solve_system(resolution):
         # Write results from previous time step to file
         write_to_file(xdmf_e, xdmf_i, phi, c, phi_M_prev, ion_list, t)
     """
-    problem_emi.solve()
-    #problem_knp.solve()
+    #problem_emi.solve()
+    problem_knp.solve()
 
     xdmf_e.close()
     xdmf_i.close()
@@ -544,12 +537,10 @@ def solve_system(resolution):
     xdmf_b_i.write_function(c['i'][1], t=float(t))
     xdmf_b_i.close()
 
-
-
     #phi = problem_emi.u
-    #phi_e = phi['e']
-    #phi_i = phi['i']
-    phi_e, phi_i= problem_emi.u
+    phi_e = phi['e']
+    phi_i = phi['i']
+    #phi_e, phi_i= problem_emi.u
 
     # calculate ICS error
     error_phi_i = dolfinx.fem.form(
