@@ -1,4 +1,4 @@
-from knpemi.membrane import MembraneModel
+from knpemi.odeSolver import MembraneModel
 
 from knpemi.emiWeakForm import emi_system
 from knpemi.knpWeakForm import knp_system
@@ -10,8 +10,8 @@ from knpemi.utils import set_initial_conditions
 from knpemi.utils import setup_membrane_model
 from knpemi.utils import interpolate_to_membrane
 
-from knpemi.emiSolver import create_solver_emi
-from knpemi.knpSolver import create_solver_knp
+from knpemi.pdeSolver import create_solver_emi
+from knpemi.pdeSolver import create_solver_knp
 
 __all__ = ["MembraneModel",
            "emi_system", "knp_system",

@@ -2,7 +2,7 @@ import dolfinx
 import numpy as np
 import scifem
 
-from knpemi.membrane import MembraneModel
+from knpemi.odeSolver import MembraneModel
 
 def set_initial_conditions(ion_list, c_prev):
     """ Set initial conditions given by constants """

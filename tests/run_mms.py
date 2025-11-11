@@ -2,12 +2,10 @@ from knpemi.emiWeakForm import emi_system, create_functions_emi
 from knpemi.knpWeakForm import knp_system, create_functions_knp
 from knpemi.utils import set_initial_conditions, setup_membrane_model
 
-from knpemi.emiSolver import create_solver_emi
-from knpemi.knpSolver import create_solver_knp
+from knpemi.pdeSolver import create_solver_emi
+from knpemi.pdeSolver import create_solver_knp
 
 from knpemi.utils import interpolate_to_membrane
-
-import mm_hh as mm_hh
 
 import dolfinx
 import scifem
