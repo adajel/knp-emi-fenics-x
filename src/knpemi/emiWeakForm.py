@@ -19,32 +19,41 @@ i_res = "-"
 e_res = "+"
 
 def create_measures(mesh, ct, ft):
+    """ Create measures, all measure defined on parent mesh """
     # Define measures
     dx = Measure('dx', domain=mesh, subdomain_data=ct)
     ds = Measure('ds', domain=mesh, subdomain_data=ft)
 
-    dS = {}
+    # Get interface/membrane tags
     gamma_tags = np.unique(ft.values)
+    dS = {}
 
     # Define measures on membrane interface gamma
     for tag in gamma_tags:
         ordered_integration_data = scifem.compute_interface_data(ct, ft.find(tag))
-        dS_tag = Measure("dS",
-                    domain=mesh,
-                    subdomain_data=[(tag, ordered_integration_data.flatten())],
-                    subdomain_id=tag,
-                    )
+        # Define measure for tag
+        dS_tag = Measure(
+                "dS",
+                domain=mesh,
+                subdomain_data=[(tag, ordered_integration_data.flatten())],
+                subdomain_id=tag,
+        )
+        # Add measure to dictionary with all gamma measures
         dS[tag] = dS_tag
 
     return dx, dS, ds
 
-def create_functions_emi(subdomain_list, degree=1):
 
+def create_functions_emi(subdomain_list, degree=1):
+    """ Create functions for EMI problem. Return dictionary phi containing
+        local potentials for each subdomain and function for previous membrane
+        potential phi_M_prev. E.g. in the case with subdomains 0 and 1 we have
+        phi = {0:phi_e, 1:phi_i} """
     phi = {}
     for subdomain in subdomain_list:
         tag = subdomain["tag"]
         mesh = subdomain["mesh_sub"]
-        # Create local functions space for local potential ..
+        # Create local functionspace for local potential ..
         V = dolfinx.fem.functionspace(mesh, ("CG", degree))
         # ... and create and name function for local potential.
         phi_sub = dolfinx.fem.Function(V)

@@ -19,16 +19,13 @@ from ufl import (
         ln,
 )
 
-interior_marker = 1
-exterior_marker = 0
-
 i_res = "-"
 e_res = "+"
 
 comm = MPI.COMM_WORLD
 
 def evaluate_function_in_point(mesh, u, x, y):
-
+    # TODO get from scifem
     tdim = mesh.topology.dim
     left_cells = dolfinx.mesh.locate_entities(mesh, tdim, lambda x: x[0] <= 100)
 
@@ -54,47 +51,36 @@ def evaluate_function_in_point(mesh, u, x, y):
 
     return u_values
 
-def update_ode_variables(ode_model, c_prev, phi_M_prev_sub, ion_list,
+def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list,
         subdomain_list, mesh, ct, tag, k):
-    """ Update parameters in ODE solver (based on previous PDEs step)
-        specific to membrane model
-    """
-    c_e = c_prev[0]
-    c_i = c_prev[1]
-
+    """ Update parameters in ODE solver (based on previous PDEs step) """
     # Get function space on membrane (gamma interface)
-    Q = phi_M_prev_sub.function_space
+    Q = phi_M_prev.function_space
 
-    # Get traces (in Q) of ECS and ICS concentrations
-    K_e, K_i = interpolate_to_membrane(c_e[0], c_i[0], Q, mesh, ct, subdomain_list, tag)
-    Cl_e, Cl_i = interpolate_to_membrane(c_e[1], c_i[1], Q, mesh, ct, subdomain_list, tag)
-    Na_e, Na_i = interpolate_to_membrane(ion_list[-1]['c_0'], ion_list[-1][f'c_{tag}'], Q, mesh, ct, subdomain_list, tag)
+    # Set traces of ECS and ICS concentrations on membrane (from PDE solver) in ODE solver
+    for idx, ion in enumerate(ion_list):
+        # Determine the function source based on the index
+        is_last = (idx == len(ion_list) - 1)
+        c_e = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
+        c_i = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
-    # Set traces of ECS and ICS concentrations in ODE solver
-    ode_model.set_parameter('K_e', K_e)
-    ode_model.set_parameter('K_i', K_i)
-    ode_model.set_parameter('Na_e', Na_e)
-    ode_model.set_parameter('Na_i', Na_i)
-    ode_model.set_parameter('Cl_e', Cl_e)
-    ode_model.set_parameter('Cl_i', Cl_i)
+        # Get and set extra and intracellular traces
+        k_e, k_i = interpolate_to_membrane(c_e, c_i, Q, mesh, ct, subdomain_list, tag)
+        ode_model.set_parameter(f"{ion['name']}_e", k_e)
+        ode_model.set_parameter(f"{ion['name']}_i", k_i)
 
-    if k == 0:
-        # If first time step do nothing, let initial value for phi_M
-        # in ODE system be taken from ODE file
-        pass
-    else:
-        # For all other time steps, update the membrane potential in ODE solver
-        # based on previous PDEs time step
-        ode_model.set_membrane_potential(phi_M_prev_sub)
+    # If first time step do nothing (the initial value for phi_M in ODEs are
+    # taken from ODE file). For all other time steps, update the membrane
+    # potential in ODE solver based on previous PDEs step
+    if k > 0: ode_model.set_membrane_potential(phi_M_prev)
 
     return
 
-def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, 
-        ion_list, mesh, ct, subdomain_list):
-
+def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
+        ion_list, subdomain_list, mesh, ct):
+    """ Update parameters in PDE solver for next time step """
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
-
     # Get physical parameters
     temperature = physical_parameters['temperature']
     F = physical_parameters['F']
@@ -103,16 +89,15 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters,
 
     for subdomain in subdomain_list:
         tag = subdomain['tag']
-
         # Add contribution from immobile ions to eliminated ion
         c_elim_sum = - (1.0 / ion_list[-1]['z']) * rho[tag]
 
         for idx, ion in enumerate(ion_list[:-1]):
-            # Update previous concentration
+            # Update previous concentration and scatter forward
             c_prev[tag][idx].x.array[:] = c[tag][idx].x.array
             c_prev[tag][idx].x.scatter_forward()
 
-            # Add contribution to eliminated ion from ion
+            # Add contribution to eliminated ion from ion concentration
             c_prev_sub = c_prev[tag][idx]
             c_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_prev_sub
 
@@ -122,12 +107,12 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters,
         expr = dolfinx.fem.Expression(c_elim_sum, V.element.interpolation_points)
         c_elim.interpolate(expr)
 
-        # Update eliminated ion concentrations
+        # Update eliminated ion concentration
         ion_list[-1][f'c_{tag}'].x.array[:] = c_elim.x.array
 
         # Update Nernst potentials for all cells (i.e. all subdomain but ECS)
         if tag != 0:
-            # Update Nernst potentials for each ion
+            # Update Nernst potentials for each ion we solve for
             for idx, ion in enumerate(ion_list[:-1]):
                 # Get previous extra and intracellular concentrations
                 c_e = c_prev[0][idx]
@@ -445,8 +430,8 @@ def solve_system():
     phi_e = []
     phi_i = []
 
-    xdmf_e = dolfinx.io.XDMFFile(mesh.comm, "results/results_e.xdmf", "w")
-    xdmf_i = dolfinx.io.XDMFFile(mesh.comm, "results/results_i.xdmf", "w")
+    xdmf_e = dolfinx.io.XDMFFile(comm, "results/results_e.xdmf", "w")
+    xdmf_i = dolfinx.io.XDMFFile(comm, "results/results_i.xdmf", "w")
 
     # write mesh and mesh tags to file
     xdmf_e.write_mesh(mesh_sub_0)
@@ -473,8 +458,8 @@ def solve_system():
         problem_knp.solve()
 
         update_pde_variables(
-                c_prev, c, phi, phi_M_prev, physical_parameters,
-                ion_list, mesh, ct, subdomain_list,
+                c, c_prev, phi, phi_M_prev, physical_parameters,
+                ion_list, subdomain_list, mesh, ct,
         )
 
         # update time

@@ -85,12 +85,6 @@ def solve_system(resolution):
             mesh, ft, interface_marker
     )
 
-    meshes = {"mesh":mesh, "mesh_sub_0":mesh_sub_0, "mesh_sub_1":mesh_sub_1, "mesh_g":mesh_g,
-              "ct":ct, "ft":ft, "e_to_parent":e_to_parent,
-              "i_to_parent":i_to_parent, "g_to_parent":g_to_parent,
-              "e_vertex_to_parent": e_vertex_to_parent,
-              "subdomain_tags":subdomain_tags}
-
     # Create subdomains (ECS and cells)
     ECS = {"tag":0,
            "name":"ECS",
@@ -240,7 +234,7 @@ def solve_system(resolution):
 
     # get functions
     phi, phi_M_prev = create_functions_emi(subdomain_list, degree=1)
-    c, c_prev = create_functions_knp(meshes, ion_list, degree=1)
+    c, c_prev = create_functions_knp(subdomain_list, ion_list, degree=1)
 
     V_e = phi[0].function_space
     V_i = phi[1].function_space

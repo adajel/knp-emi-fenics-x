@@ -18,83 +18,73 @@ i_res = "-"
 e_res = "+"
 
 def create_measures(mesh, ct, ft):
-    # Get mesh and interface/membrane tags associated with the membrane models
-    gamma_tags = np.unique(ft.values)
-
+    """ Create measures, all measure defined on parent mesh """
     # Define measures
     dx = Measure('dx', domain=mesh, subdomain_data=ct)
     ds = Measure('ds', domain=mesh, subdomain_data=ft)
+
+    # Get interface/membrane tags
+    gamma_tags = np.unique(ft.values)
     dS = {}
 
-    # Create gamma measures for each tag associated with a membrane model
+    # Define measures on membrane interface gamma
     for tag in gamma_tags:
-        #ordered_integration_data = scifem.compute_interface_data(ct, ct_g.find(tag))
         ordered_integration_data = scifem.compute_interface_data(ct, ft.find(tag))
-        # Define measure
-        dGamma = Measure(
-            "dS",
-            domain=mesh,
-            subdomain_data=[(tag, ordered_integration_data.flatten())],
-            subdomain_id=tag,
+        # Define measure for tag
+        dS_tag = Measure(
+                "dS",
+                domain=mesh,
+                subdomain_data=[(tag, ordered_integration_data.flatten())],
+                subdomain_id=tag,
         )
-        # Add to dictionary of gamma measures
-        dS[tag] = dGamma
+        # Add measure to dictionary with all gamma measures
+        dS[tag] = dS_tag
 
     return dx, dS, ds
 
 
 def create_functions_knp(subdomain_list, ion_list, degree=1):
-
+    """ Create functions for KNP problem. Return dictionaries c and c_prev with
+        lists of respectively current and previous local concentrations for
+        each subdomain. E.g. in the case with subdomains 0 and 1 and ion
+        species a and b we have c = {0:[c_a, c_b], 1:[c_a, c_b]} """
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
+    # Current and previous concentrations
+    c = {}
+    c_prev = {}
 
-    # Dictionaries for lists (of functions / function-spaces for each ion) for
-    # each subdomain. E.g. in case with subdomains 0 and 1 and ion species a
-    # and b we have cs = {0:[c_a, c_b], 1:[c_a, c_b]}
-    c = {}         # current solution
-    c_prev = {}    # previous solution
-
-    # For summing up lists of function-spaces in mixed function-space
-    Vs_list = []
-
-    #for tag in subdomain_tags:
     for subdomain in subdomain_list:
         tag = subdomain['tag']
         mesh = subdomain['mesh_sub']
-        # Create list of function-spaces for each concentration in the
-        # subdomain tagged with tag
+        # List of functionspaces for each concentration in the subdomain
         V = dolfinx.fem.functionspace(mesh, ("CG", degree))
         V_list = [V.clone() for _ in range(N_ions)]
 
-        # Create list of functions for each concentration in the
-        # subdomain tagged with tag
+        # Create list of functions for each concentration in the subdomain
         c_sub = [dolfinx.fem.Function(V) for V in V_list]
-        # ... and for the concentrations in the previous time step
+        # ... and list for the concentrations in the previous time step
         c_prev_sub = [dolfinx.fem.Function(V) for V in V_list]
 
         # Name functions (convenient when writing results to file)
         for f, ion in zip(c_sub, ion_list): f.name =  f"c_{ion['name']}_{tag}"
 
-        # Add lists to dictionaries
+        # Add lists to dictionaries and to flat list
         c[tag] = c_sub
         c_prev[tag] = c_prev_sub
-
-        Vs_list += V_list
 
         # Initialize and name function for eliminated ion species
         ion_list[-1][f'c_{tag}'] = dolfinx.fem.Function(V)
         ion_list[-1][f'c_{tag}'].name = f"c_{ion_list[-1]['name']}_{tag}"
 
-    # Create mixed function-space
-    W = MixedFunctionSpace(*Vs_list)
-
     return c, c_prev
 
 
 def initialize_variables(ion_list, subdomain_list, mem_models, c_prev):
-    """ Calculate sum of alpha_sum and total ionic current """
-    alpha_sum = {}
+    """ Calculate sum of alphas and total ionic current I_ch """
 
+    # Calculate sum of alpha for each subdomain
+    alpha_sum = {}
     for subdomain in subdomain_list:
         tag = subdomain['tag']
         # Initialize sum for current tag
@@ -104,16 +94,14 @@ def initialize_variables(ion_list, subdomain_list, mem_models, c_prev):
             # Determine the function source based on the index
             is_last = (idx == len(ion_list) - 1)
             c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
-
             # Update alpha sum
             alpha_sum_sub += ion['D'][tag] * ion['z'] * ion['z'] * c
 
         # Set alpha sum in dictionary
         alpha_sum[tag] = alpha_sum_sub
 
-    # sum of ion specific channel currents for each membrane tag
+    # Sum of ion specific channel currents for each membrane tag
     I_ch = [0]*len(mem_models)
-
     # loop though membrane models to set total ionic current
     for jdx, mm in enumerate(mem_models):
         # loop through ion species
