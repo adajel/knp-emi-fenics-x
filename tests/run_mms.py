@@ -421,7 +421,7 @@ def solve_system(resolution):
     num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
 
     # Create variational form emi problem
-    a_emi, L_emi, dx, bc = emi_system(
+    a_emi, L_emi, dx  = emi_system(
             meshes, ct, ft, physical_parameters, ion_list, mem_models,
             phi, phi_M_prev, c_prev, dt, mms=mms,
     )

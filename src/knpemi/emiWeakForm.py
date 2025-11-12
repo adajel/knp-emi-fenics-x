@@ -74,32 +74,38 @@ def create_functions_emi(meshes, degree=1):
     return phi, phi_M_prev
 
 
-def initialize_variables(ion_list, c_prev, physical_params, mem_models):
+def initialize_variables(ion_list, c_prev, physical_params, mem_models, meshes):
     """ Calculate kappa (tissue conductance) and set Nernst potentials """
-    # Initialize
-    kappa_e = 0; kappa_i = 0
-
     # Get physical parameters
     F = physical_params['F']
     R = physical_params['R']
     psi = physical_params['psi']
     temperature = physical_params['temperature']
 
-    for idx, ion in enumerate(ion_list):
-        # Determine the function source based on the index
-        is_last = (idx == len(ion_list) - 1)
+    # Initialize dictionary
+    kappa = {}
+    subdomain_tags = meshes['subdomain_tags']
 
-        c_e = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
-        c_i = ion_list[-1]['c_1'] if is_last else c_prev[1][idx]
+    for tag in subdomain_tags:
+        # Initialize kappa for each subdomain
+        kappa_sub = 0
+        # For each ion ...
+        for idx, ion in enumerate(ion_list):
+            # Determine the function source based on the index
+            is_last = (idx == len(ion_list) - 1)
+            c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
-        # Calculate and set Nernst potential for current ion (+ is ECS, - is ICS)
-        ion['E'] = R * temperature / (F * ion['z']) * ln(c_e(e_res) / c_i(i_res))
+            # Add contribution to kappa (tissue conductance)
+            kappa_sub += F * ion['z'] * ion['z'] * ion['D'][tag] * psi * c
 
-        # Add contribution to kappa (tissue conductance)
-        kappa_e += F * ion['z'] * ion['z'] * ion['D'][0] * psi * c_e
-        kappa_i += F * ion['z'] * ion['z'] * ion['D'][1] * psi * c_i
+            if tag != 0:
+                # Get ECS concentration (ECS is subdomain with tag 0)
+                c_e = ion_list[-1][f'c_0'] if is_last else c_prev[0][idx]
+                # Calculate and set Nernst potential
+                ion[f'E_{tag}'] = R * temperature / (F * ion['z']) * ln(c_e(e_res) / c(i_res))
 
-    kappa = {'e':kappa_e, 'i':kappa_i}
+        # Add to dictionary
+        kappa[tag] = kappa_sub
 
     # sum of ion specific channel currents for each membrane tag
     I_ch = [0]*len(mem_models)
@@ -125,12 +131,12 @@ def get_lhs(kappa, u, v, dx, dS, physical_params, mem_models,
     R = physical_params['R']
     temperature = physical_params['temperature']
 
-    kappa_e = kappa['e']
-    kappa_i = kappa['i']
+    kappa_e = kappa[0]
+    kappa_i = kappa[1]
 
     # get test and trial functions for each of the sub-domains
-    u_e = u['e']; u_i = u['i']
-    v_e = v['e']; v_i = v['i']
+    u_e = u[0]; u_i = u[1]
+    v_e = v[0]; v_i = v[1]
 
     # equation potential (drift terms)
     a = inner(kappa_e * grad(u_e), grad(v_e)) * dx(0) \
@@ -156,8 +162,8 @@ def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
     R = physical_params['R']
     temperature = physical_params['temperature']
 
-    v_e = v['e']
-    v_i = v['i']
+    v_e = v[0]
+    v_i = v[1]
 
     # initialize
     L = 0
@@ -198,8 +204,8 @@ def get_rhs_mms(v, dx, dS, ds, dt, n, c_prev,
     R = physical_params['R']
     temperature = physical_params['temperature']
 
-    v_e = v['e']
-    v_i = v['i']
+    v_e = v[0]
+    v_i = v[1]
 
     # initialize
     L = 0
@@ -238,30 +244,33 @@ def emi_system(meshes, ct, ft, physical_params, ion_list, mem_models,
 
     MMS_FLAG = False if mms is None else True
 
-    phi_e = phi[0]
-    phi_i = phi[1]
+    subdomain_tags = meshes['subdomain_tags']
 
-    # Create measures
-    dx, dS, ds = create_measures(meshes, ct, ft)
+    # Create function-space for each subdomain
+    Vs = []
+    for tag in subdomain_tags:
+        V = phi[tag].function_space
+        Vs.append(V)
 
-    # Get function space
-    V_e = phi_e.function_space
-    V_i = phi_i.function_space
     # Create mixed function space for potentials (phi)
-    W = MixedFunctionSpace(V_e, V_i)
+    W = MixedFunctionSpace(*Vs)
+    # Create trial and test functions
+    us = TrialFunctions(W)
+    vs = TestFunctions(W)
 
+    u = {}; v = {}
+
+    # Add test and trial function to dictionary with subdomain tags as keys
+    for tag, u_ in enumerate(us): u[tag] = u_
+    for tag, v_ in enumerate(vs): v[tag] = v_
+
+    # Create measures and facet normal
+    dx, dS, ds = create_measures(meshes, ct, ft)
     n = FacetNormal(meshes['mesh'])
-
-    # Test and trial functions
-    ue, ui = TrialFunctions(W)
-    ve, vi = TestFunctions(W)
-
-    u = {'e':ue, 'i':ui}
-    v = {'e':ve, 'i':vi}
 
     # Get tissue conductance and set Nernst potentials
     kappa, I_ch = initialize_variables(
-            ion_list, c_prev, physical_params, mem_models
+            ion_list, c_prev, physical_params, mem_models, meshes,
     )
 
     # if MMS (i.e. no ODEs to solve), set splitting_scheme to false
@@ -284,23 +293,23 @@ def emi_system(meshes, ct, ft, physical_params, ion_list, mem_models,
                 mem_models, ion_list)
 
         # Create Dirichlet BC
-        omega_e = meshes['mesh_sub_0']
-        e_vertex_to_parent = meshes['e_vertex_to_parent']
-        exterior_to_parent = meshes['e_to_parent']
-        boundary_marker = 5
-        sub_tag, _ = scifem.transfer_meshtags_to_submesh(
-            ft, omega_e, e_vertex_to_parent, exterior_to_parent
-        )
+        #omega_e = meshes['mesh_sub_0']
+        #e_vertex_to_parent = meshes['e_vertex_to_parent']
+        #exterior_to_parent = meshes['e_to_parent']
+        #boundary_marker = 5
+        #sub_tag, _ = scifem.transfer_meshtags_to_submesh(
+        #    ft, omega_e, e_vertex_to_parent, exterior_to_parent
+        #)
 
-        omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
-        bc_dofs = dolfinx.fem.locate_dofs_topological(
-            V_e, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
-        )
+        #omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
+        #bc_dofs = dolfinx.fem.locate_dofs_topological(
+        #    V_e, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
+        #)
 
-        u_bc = dolfinx.fem.Function(V_e)
-        u_bc.interpolate(lambda x: np.sin(2 * np.pi * x[0]) * np.cos(2 * np.pi * x[1]))
-        bc = dolfinx.fem.dirichletbc(u_bc, bc_dofs)
+        #u_bc = dolfinx.fem.Function(V_e)
+        #u_bc.interpolate(lambda x: np.sin(2 * np.pi * x[0]) * np.cos(2 * np.pi * x[1]))
+        #bc = dolfinx.fem.dirichletbc(u_bc, bc_dofs)
 
-        return a, L, dx, bc
+        return a, L, dx
 
     return a, L

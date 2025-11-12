@@ -96,24 +96,25 @@ def create_functions_knp(meshes, ion_list, degree=1):
     return c, c_prev
 
 
-def initialize_variables(ion_list, mem_models, c_e_prev, c_i_prev):
+def initialize_variables(ion_list, mem_models, meshes, c_prev):
     """ Calculate sum of alpha_sum and total ionic current """
-    alpha_e_sum = 0
-    alpha_i_sum = 0
+    alpha_sum = {}
+    subdomain_tags = meshes['subdomain_tags']
 
-    for idx, ion in enumerate(ion_list):
-        if idx == len(ion_list) - 1:
-            # get eliminated concentrations from previous global step
-            c_e_ = ion_list[-1]['c_0']
-            c_i_ = ion_list[-1]['c_1']
-        else:
-            # get concentrations from previous global step
-            c_e_ = c_e_prev[idx]
-            c_i_ = c_i_prev[idx]
+    for tag in subdomain_tags:
+        # Initialize sum for current tag
+        alpha_sum_sub = 0
 
-        # update alpha
-        alpha_e_sum += ion['D'][0] * ion['z'] * ion['z'] * c_e_
-        alpha_i_sum += ion['D'][1] * ion['z'] * ion['z'] * c_i_
+        for idx, ion in enumerate(ion_list):
+            # Determine the function source based on the index
+            is_last = (idx == len(ion_list) - 1)
+            c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
+
+            # Update alpha sum
+            alpha_sum_sub += ion['D'][0] * ion['z'] * ion['z'] * c
+
+        # Set alpha sum in dictionary
+        alpha_sum[tag] = alpha_sum_sub
 
     # sum of ion specific channel currents for each membrane tag
     I_ch = [0]*len(mem_models)
@@ -125,7 +126,7 @@ def initialize_variables(ion_list, mem_models, c_e_prev, c_i_prev):
             # update total channel current for each tag
             I_ch[jdx] += mm['I_ch_k'][key]
 
-    return alpha_e_sum, alpha_i_sum, I_ch
+    return alpha_sum, I_ch
 
 
 def create_lhs(u, v, phi, dx, dS, ion_list, physical_parameters, dt, splitting_scheme):
@@ -143,8 +144,8 @@ def create_lhs(u, v, phi, dx, dS, ion_list, physical_parameters, dt, splitting_s
     for idx, ion in enumerate(ion_list[:-1]):
 
         # get extra and intracellular trial and test functions
-        u_e = u['e'][idx]; v_e = v['e'][idx]
-        u_i = u['i'][idx]; v_i = v['i'][idx]
+        u_e = u[0][idx]; v_e = v[0][idx]
+        u_i = u[1][idx]; v_i = v[1][idx]
 
         # get valence and diffusion coefficients
         z = ion['z']
@@ -165,8 +166,8 @@ def create_lhs(u, v, phi, dx, dS, ion_list, physical_parameters, dt, splitting_s
 
 
 def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
-        physical_parameters, ion_list, mem_models, I_ch, alpha_e_sum,
-        alpha_i_sum, dt, splitting_scheme):
+        physical_parameters, ion_list, mem_models, I_ch, alpha_sum,
+        dt, splitting_scheme):
     """ setup right hand side of variational form for KNP system """
 
     psi = physical_parameters['psi']        # combination of physical constants
@@ -182,7 +183,7 @@ def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
 
     for idx, ion in enumerate(ion_list[:-1]):
         # get extra and intracellular test functions
-        v_e = v['e'][idx]; v_i = v['i'][idx]
+        v_e = v[0][idx]; v_i = v[1][idx]
 
         # get previous concentration
         c_e_ = c_e_prev[idx]
@@ -201,8 +202,8 @@ def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
         L += ion['f_source'] * v_e * dx(0)
 
         # calculate alpha
-        alpha_e = D_e * z * z * c_e_ / alpha_e_sum
-        alpha_i = D_i * z * z * c_i_ / alpha_i_sum
+        alpha_e = D_e * z * z * c_e_ / alpha_sum[0]
+        alpha_i = D_i * z * z * c_i_ / alpha_sum[1]
 
         # calculate coupling coefficient
         C_e = alpha_e(e_res) * C_M / (F * z * dt)
@@ -255,12 +256,12 @@ def get_rhs_mms(v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
 
     for idx, ion in enumerate(ion_list[:-1]):
         # get extra and intracellular test functions
-        v_e = v['e'][idx]
-        v_i = v['i'][idx]
+        v_e = v[0][idx]
+        v_i = v[1][idx]
 
         # get previous concentration
-        c_e_ = c_prev['e'][idx]
-        c_i_ = c_prev['i'][idx]
+        c_e_ = c_prev[0][idx]
+        c_i_ = c_prev[1][idx]
 
         # get valence and diffusion coefficients
         z = ion['z']
@@ -304,6 +305,37 @@ def knp_system(meshes, ct, ft, physical_parameters, ion_list, mem_models,
 
     MMS_FLAG = False if mms is None else True
 
+    subdomain_tags = meshes['subdomain_tags']
+    # Number of ions to solve for
+    N_ions = len(ion_list[:-1])
+
+    print("N_ions", N_ions)
+
+    # Create function-space for each subdomain
+    V_list_total = []
+
+    for tag in subdomain_tags:
+        # Get function spaces of all ions in subdomain tagged with tag
+        V_list = [c[tag][i].function_space for i in range(N_ions)]
+
+        # Add to total list
+        V_list_total += V_list
+
+    # Create mixed space (for each ion in each subspace)
+    W = MixedFunctionSpace(*V_list_total)
+
+    # Create trial and test functions
+    us = TrialFunctions(W)
+    vs = TestFunctions(W)
+
+    # Reorganize test and trial functions from lists into dictionary
+    u = {}; v = {}
+    # Get list of ions for each subdomain (ECS and cells) and insert into 
+    # dictionary with cell tag as key
+    for tag in subdomain_tags:
+        u[tag] = us[tag * N_ions:(tag + 1) * N_ions]
+        v[tag] = vs[tag * N_ions:(tag + 1) * N_ions]
+
     # Extract functions for solution concentrations
     c_e = c[0]
     c_i = c[1]
@@ -331,16 +363,9 @@ def knp_system(meshes, ct, ft, physical_parameters, ion_list, mem_models,
 
     n = FacetNormal(meshes['mesh'])
 
-    # Order functions in extra and intracellular lists
-    u_e = us[:N_ions]; u_i = us[N_ions:2 * N_ions]
-    v_e = vs[:N_ions]; v_i = vs[N_ions:2 * N_ions]
-    # ... and gather in dictionary
-    u = {'e':u_e, 'i':u_i}
-    v = {'e':v_e, 'i':v_i}
-
     # Initialize variational formulation
-    alpha_e_sum, alpha_i_sum, I_ch = initialize_variables(
-            ion_list, mem_models, c_e_prev, c_i_prev
+    alpha_sum, I_ch = initialize_variables(
+            ion_list, mem_models, meshes, c_prev,
     )
 
     # if MMS (i.e. no ODEs to solve), set splitting_scheme to false
@@ -355,8 +380,8 @@ def knp_system(meshes, ct, ft, physical_parameters, ion_list, mem_models,
     # Create right hand side knp system
     L = create_rhs(
             v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
-            physical_parameters, ion_list, mem_models, I_ch, alpha_e_sum,
-            alpha_i_sum, dt, splitting_scheme
+            physical_parameters, ion_list, mem_models, I_ch, alpha_sum,
+            dt, splitting_scheme
     )
 
     # add terms specific to mms test
