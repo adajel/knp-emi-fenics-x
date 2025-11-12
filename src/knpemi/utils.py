@@ -4,31 +4,26 @@ import scifem
 
 from knpemi.odeSolver import MembraneModel
 
-def set_initial_conditions(ion_list, c_prev):
+def set_initial_conditions(ion_list, subdomain_list, c_prev):
     """ Set initial conditions given by constants """
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        for idx, ion in enumerate(ion_list):
+            # Determine the target objects (c_e and c_i) based on the ion's index
+            is_last = (idx == len(ion_list) - 1)
+            c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
-    for idx, ion in enumerate(ion_list):
-
-        # Determine the target objects (c_e and c_i) based on the ion's index
-        is_last = (idx == len(ion_list) - 1)
-        c_e = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
-        c_i = ion_list[-1]['c_1'] if is_last else c_prev[1][idx]
-
-        # Apply initial conditions and scatter the data
-        c_e.x.array[:] = ion['c_init'][0]
-        c_e.x.scatter_forward()
-
-        c_i.x.array[:] = ion['c_init'][1]
-        c_i.x.scatter_forward()
+            # Apply initial conditions and scatter the data
+            c.x.array[:] = ion['c_init'][tag]
+            c.x.scatter_forward()
 
     return
 
+
 def setup_membrane_model(stim_params, physical_params, ode_models, ct, Q,
         ion_list):
-    """
-    Initiate membrane model(s) containing membrane mechanisms (passive
-    dynamics / ODEs) and src terms for PDE system
-    """
+    """ Initiate membrane model(s) containing membrane mechanisms (passive
+        dynamics / ODEs) and src terms for PDE system """
     # Set membrane (ODE) stimuli parameters
     stimulus = stim_params["stimulus"]
     stimulus_locator = stim_params["stimulus_locator"]
@@ -70,14 +65,6 @@ def setup_membrane_model(stim_params, physical_params, ode_models, ct, Q,
     return mem_models
 
 def interpolate_to_membrane(ue, ui, Q, mesh, ct, subdomain_list, tag):
-
-    #mesh = meshes['mesh']
-    #mesh_g = meshes['mesh_g']
-    #e_to_parent = meshes['e_to_parent']
-    #i_to_parent = meshes['i_to_parent']
-    #g_to_parent = meshes['g_to_parent']
-    #ct = meshes['ct']
-
     ECS = subdomain_list[0]
     ICS = subdomain_list[tag]
 
@@ -129,22 +116,6 @@ def interpolate_to_membrane(ue, ui, Q, mesh, ct, subdomain_list, tag):
         ui, qi, np.arange(len(g_to_parent_map), dtype=np.int32), mapped_entities[:, 2:]
     )
     qi.x.scatter_forward()
-
-    # Compute the difference between the two interpolated functions
-    #I = dolfinx.fem.Function(Q, name="i")
-    #I.x.array[:] = qe.x.array - qi.x.array
-
-    #reference = dolfinx.fem.Function(Q)
-    #reference.interpolate(lambda x: fe(x) - fi(x))
-
-    #qe_ref = dolfinx.fem.Function(Q)
-    #qe_ref.interpolate(fe)
-    #qi_ref = dolfinx.fem.Function(Q)
-    #qi_ref.interpolate(fi)
-
-    #np.testing.assert_allclose(qe.x.array, qe_ref.x.array)
-    #np.testing.assert_allclose(qi.x.array, qi_ref.x.array)
-    #np.testing.assert_allclose(I.x.array, reference.x.array, rtol=1e-14, atol=1e-14)
 
     # return extra and intracellular traces
     return qe, qi

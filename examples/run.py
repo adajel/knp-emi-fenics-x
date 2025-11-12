@@ -345,7 +345,7 @@ def solve_system():
     c, c_prev = create_functions_knp(subdomain_list, ion_list, degree=1)
 
     # Set initial conditions for PDE system
-    set_initial_conditions(ion_list, c_prev)
+    set_initial_conditions(ion_list, subdomain_list, c_prev)
 
     # Create new cell marker on gamma mesh
     cell_marker = 1
