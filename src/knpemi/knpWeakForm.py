@@ -267,7 +267,7 @@ def get_rhs_mms(vs, ion_list, subdomain_list, mms, dt, c_prev, phi, dx, dS, ds, 
                        - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag_mm]
 
                     # MMS specific: add neumann contribution
-                    L += - dot(ion['J_k_e'], n) * v_e * ds(5)
+                    L += - dot(ion['J_k_e'], n) * v_e * ds
 
     return L
 
@@ -276,8 +276,8 @@ def knp_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
         mms=None):
     """ Create and return EMI weak formulation """
 
+    # Set MMS flag
     MMS_FLAG = False if mms is None else True
-
     # If MMS (i.e. no ODEs to solve), set splitting_scheme to false
     if MMS_FLAG: splitting_scheme = False
 

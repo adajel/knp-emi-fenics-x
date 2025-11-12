@@ -155,86 +155,89 @@ def get_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting_sc
 
     return a
 
-def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
-        mem_models, I_ch, splitting_scheme):
+def get_rhs(c_prev, vs, dx, dS, ion_list, subdomain_list, physical_params, 
+        phi_M_prev, I_ch, splitting_scheme):
     """ Setup right hand side of variational form for the EMI system """
 
     C_phi = physical_params['C_phi']
     F = physical_params['F']
-
-    v_e = v[0]
-    v_i = v[1]
-
-    # initialize
     L = 0
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        v = vs[tag]
+        for idx, ion in enumerate(ion_list):
+            # Determine the function source based on the index
+            is_last = (idx == len(ion_list) - 1)
+            c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
-    for idx, ion in enumerate(ion_list):
-        # Determine the function source based on the index
-        is_last = (idx == len(ion_list) - 1)
+            # Add terms rhs (diffusive terms)
+            L += - F * ion['z'] * inner((ion['D'][tag])*grad(c), grad(v)) * dx(tag)
 
-        c_e_ = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
-        c_i_ = ion_list[-1]['c_1'] if is_last else c_prev[1][idx]
+        # Add membrane dynamics for each cell (all subdomain but ECS)
+        if tag > 0:
+            # ECS and ICS (i.e. current subdomain) shorthands
+            v_e = vs[0]; v_i = v # test functions
 
-        # Add terms rhs (diffusive terms)
-        L += - F * ion['z'] * inner((ion['D'][0])*grad(c_e_), grad(v_e)) * dx(0) \
-             - F * ion['z'] * inner((ion['D'][1])*grad(c_i_), grad(v_i)) * dx(1) \
+            # Loop through each membrane model (one cell tagged with tag
+            # might have several membrane models with different membrane
+            # tags tag_mm).
+            mem_models = subdomain['mem_models']
+            for jdx, mm in enumerate(mem_models):
+                # Get facet tag
+                tag_mm = mm['ode'].tag
+                if splitting_scheme:
+                    # Robin condition with PDE/ODE splitting scheme
+                    g_robin = phi_M_prev[tag]
+                else:
+                    # Original robin condition (without splitting)
+                    g_robin = phi_M_prev[tag] - (1 / C_phi) * I_ch[tag][jdx]
 
-    if splitting_scheme:
-        # robin condition with PDE/ODE splitting scheme
-        g_robin = [phi_M_prev[1]]*len(mem_models)
-    else:
-        # original robin condition (without splitting)
-        g_robin = [phi_M_prev[1] - (1 / C_phi) * I for I in I_ch]
-
-    for jdx, mm in enumerate(mem_models):
-        # get tag
-        tag = mm['ode'].tag
-        # add robin condition at interface
-        L += C_phi * inner(g_robin[jdx], v_i(i_res) - v_e(e_res)) * dS[tag]
+                # Add robin condition at interface
+                L += C_phi * inner(g_robin, v_i(i_res) - v_e(e_res)) * dS[tag_mm]
 
     return L
 
-def get_rhs_mms(v, dx, dS, ds, dt, n, c_prev,
-        mms, physical_params, mem_models, ion_list):
+
+def get_rhs_mms(vs, dx, dS, ds, c_prev, ion_list, subdomain_list,
+        physical_params, dt, n, mms):
 
     C_phi = physical_params['C_phi']
     F = physical_params['F']
-    psi = physical_params['psi']
-    C_M = physical_params['C_M']
-    R = physical_params['R']
-    temperature = physical_params['temperature']
-
-    v_e = v[0]
-    v_i = v[1]
-
-    # initialize
     L = 0
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        v = vs[tag]
+        for idx, ion in enumerate(ion_list):
+            # Determine the function source based on the index
+            is_last = (idx == len(ion_list) - 1)
+            c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
-    # not MMS specific,
-    for idx, ion in enumerate(ion_list):
-        # Determine the function source based on the index
-        is_last = (idx == len(ion_list) - 1)
+            # Add terms rhs (diffusive terms)
+            L += - F * ion['z'] * inner((ion['D'][tag])*grad(c), grad(v)) * dx(tag)
 
-        c_e_ = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
-        c_i_ = ion_list[-1]['c_1'] if is_last else c_prev[1][idx]
+            # Add Neumann term (zero in physiological simulation)
+            if tag == 0: L += - F * ion['z'] * dot(ion['J_k_e'], n) * v * ds(5)
 
-        # Add terms rhs (diffusive terms)
-        L += - F * ion['z'] * inner((ion['D'][0])*grad(c_e_), grad(v_e)) * dx(0) \
-             - F * ion['z'] * inner((ion['D'][1])*grad(c_i_), grad(v_i)) * dx(1) \
+        # EMI source terms for potentials
+        if tag == 0: L += inner(mms['f_phi_e'], v) * dx(tag)
+        if tag == 1: L += inner(mms['f_phi_i'], v) * dx(tag)
 
-    # MMS specific source terms
-    # EMI source terms for potentials
-    L += inner(mms['f_phi_e'], v_e) * dx(0) # Equation for phi_e
-    L += inner(mms['f_phi_i'], v_i) * dx(1) # Equation for phi_i
+        # Add membrane dynamics for each cell (all subdomain but ECS)
+        if tag > 0:
+            # ECS and ICS (i.e. current subdomain) shorthands
+            v_e = vs[0]; v_i = v # test functions
 
-    # Add robin terms (i.e. source term for equation for phi_M)
-    L += C_phi * inner(mms['f_phi_m'], v_i(i_res) - v_e(e_res)) * dS[1]
-    # Enforcing correction for I_m
-    L -= inner(mms['f_I_M'], v_e(e_res)) * dS[1]
-
-    # Add Neumann term (zero in physiological simulation)
-    for ion in ion_list:
-        L += - F * ion['z'] * dot(ion['J_k_e'], n) * v_e * ds(5)
+            # Loop through each membrane model (one cell tagged with tag
+            # might have several membrane models with different membrane
+            # tags tag_mm).
+            mem_models = subdomain['mem_models']
+            for jdx, mm in enumerate(mem_models):
+                # Get facet tag
+                tag_mm = mm['ode'].tag
+                # Add robin terms (i.e. source term for equation for phi_M)
+                L += C_phi * inner(mms['f_phi_m'], v_i(i_res) - v_e(e_res)) * dS[tag_mm]
+                # Enforcing correction for I_m
+                L -= inner(mms['f_I_M'], v_e(e_res)) * dS[tag_mm]
 
     return L
 
@@ -242,7 +245,10 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
         phi, phi_M_prev, c_prev, dt, degree=1, splitting_scheme=True, mms=None):
     """ Create and return EMI weak formulation """
 
+    # Set MMS flag
     MMS_FLAG = False if mms is None else True
+    # If MMS (i.e. no ODEs to solve), set splitting_scheme to false
+    if MMS_FLAG: splitting_scheme = False
 
     # Create function-space for each subdomain
     Vs = []
@@ -272,23 +278,22 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
             ion_list, subdomain_list, c_prev, physical_params
     )
 
-    # if MMS (i.e. no ODEs to solve), set splitting_scheme to false
-    if MMS_FLAG: splitting_scheme = False
-
     # get standard variational formulation
     a = get_lhs(
             u, v, dx, dS, subdomain_list, physical_params, kappa, splitting_scheme
     )
 
     L = get_rhs(
-            c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
-            mem_models, I_ch, splitting_scheme
+            c_prev, v, dx, dS, ion_list, subdomain_list, physical_params,
+            phi_M_prev, I_ch, splitting_scheme
     )
 
     # add terms specific to mms test
     if MMS_FLAG:
-        L = get_rhs_mms(v, dx, dS, ds, dt, n, c_prev, mms, physical_params,
-                mem_models, ion_list)
+        L = get_rhs_mms(
+                v, dx, dS, ds, c_prev, ion_list, subdomain_list, 
+                physical_params, dt, n, mms
+        )
 
         # Create Dirichlet BC
         #omega_e = meshes['mesh_sub_0']
