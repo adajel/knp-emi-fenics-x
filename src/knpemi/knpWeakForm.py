@@ -160,7 +160,7 @@ def create_lhs(u, v, phi, dx, dS, ion_list, physical_parameters, dt, splitting_s
     return a
 
 
-def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
+def create_rhs(v, phi, phi_M_prev_PDE_all, c_e_prev, c_i_prev, dx, dS,
         physical_parameters, ion_list, mem_models, I_ch, alpha_sum,
         dt, splitting_scheme):
     """ setup right hand side of variational form for KNP system """
@@ -205,9 +205,10 @@ def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
         C_i = alpha_i(i_res) * C_M / (F * z * dt)
 
         # loop through each membrane model
+        phi_M_prev_PDE = phi_M_prev_PDE_all[1]
         for jdx, mm in enumerate(mem_models):
             # get facet tag
-            tag = mm['ode'].tag
+            tag_mm = mm['ode'].tag
 
             if splitting_scheme:
                 # robin condition terms with splitting
@@ -225,12 +226,12 @@ def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
                           - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
 
             # add robin coupling condition at interface
-            L += - C_e * g_robin_e * v_e(e_res) * dS[tag] \
-                 + C_i * g_robin_i * v_i(i_res) * dS[tag]
+            L += - C_e * g_robin_e * v_e(e_res) * dS[tag_mm] \
+                 + C_i * g_robin_i * v_i(i_res) * dS[tag_mm]
 
             # add coupling terms on interface
-            L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag] \
-               - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag]
+            L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag_mm] \
+               - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag_mm]
 
     return L
 
@@ -270,7 +271,7 @@ def get_rhs_mms(v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
         L += 1.0/dt * c_i_ * v_i * dx(1)
 
         # get facet tag
-        tag = 1
+        tag_mm = 1
 
         # original robin condition terms (without splitting)
         g_robin_e = ion['f_phi_m_e']
@@ -278,12 +279,12 @@ def get_rhs_mms(v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
         f_I_M = mms['f_I_M']
 
         # add robin coupling condition at interface
-        L += C_i * g_robin_i * v_i(i_res) * dS[tag] \
-           - C_e * g_robin_e * v_e(e_res) * dS[tag]
+        L += C_i * g_robin_i * v_i(i_res) * dS[tag_mm] \
+           - C_e * g_robin_e * v_e(e_res) * dS[tag_mm]
 
         # add coupling terms on interface
-        L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag] \
-           - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag]
+        L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag_mm] \
+           - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag_mm]
 
         L += inner(ion['f_k_e'], v_e) * dx(0)
         L += inner(ion['f_k_i'], v_i) * dx(1)

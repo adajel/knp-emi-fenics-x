@@ -19,18 +19,16 @@ i_res = "-"
 e_res = "+"
 
 def create_measures(mesh, ct, ft):
-    gamma_tags = np.unique(ft.values)
-
     # Define measures
     dx = Measure('dx', domain=mesh, subdomain_data=ct)
     ds = Measure('ds', domain=mesh, subdomain_data=ft)
 
     dS = {}
+    gamma_tags = np.unique(ft.values)
+
     # Define measures on membrane interface gamma
-    interface_marker = 1
-    #ordered_integration_data = scifem.compute_interface_data(ct, ct_g.find(interface_marker))
-    ordered_integration_data = scifem.compute_interface_data(ct, ft.find(interface_marker))
     for tag in gamma_tags:
+        ordered_integration_data = scifem.compute_interface_data(ct, ft.find(tag))
         dS_tag = Measure("dS",
                     domain=mesh,
                     subdomain_data=[(tag, ordered_integration_data.flatten())],
@@ -43,7 +41,6 @@ def create_measures(mesh, ct, ft):
 def create_functions_emi(subdomain_list, degree=1):
 
     phi = {}
-
     for subdomain in subdomain_list:
         tag = subdomain["tag"]
         mesh = subdomain["mesh_sub"]
@@ -56,17 +53,12 @@ def create_functions_emi(subdomain_list, degree=1):
         # Add local function to dictionary
         phi[tag] = phi_sub
 
-        print(tag)
-
     neuron = subdomain_list[1]
     mesh_g = neuron["mesh_mem"]
     # create function space over gamma for membrane potential (phi_M)
     Q = dolfinx.fem.functionspace(mesh_g, ("CG", degree))
-    # current potential
-    #phi_e = dolfinx.fem.Function(V_e)
-    #phi_i = dolfinx.fem.Function(V_i)
     # previous membrane potential
-    phi_M_prev = dolfinx.fem.Function(Q)
+    phi_M_prev = {1:dolfinx.fem.Function(Q)}
 
     return phi, phi_M_prev
 
@@ -118,7 +110,7 @@ def initialize_variables(ion_list, c_prev, physical_params, mem_models, subdomai
     return kappa, I_ch
 
 
-def get_lhs(kappa, u, v, dx, dS, physical_params, mem_models, 
+def get_lhs(kappa, u, v, dx, dS, physical_params, mem_models,
         splitting_scheme):
     """ setup variational form for the emi system """
 
@@ -179,10 +171,10 @@ def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
 
     if splitting_scheme:
         # robin condition with PDE/ODE splitting scheme
-        g_robin = [phi_M_prev]*len(mem_models)
+        g_robin = [phi_M_prev[1]]*len(mem_models)
     else:
         # original robin condition (without splitting)
-        g_robin = [phi_M_prev - (1 / C_phi) * I for I in I_ch]
+        g_robin = [phi_M_prev[1] - (1 / C_phi) * I for I in I_ch]
 
     for jdx, mm in enumerate(mem_models):
         # get tag

@@ -54,8 +54,8 @@ def evaluate_function_in_point(mesh, u, x, y):
 
     return u_values
 
-def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, mesh, ct,
-        subdomain_list, k):
+def update_ode_variables(ode_model, c_prev, phi_M_prev_sub, ion_list,
+        subdomain_list, mesh, ct, tag, k):
     """ Update parameters in ODE solver (based on previous PDEs step)
         specific to membrane model
     """
@@ -63,12 +63,12 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, mesh, ct,
     c_i = c_prev[1]
 
     # Get function space on membrane (gamma interface)
-    Q = phi_M_prev.function_space
+    Q = phi_M_prev_sub.function_space
 
     # Get traces (in Q) of ECS and ICS concentrations
-    K_e, K_i = interpolate_to_membrane(c_e[0], c_i[0], Q, mesh, ct, subdomain_list, 1)
-    Cl_e, Cl_i = interpolate_to_membrane(c_e[1], c_i[1], Q, mesh, ct, subdomain_list, 1)
-    Na_e, Na_i = interpolate_to_membrane(ion_list[-1]['c_0'], ion_list[-1]['c_1'], Q, mesh, ct, subdomain_list, 1)
+    K_e, K_i = interpolate_to_membrane(c_e[0], c_i[0], Q, mesh, ct, subdomain_list, tag)
+    Cl_e, Cl_i = interpolate_to_membrane(c_e[1], c_i[1], Q, mesh, ct, subdomain_list, tag)
+    Na_e, Na_i = interpolate_to_membrane(ion_list[-1]['c_0'], ion_list[-1][f'c_{tag}'], Q, mesh, ct, subdomain_list, tag)
 
     # Set traces of ECS and ICS concentrations in ODE solver
     ode_model.set_parameter('K_e', K_e)
@@ -78,10 +78,6 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, mesh, ct,
     ode_model.set_parameter('Cl_e', Cl_e)
     ode_model.set_parameter('Cl_i', Cl_i)
 
-    #print("Set traces, from PDE to ODE")
-    #print("K_e", K_e.x.array[:])
-    #print("K_i", K_i.x.array[:])
-
     if k == 0:
         # If first time step do nothing, let initial value for phi_M
         # in ODE system be taken from ODE file
@@ -89,12 +85,13 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, mesh, ct,
     else:
         # For all other time steps, update the membrane potential in ODE solver
         # based on previous PDEs time step
-        ode_model.set_membrane_potential(phi_M_prev)
+        ode_model.set_membrane_potential(phi_M_prev_sub)
 
     return
 
 def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, 
         ion_list, mesh, ct, subdomain_list):
+
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
 
@@ -104,57 +101,55 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters,
     R = physical_parameters['R']
     rho = physical_parameters['rho']
 
-    phi_e = phi[0]
-    phi_i = phi[1]
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
 
-    # Update previous extra and intracellular concentrations
-    for idx in range(N_ions):
-        c_prev[0][idx].x.array[:] = c[0][idx].x.array
-        c_prev[1][idx].x.array[:] = c[1][idx].x.array
-        # Scatter
-        c_prev[0][idx].x.scatter_forward()
-        c_prev[1][idx].x.scatter_forward()
+        # Add contribution from immobile ions to eliminated ion
+        c_elim_sum = - (1.0 / ion_list[-1]['z']) * rho[tag]
 
-    # Update previous membrane potential (source term PDEs)
-    Q = phi_M_prev.function_space
-    tr_phi_e, tr_phi_i = interpolate_to_membrane(phi_e, phi_i, Q, mesh, ct, subdomain_list, 1)
-    phi_M_prev.x.array[:] = tr_phi_i.x.array - tr_phi_e.x.array
-    phi_M_prev.x.scatter_forward()
+        for idx, ion in enumerate(ion_list[:-1]):
+            # Update previous concentration
+            c_prev[tag][idx].x.array[:] = c[tag][idx].x.array
+            c_prev[tag][idx].x.scatter_forward()
 
-    # Add contribution from background charge / immobile ions to eliminated ion
-    c_e_elim_sum = - (1.0 / ion_list[-1]['z']) * rho[0]
-    c_i_elim_sum = - (1.0 / ion_list[-1]['z']) * rho[1]
+            # Add contribution to eliminated ion from ion
+            c_prev_sub = c_prev[tag][idx]
+            c_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_prev_sub
 
-    # Update Nernst potentials for next global time level
-    for idx, ion in enumerate(ion_list[:-1]):
-        # Get previous extra and intracellular concentrations
-        c_e = c_prev[0][idx]
-        c_i = c_prev[1][idx]
-        # Update Nernst potential
-        ion['E'] = R * temperature / (F * ion['z']) * ln(c_e(e_res) / c_i(i_res))
+        # Interpolate ufl sum onto V
+        V = c[tag][tag].function_space
+        c_elim = dolfinx.fem.Function(V)
+        expr = dolfinx.fem.Expression(c_elim_sum, V.element.interpolation_points)
+        c_elim.interpolate(expr)
 
-        # Add ion specific contribution to eliminated ion concentration
-        c_e_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_e
-        c_i_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_i
+        # Update eliminated ion concentrations
+        ion_list[-1][f'c_{tag}'].x.array[:] = c_elim.x.array
 
-    # Interpolate eliminated ion concentration sum onto function spaces
-    V_e = c[0][0].function_space
-    V_i = c[1][1].function_space
+        # Update Nernst potentials for all cells (i.e. all subdomain but ECS)
+        if tag != 0:
+            # Update Nernst potentials for each ion
+            for idx, ion in enumerate(ion_list[:-1]):
+                # Get previous extra and intracellular concentrations
+                c_e = c_prev[0][idx]
+                c_i = c_prev[tag][idx]
+                # Update Nernst potential
+                ion['E'] = R * temperature / (F * ion['z']) * ln(c_e(e_res) / c_i(i_res))
 
-    c_e_elim = dolfinx.fem.Function(V_e)
-    c_i_elim = dolfinx.fem.Function(V_i)
+            # Update Nernst potential for eliminated ion
+            c_e_elim = ion_list[-1][f'c_0']
+            c_i_elim = ion_list[-1][f'c_{tag}']
+            ion_list[-1]['E'] = R * temperature / (F * ion['z']) * ln(c_e_elim(e_res) / c_i_elim(i_res))
 
-    expr_e = dolfinx.fem.Expression(c_e_elim_sum, V_e.element.interpolation_points)
-    expr_i = dolfinx.fem.Expression(c_i_elim_sum, V_i.element.interpolation_points)
+            # Update membrane potential
+            phi_e = phi[0]
+            phi_i = phi[tag]
+            phi_M_prev_sub = phi_M_prev[tag]
 
-    c_e_elim.interpolate(expr_e)
-    c_i_elim.interpolate(expr_i)
-
-    # Update eliminated ion concentrations
-    ion_list[-1]['c_0'].x.array[:] = c_e_elim.x.array
-    ion_list[-1]['c_1'].x.array[:] = c_i_elim.x.array
-    # Update Nernst potential for eliminated ion concentrations
-    ion_list[-1]['E'] = R * temperature / (F * ion['z']) * ln(c_e_elim(e_res) / c_i_elim(i_res))
+            # Update previous membrane potential (source term PDEs)
+            Q = phi_M_prev_sub.function_space
+            tr_phi_e, tr_phi_i = interpolate_to_membrane(phi_e, phi_i, Q, mesh, ct, subdomain_list, tag)
+            phi_M_prev[tag].x.array[:] = tr_phi_i.x.array - tr_phi_e.x.array
+            phi_M_prev[tag].x.scatter_forward()
 
     return
 
@@ -186,36 +181,36 @@ def write_to_file(xdmf_e, xdmf_i, phi, c, phi_M, ion_list, t):
 
     return
 
-
 def solve_odes(mem_models, c_prev, phi_M_prev, ion_list, stim_params, dt,
         mesh, ct, subdomain_list, k):
-    # Solve ODEs (membrane models) for each membrane tag
-    for mem_model in mem_models:
+    """ Solve ODEs (membrane models) for each membrane tag in each subdomain """
 
-        # Update ODE variables based on PDEs output
-        ode_model = mem_model['ode']
-        update_ode_variables(
-            ode_model, c_prev, phi_M_prev, ion_list, mesh, ct, subdomain_list, k
-        )
+    # Solve ODEs for all cells (i.e. all subdomains but the ECS)
+    for subdomain in subdomain_list[1:]:
+        # Get tag and membrane potential
+        tag = subdomain['tag']
+        phi_M_prev_sub = phi_M_prev[tag]
+        for mem_model in subdomain['mem_models']:
+            # Update ODE variables based on PDE output
+            ode_model = mem_model['ode']
+            update_ode_variables(
+                ode_model, c_prev, phi_M_prev_sub, ion_list, subdomain_list,
+                mesh, ct, tag, k
+            )
 
+            # Solve ODEs
+            ode_model.step_lsoda(
+                    dt=dt,
+                    stimulus=stim_params['stimulus'],
+                    stimulus_locator=stim_params['stimulus_locator']
+            )
 
-        # Solve ODEs
-        ode_model.step_lsoda(
-                dt=dt,
-                stimulus=stim_params['stimulus'],
-                stimulus_locator=stim_params['stimulus_locator']
-        )
+            # Update PDE variables based on ODE output
+            ode_model.get_membrane_potential(phi_M_prev_sub)
 
-        # Update PDE variables based on ODE output
-        ode_model.get_membrane_potential(phi_M_prev)
-
-        # Update src terms for next PDE step based on ODE output
-        for ion, I_ch_k in mem_model['I_ch_k'].items():
-
-            print(ion)
-            print(I_ch_k.x.array[:][10])
-
-            ode_model.get_parameter("I_ch_" + ion, I_ch_k)
+            # Update src terms for next PDE step based on ODE output
+            for ion, I_ch_k in mem_model['I_ch_k'].items():
+                ode_model.get_parameter("I_ch_" + ion, I_ch_k)
 
     return
 
@@ -384,33 +379,36 @@ def solve_system():
     #)
 
     # Dictionary with membrane models (key is facet tag, value is ode model)
-    ode_models = {1: mm_hh}
+    ode_models_neuron = {1: mm_hh}
 
     # Membrane parameters
     g_syn_bar = 10                     # synaptic conductivity (S/m**2)
-
     # Set stimulus ODE
     stimulus = {'stim_amplitude': g_syn_bar}
     stimulus_locator = lambda x: (x[0] < 20e-6)
-    #stimulus_locator = lambda x: True
 
     # Set membrane parameters
     stim_params = {'g_syn_bar':g_syn_bar, 'stimulus':stimulus,
                    'stimulus_locator':stimulus_locator}
 
-    mem_models = setup_membrane_model(stim_params, physical_parameters,
-            ode_models, ct_g, phi_M_prev.function_space, ion_list)
+    mem_models_neuron = setup_membrane_model(
+            stim_params, physical_parameters, ode_models_neuron, ct_g,
+            phi_M_prev[neuron_tag].function_space, ion_list
+    )
+
+    # add membrane model to neuron in subdomain list
+    subdomain_list[1]['mem_models'] = mem_models_neuron
 
     # Create variational form emi problem
     a_emi, L_emi = emi_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
-            mem_models, phi, phi_M_prev, c_prev, dt,
+            mem_models_neuron, phi, phi_M_prev, c_prev, dt,
     )
 
     # Create variational form knp problem
     a_knp, L_knp = knp_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
-            mem_models, phi, phi_M_prev, c, c_prev, dt,
+            mem_models_neuron, phi, phi_M_prev, c, c_prev, dt,
     )
 
     # Specify entity maps for each sub-mesh to ensure correct assembly
@@ -454,10 +452,6 @@ def solve_system():
     xdmf_e.write_mesh(mesh_sub_0)
     xdmf_i.write_mesh(mesh_sub_1)
 
-    #xdmf.write_meshtags(ct, mesh.geometry)
-    # write initial conditions to file
-    #write_to_file(xdmf, phi, c_prev, phi_M_prev, ion_list, 0)
-
     # at membrane of axon A (gamma)
     x_M = 25; y_M = 3
     # 0.05 um above axon A (ECS)
@@ -470,18 +464,17 @@ def solve_system():
 
         # Solve ODEs
         solve_odes(
-                mem_models, c_prev, phi_M_prev, ion_list, stim_params,
+                mem_models_neuron, c_prev, phi_M_prev, ion_list, stim_params,
                 dt, mesh, ct, subdomain_list, k
-        )
+            )
 
         # Solve PDEs
         problem_emi.solve()
         problem_knp.solve()
 
-        # update PDE variables
         update_pde_variables(
                 c_prev, c, phi, phi_M_prev, physical_parameters,
-                ion_list, mesh, ct, subdomain_list
+                ion_list, mesh, ct, subdomain_list,
         )
 
         # update time
@@ -505,9 +498,9 @@ def solve_system():
         Na_i_val = evaluate_function_in_point(mesh_sub_1, ion_list[-1]['c_1'], x_i*1.0e-6, y_i*1.0e-6)
         Na_i.append(Na_i_val[0])
 
-        for mem_model in mem_models:
+        for mem_model in mem_models_neuron:
 
-            Q = phi_M_prev.function_space
+            Q = phi_M_prev[1].function_space
             ode_model = mem_model['ode']
 
             I_Na = dolfinx.fem.Function(Q)

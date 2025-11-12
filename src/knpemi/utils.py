@@ -37,10 +37,10 @@ def setup_membrane_model(stim_params, physical_params, ode_models, ct, Q,
     mem_models = []
 
     # initialize and append ode models to list
-    for tag, ode in ode_models.items():
+    for tag_sub, ode in ode_models.items():
 
         # Initialize ODE model
-        ode_model = MembraneModel(ode, ct, tag, Q)
+        ode_model = MembraneModel(ode, ct, tag_sub, Q)
 
         # Set constants in ODE solver from PDE parameters (to ensure same values are used)
         ode_model.set_parameter_values({'Cm': lambda x: physical_params["C_M"]})
