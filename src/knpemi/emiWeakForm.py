@@ -46,29 +46,30 @@ def create_measures(meshes, ct, ft):
 
 def create_functions_emi(meshes, degree=1):
 
-    mesh_e = meshes["mesh_e"]
-    mesh_i = meshes["mesh_i"]
+    phi = {}
+    subdomain_tags = meshes['subdomain_tags']
+
+    for tag in subdomain_tags:
+        mesh = meshes[f"mesh_sub_{tag}"]
+        # Create local functions space for local potential ..
+        V = dolfinx.fem.functionspace(mesh, ("CG", degree))
+        # ... and create and name function for local potential.
+        phi_sub = dolfinx.fem.Function(V)
+        phi_sub.name = f"phi_{tag}"
+
+        # Add local function to dictionary
+        phi[tag] = phi_sub
+
+        print(tag)
+
     mesh_g = meshes["mesh_g"]
-
-    # create functions spaces for phi_e and phi_i over Omega_e and Omega_i respectively
-    V_e = dolfinx.fem.functionspace(mesh_e, ("CG", degree))
-    V_i = dolfinx.fem.functionspace(mesh_i, ("CG", degree))
-
     # create function space over gamma for membrane potential (phi_M)
     Q = dolfinx.fem.functionspace(mesh_g, ("CG", degree))
-
     # current potential
-    phi_e = dolfinx.fem.Function(V_e)
-    phi_i = dolfinx.fem.Function(V_i)
+    #phi_e = dolfinx.fem.Function(V_e)
+    #phi_i = dolfinx.fem.Function(V_i)
     # previous membrane potential
     phi_M_prev = dolfinx.fem.Function(Q)
-
-    # name functions (convenient when writing results to file)
-    phi_e.name = "phi_e"
-    phi_i.name = "phi_i"
-    phi_M_prev.name = "phi_m"
-
-    phi = {'e':phi_e, 'i':phi_i}
 
     return phi, phi_M_prev
 
@@ -88,8 +89,8 @@ def initialize_variables(ion_list, c_prev, physical_params, mem_models):
         # Determine the function source based on the index
         is_last = (idx == len(ion_list) - 1)
 
-        c_e = ion_list[-1]['c_e'] if is_last else c_prev['e'][idx]
-        c_i = ion_list[-1]['c_i'] if is_last else c_prev['i'][idx]
+        c_e = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
+        c_i = ion_list[-1]['c_1'] if is_last else c_prev[1][idx]
 
         # Calculate and set Nernst potential for current ion (+ is ECS, - is ICS)
         ion['E'] = R * temperature / (F * ion['z']) * ln(c_e(e_res) / c_i(i_res))
@@ -165,8 +166,8 @@ def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
         # Determine the function source based on the index
         is_last = (idx == len(ion_list) - 1)
 
-        c_e_ = ion_list[-1]['c_e'] if is_last else c_prev['e'][idx]
-        c_i_ = ion_list[-1]['c_i'] if is_last else c_prev['i'][idx]
+        c_e_ = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
+        c_i_ = ion_list[-1]['c_1'] if is_last else c_prev[1][idx]
 
         # Add terms rhs (diffusive terms)
         L += - F * ion['z'] * inner((ion['D'][0])*grad(c_e_), grad(v_e)) * dx(0) \
@@ -208,8 +209,8 @@ def get_rhs_mms(v, dx, dS, ds, dt, n, c_prev,
         # Determine the function source based on the index
         is_last = (idx == len(ion_list) - 1)
 
-        c_e_ = ion_list[-1]['c_e'] if is_last else c_prev['e'][idx]
-        c_i_ = ion_list[-1]['c_i'] if is_last else c_prev['i'][idx]
+        c_e_ = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
+        c_i_ = ion_list[-1]['c_1'] if is_last else c_prev[1][idx]
 
         # Add terms rhs (diffusive terms)
         L += - F * ion['z'] * inner((ion['D'][0])*grad(c_e_), grad(v_e)) * dx(0) \
@@ -237,8 +238,8 @@ def emi_system(meshes, ct, ft, physical_params, ion_list, mem_models,
 
     MMS_FLAG = False if mms is None else True
 
-    phi_e = phi['e']
-    phi_i = phi['i']
+    phi_e = phi[0]
+    phi_i = phi[1]
 
     # Create measures
     dx, dS, ds = create_measures(meshes, ct, ft)
@@ -283,7 +284,7 @@ def emi_system(meshes, ct, ft, physical_params, ion_list, mem_models,
                 mem_models, ion_list)
 
         # Create Dirichlet BC
-        omega_e = meshes['mesh_e']
+        omega_e = meshes['mesh_sub_0']
         e_vertex_to_parent = meshes['e_vertex_to_parent']
         exterior_to_parent = meshes['e_to_parent']
         boundary_marker = 5

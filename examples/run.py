@@ -58,8 +58,8 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, meshes, k):
     """ Update parameters in ODE solver (based on previous PDEs step)
         specific to membrane model
     """
-    c_e = c_prev['e']
-    c_i = c_prev['i']
+    c_e = c_prev[0]
+    c_i = c_prev[1]
 
     # Get function space on membrane (gamma interface)
     Q = phi_M_prev.function_space
@@ -67,7 +67,7 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, meshes, k):
     # Get traces (in Q) of ECS and ICS concentrations
     K_e, K_i = interpolate_to_membrane(c_e[0], c_i[0], Q, meshes)
     Cl_e, Cl_i = interpolate_to_membrane(c_e[1], c_i[1], Q, meshes)
-    Na_e, Na_i = interpolate_to_membrane(ion_list[-1]['c_e'], ion_list[-1]['c_i'], Q, meshes)
+    Na_e, Na_i = interpolate_to_membrane(ion_list[-1]['c_0'], ion_list[-1]['c_1'], Q, meshes)
 
     # Set traces of ECS and ICS concentrations in ODE solver
     ode_model.set_parameter('K_e', K_e)
@@ -102,16 +102,16 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
     R = physical_parameters['R']
     rho = physical_parameters['rho']
 
-    phi_i = phi['i']
-    phi_e = phi['e']
+    phi_e = phi[0]
+    phi_i = phi[1]
 
     # Update previous extra and intracellular concentrations
     for idx in range(N_ions):
-        c_prev['e'][idx].x.array[:] = c['e'][idx].x.array
-        c_prev['i'][idx].x.array[:] = c['i'][idx].x.array
+        c_prev[0][idx].x.array[:] = c[0][idx].x.array
+        c_prev[1][idx].x.array[:] = c[1][idx].x.array
         # Scatter
-        c_prev['e'][idx].x.scatter_forward()
-        c_prev['i'][idx].x.scatter_forward()
+        c_prev[0][idx].x.scatter_forward()
+        c_prev[1][idx].x.scatter_forward()
 
     # Update previous membrane potential (source term PDEs)
     Q = phi_M_prev.function_space
@@ -126,8 +126,8 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
     # Update Nernst potentials for next global time level
     for idx, ion in enumerate(ion_list[:-1]):
         # Get previous extra and intracellular concentrations
-        c_e = c_prev['e'][idx]
-        c_i = c_prev['i'][idx]
+        c_e = c_prev[0][idx]
+        c_i = c_prev[1][idx]
         # Update Nernst potential
         ion['E'] = R * temperature / (F * ion['z']) * ln(c_e(e_res) / c_i(i_res))
 
@@ -136,8 +136,8 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
         c_i_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_i
 
     # Interpolate eliminated ion concentration sum onto function spaces
-    V_e = c['e'][0].function_space
-    V_i = c['i'][1].function_space
+    V_e = c[0][0].function_space
+    V_i = c[1][1].function_space
 
     c_e_elim = dolfinx.fem.Function(V_e)
     c_i_elim = dolfinx.fem.Function(V_i)
@@ -149,8 +149,8 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
     c_i_elim.interpolate(expr_i)
 
     # Update eliminated ion concentrations
-    ion_list[-1]['c_e'].x.array[:] = c_e_elim.x.array
-    ion_list[-1]['c_i'].x.array[:] = c_i_elim.x.array
+    ion_list[-1]['c_0'].x.array[:] = c_e_elim.x.array
+    ion_list[-1]['c_1'].x.array[:] = c_i_elim.x.array
     # Update Nernst potential for eliminated ion concentrations
     ion_list[-1]['E'] = R * temperature / (F * ion['z']) * ln(c_e_elim(e_res) / c_i_elim(i_res))
 
@@ -160,22 +160,22 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
 def write_to_file(xdmf_e, xdmf_i, phi, c, phi_M, ion_list, t):
 
     # Write results to file
-    #xdmf_e.write_function(phi['e'], t=float(t))
-    #xdmf_i.write_function(phi['i'], t=float(t))
+    #xdmf_e.write_function(phi[0], t=float(t))
+    #xdmf_i.write_function(phi[1], t=float(t))
     #xdmf.write_function(phi_M, t=float(t))
 
-    c_e = c['e'][0]
+    c_e = c[0][0]
     xdmf_e.write_function(c_e, t=float(t))
 
-    c_i = c['i'][0]
+    c_i = c[1][0]
     xdmf_i.write_function(c_i, t=float(t))
 
     for idx in range(len(ion_list)):
         # Determine the function source based on the index
         is_last = (idx == len(ion_list) - 1)
 
-        c_i = ion_list[-1]['c_i'] if is_last else c['i'][idx]
-        c_e = ion_list[-1]['c_e'] if is_last else c['e'][idx]
+        c_e = ion_list[-1]['c_0'] if is_last else c[0][idx]
+        c_i = ion_list[-1]['c_1'] if is_last else c[1][idx]
 
         # Write the functions to file
         #(xdmf.write_function(f, t=float(t)) for f in (c_i, c_e))
@@ -251,11 +251,14 @@ def solve_system():
     # gamma markers
     interface_marker = 1
 
-    mesh_i, i_to_parent, _, _, _ = scifem.extract_submesh(
+    subdomain_tags = [0, 1]
+    membrane_tags = [1]
+
+    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(
             mesh, ct, interior_marker
     )
 
-    mesh_e, e_to_parent, _, _, _ = scifem.extract_submesh(
+    mesh_sub_0, e_to_parent, _, _, _ = scifem.extract_submesh(
             mesh, ct, exterior_marker
     )
 
@@ -263,9 +266,10 @@ def solve_system():
             mesh, ft, interface_marker
     )
 
-    meshes = {"mesh":mesh, "mesh_e":mesh_e, "mesh_i":mesh_i, "mesh_g":mesh_g,
+    meshes = {"mesh":mesh, "mesh_sub_0":mesh_sub_0, "mesh_sub_1":mesh_sub_1, "mesh_g":mesh_g,
               "ct":ct, "ft":ft, "e_to_parent":e_to_parent,
-              "i_to_parent":i_to_parent, "g_to_parent":g_to_parent}
+              "i_to_parent":i_to_parent, "g_to_parent":g_to_parent,
+              "subdomain_tags":subdomain_tags, "membrane_tags":membrane_tags}
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -311,8 +315,8 @@ def solve_system():
     Cl_i_init = Na_i_init + K_i_init    # intracellular CL concentration
 
     # set background charge (no background charge in this scenario)
-    rho = {0:dolfinx.fem.Constant(mesh_e, 0.0),
-           1:dolfinx.fem.Constant(mesh_i, 0.0)}
+    rho = {0:dolfinx.fem.Constant(mesh_sub_0, 0.0),
+           1:dolfinx.fem.Constant(mesh_sub_1, 0.0)}
 
     # Set parameters
     physical_parameters = {'dt':dolfinx.fem.Constant(mesh, dt),
@@ -326,47 +330,47 @@ def solve_system():
                            'rho':rho}
 
     # diffusion coefficients for each sub-domain
-    D_Na = {0:dolfinx.fem.Constant(mesh_e, D_Na),
-            1:dolfinx.fem.Constant(mesh_i, D_Na)}
+    D_Na = {0:dolfinx.fem.Constant(mesh_sub_0, D_Na),
+            1:dolfinx.fem.Constant(mesh_sub_1, D_Na)}
 
-    D_K = {0:dolfinx.fem.Constant(mesh_e, D_K),
-           1:dolfinx.fem.Constant(mesh_i, D_K)}
+    D_K = {0:dolfinx.fem.Constant(mesh_sub_0, D_K),
+           1:dolfinx.fem.Constant(mesh_sub_1, D_K)}
 
-    D_Cl = {0:dolfinx.fem.Constant(mesh_e, D_Cl),
-            1:dolfinx.fem.Constant(mesh_i, D_Cl)}
+    D_Cl = {0:dolfinx.fem.Constant(mesh_sub_0, D_Cl),
+            1:dolfinx.fem.Constant(mesh_sub_1, D_Cl)}
 
     # initial concentrations for each sub-domain
-    Na_init = {0:dolfinx.fem.Constant(mesh_e, Na_e_init),
-               1:dolfinx.fem.Constant(mesh_i, Na_i_init)}
+    Na_init = {0:dolfinx.fem.Constant(mesh_sub_0, Na_e_init),
+               1:dolfinx.fem.Constant(mesh_sub_1, Na_i_init)}
 
-    K_init = {0:dolfinx.fem.Constant(mesh_e, K_e_init),
-              1:dolfinx.fem.Constant(mesh_i, K_i_init)}
+    K_init = {0:dolfinx.fem.Constant(mesh_sub_0, K_e_init),
+              1:dolfinx.fem.Constant(mesh_sub_1, K_i_init)}
 
-    Cl_init = {0:dolfinx.fem.Constant(mesh_e, Cl_e_init),
-               1:dolfinx.fem.Constant(mesh_i, Cl_i_init)}
+    Cl_init = {0:dolfinx.fem.Constant(mesh_sub_0, Cl_e_init),
+               1:dolfinx.fem.Constant(mesh_sub_1, Cl_i_init)}
 
     # set source terms to be zero for all ion species
-    f_source_Na = dolfinx.fem.Constant(mesh_e, 0.0)
-    f_source_K = dolfinx.fem.Constant(mesh_e, 0.0)
-    f_source_Cl = dolfinx.fem.Constant(mesh_e, 0.0)
+    f_source_Na = dolfinx.fem.Constant(mesh_sub_0, 0.0)
+    f_source_K = dolfinx.fem.Constant(mesh_sub_0, 0.0)
+    f_source_Cl = dolfinx.fem.Constant(mesh_sub_0, 0.0)
 
     # Create ions (channel conductivity is set below for each model)
     Na = {'c_init':Na_init,
-          'bdry': dolfinx.fem.Constant(mesh_e, (0.0, 0.0)),
+          'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
           'z': 1.0,
           'name':'Na',
           'D':D_Na,
           'f_source':f_source_Na}
 
     K = {'c_init':K_init,
-          'bdry': dolfinx.fem.Constant(mesh_e, (0.0, 0.0)),
+          'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
          'z': 1.0,
          'name':'K',
          'D':D_K,
          'f_source':f_source_K}
 
     Cl = {'c_init':Cl_init,
-          'bdry': dolfinx.fem.Constant(mesh_e, (0.0, 0.0)),
+          'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
           'z': -1.0,
           'name':'Cl',
           'D':D_Cl,
@@ -387,8 +391,13 @@ def solve_system():
     stim_params = {'g_syn_bar':g_syn_bar, 'stimulus':stimulus,
                    'stimulus_locator':stimulus_locator}
 
-    # Dictionary with membrane models (key is facet tag, value is ode model)
-    ode_models = {1: mm_hh}
+    # Create cells
+    #neuron = {"tag":1,
+    #         "cell_mesh":mesh_sub_1,
+    #         "mem_mesh": mesh_g,
+    #         "mem_model": mem_model}
+
+    #cells = [ECS, neuron, glial]
 
     phi, phi_M_prev = create_functions_emi(meshes, degree=1)
     c, c_prev = create_functions_knp(meshes, ion_list, degree=1)
@@ -409,6 +418,9 @@ def solve_system():
     #ct_g = dolfinx.mesh.meshtags(
         #mesh_g, mesh_g.topology.dim, np.arange(num_cells_local, dtype=np.int32), cell_marker
     #)
+
+    # Dictionary with membrane models (key is facet tag, value is ode model)
+    ode_models = {1: mm_hh}
 
     mem_models = setup_membrane_model(stim_params, physical_parameters,
             ode_models, ct_g, phi_M_prev.function_space, ion_list)
@@ -463,8 +475,8 @@ def solve_system():
     xdmf_i = dolfinx.io.XDMFFile(mesh.comm, "results/results_i.xdmf", "w")
 
     # write mesh and mesh tags to file
-    xdmf_e.write_mesh(mesh_e)
-    xdmf_i.write_mesh(mesh_i)
+    xdmf_e.write_mesh(mesh_sub_0)
+    xdmf_i.write_mesh(mesh_sub_1)
 
     #xdmf.write_meshtags(ct, mesh.geometry)
     # write initial conditions to file
@@ -502,19 +514,19 @@ def solve_system():
         # Write results from previous time step to file
         write_to_file(xdmf_e, xdmf_i, phi, c, phi_M_prev, ion_list, t)
 
-        K_e_val = evaluate_function_in_point(mesh_e, c['e'][0], x_e*1.0e-6, y_e*1.0e-6)
+        K_e_val = evaluate_function_in_point(mesh_sub_0, c[0][0], x_e*1.0e-6, y_e*1.0e-6)
         K_e.append(K_e_val[0])
-        K_i_val = evaluate_function_in_point(mesh_i, c['i'][0], x_i*1.0e-6, y_i*1.0e-6)
+        K_i_val = evaluate_function_in_point(mesh_sub_1, c[1][0], x_i*1.0e-6, y_i*1.0e-6)
         K_i.append(K_i_val[0])
 
-        Cl_e_val = evaluate_function_in_point(mesh_e, c['e'][1], x_e*1.0e-6, y_e*1.0e-6)
+        Cl_e_val = evaluate_function_in_point(mesh_sub_0, c[0][1], x_e*1.0e-6, y_e*1.0e-6)
         Cl_e.append(Cl_e_val[0])
-        Cl_i_val = evaluate_function_in_point(mesh_i, c['i'][1], x_i*1.0e-6, y_i*1.0e-6)
+        Cl_i_val = evaluate_function_in_point(mesh_sub_1, c[1][1], x_i*1.0e-6, y_i*1.0e-6)
         Cl_i.append(Cl_i_val[0])
 
-        Na_e_val = evaluate_function_in_point(mesh_e, ion_list[-1]['c_e'], x_e*1.0e-6, y_e*1.0e-6)
+        Na_e_val = evaluate_function_in_point(mesh_sub_0, ion_list[-1]['c_0'], x_e*1.0e-6, y_e*1.0e-6)
         Na_e.append(Na_e_val[0])
-        Na_i_val = evaluate_function_in_point(mesh_i, ion_list[-1]['c_i'], x_i*1.0e-6, y_i*1.0e-6)
+        Na_i_val = evaluate_function_in_point(mesh_sub_1, ion_list[-1]['c_1'], x_i*1.0e-6, y_i*1.0e-6)
         Na_i.append(Na_i_val[0])
 
         for mem_model in mem_models:
@@ -668,11 +680,11 @@ if __name__ == "__main__":
     # gamma markers
     interface_marker = 1
 
-    mesh_i, i_to_parent, _, _, _ = scifem.extract_submesh(
+    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(
             mesh, ct, interior_marker
     )
 
-    mesh_e, e_to_parent, e_vertex_to_parent, _, _ = scifem.extract_submesh(
+    mesh_sub_0, e_to_parent, e_vertex_to_parent, _, _ = scifem.extract_submesh(
             mesh, ct, exterior_marker
     )
 
@@ -681,22 +693,22 @@ if __name__ == "__main__":
     )
 
     degree = 1
-    V_e = dolfinx.fem.functionspace(mesh_e, ("CG", degree))
-    V_i = dolfinx.fem.functionspace(mesh_i, ("CG", degree))
+    V_e = dolfinx.fem.functionspace(mesh_sub_0, ("CG", degree))
+    V_i = dolfinx.fem.functionspace(mesh_sub_1, ("CG", degree))
 
     u_e = dolfinx.fem.Function(V_e)
     u_i = dolfinx.fem.Function(V_i)
 
-    u_e.x.array[:] = dolfinx.fem.Constant(mesh_e, 5.0)
-    u_i.x.array[:] = dolfinx.fem.Constant(mesh_i, 3.0)
+    u_e.x.array[:] = dolfinx.fem.Constant(mesh_sub_0, 5.0)
+    u_i.x.array[:] = dolfinx.fem.Constant(mesh_sub_1, 3.0)
 
     x_i = 0.5
     y_i = 0.5
     x_e = 0.1
     y_e = 0.1
 
-    val_i = evaluate_function_in_point(mesh_i, u_i, x_i, y_i)
-    val_e = evaluate_function_in_point(mesh_e, u_e, x_e, y_e)
+    val_i = evaluate_function_in_point(mesh_sub_1, u_i, x_i, y_i)
+    val_e = evaluate_function_in_point(mesh_sub_0, u_e, x_e, y_e)
 
     print("val_i", val_i[0])
     print("val_e", val_e[0])

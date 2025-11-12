@@ -1,14 +1,10 @@
 README.md
 pyproject.toml
 src/knpemi/__init__.py
-src/knpemi/emiSolver.py
 src/knpemi/emiWeakForm.py
-src/knpemi/knpSolver.py
 src/knpemi/knpWeakForm.py
-src/knpemi/membrane.py
-src/knpemi/mm_hh.py
-src/knpemi/script.py
-src/knpemi/solver.py
+src/knpemi/odeSolver.py
+src/knpemi/pdeSolver.py
 src/knpemi/utils.py
 src/knpemi.egg-info/PKG-INFO
 src/knpemi.egg-info/SOURCES.txt

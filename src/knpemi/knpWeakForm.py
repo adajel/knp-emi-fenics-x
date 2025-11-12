@@ -49,55 +49,49 @@ def create_measures(meshes, ct, ft):
 
 def create_functions_knp(meshes, ion_list, degree=1):
 
-    mesh_e = meshes['mesh_e']
-    mesh_i = meshes['mesh_i']
+    # Get subdomain tags
+    subdomain_tags = meshes['subdomain_tags']
 
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
 
-    # Create mixed space for extra and intracellular concentrations
-    V_e = dolfinx.fem.functionspace(mesh_e, ("CG", degree))
-    V_i = dolfinx.fem.functionspace(mesh_i, ("CG", degree))
+    # Dictionaries for lists (of functions / function-spaces for each ion) for
+    # each subdomain. E.g. in case with subdomains 0 and 1 and ion species a
+    # and b we have cs = {0:[c_a, c_b], 1:[c_a, c_b]}
+    c = {}         # current solution
+    c_prev = {}    # previous solution
 
-    V_list_e = [V_e.clone() for _ in range(N_ions)]
-    V_list_i = [V_i.clone() for _ in range(N_ions)]
+    # For summing up lists of function-spaces in mixed function-space
+    Vs_list = []
 
-    W = MixedFunctionSpace(*(V_list_e + V_list_i))
+    for tag in subdomain_tags:
+        # Create list of function-spaces for each concentration in the
+        # subdomain tagged with tag
+        mesh = meshes[f'mesh_sub_{tag}']
+        V = dolfinx.fem.functionspace(mesh, ("CG", degree))
+        V_list = [V.clone() for _ in range(N_ions)]
 
-    # Functions for current extra and intracellular concentrations
-    c_e = [dolfinx.fem.Function(V_e) for V in V_list_e]
-    c_i = [dolfinx.fem.Function(V_i) for V in V_list_i]
-    c = {'e':c_e, 'i':c_i}
+        # Create list of functions for each concentration in the
+        # subdomain tagged with tag
+        c_sub = [dolfinx.fem.Function(V) for V in V_list]
+        # ... and for the concentrations in the previous time step
+        c_prev_sub = [dolfinx.fem.Function(V) for V in V_list]
 
-    # Name functions (convenient when writing results to file)
-    for f_e, f_i, ion in zip(c_e, c_i, ion_list):
-        ion_name = ion['name']
-        # Assign names
-        f_e.name = f"c_{ion_name}_e"
-        f_i.name = f"c_{ion_name}_i"
+        # Name functions (convenient when writing results to file)
+        for f, ion in zip(c_sub, ion_list): f.name =  f"c_{ion['name']}_{tag}"
 
-    # Functions for previous extra and intracellular concentrations
-    c_e_prev = [dolfinx.fem.Function(V_e) for V_e in V_list_e]
-    c_i_prev = [dolfinx.fem.Function(V_i) for V_i in V_list_i]
-    c_prev = {'e':c_e_prev, 'i':c_i_prev}
+        # Add lists to dictionaries
+        c[tag] = c_sub
+        c_prev[tag] = c_prev_sub
 
-    # TODO temporary hack
-    # Name functions (convenient when writing results to file)
-    for f_e, f_i, ion in zip(c_e_prev, c_i_prev, ion_list):
-        ion_name = ion['name']
-        # Assign names
-        f_e.name = f"c_{ion_name}_e"
-        f_i.name = f"c_{ion_name}_i"
-    # TODO temporary hack
+        Vs_list += V_list
 
-    # Initialize function for eliminated ion species
-    ion_list[-1]['c_e'] = dolfinx.fem.Function(V_e)
-    ion_list[-1]['c_i'] = dolfinx.fem.Function(V_i)
+        # Initialize and name function for eliminated ion species
+        ion_list[-1][f'c_{tag}'] = dolfinx.fem.Function(V)
+        ion_list[-1][f'c_{tag}'].name = f"c_{ion_list[-1]['name']}_{tag}"
 
-    # Name eliminated functions (convenient when writing results to file)
-    ion_name = ion_list[-1]['name']
-    ion_list[-1]['c_e'].name = f"c_{ion_name}_e"
-    ion_list[-1]['c_i'].name = f"c_{ion_name}_i"
+    # Create mixed function-space
+    W = MixedFunctionSpace(*Vs_list)
 
     return c, c_prev
 
@@ -110,8 +104,8 @@ def initialize_variables(ion_list, mem_models, c_e_prev, c_i_prev):
     for idx, ion in enumerate(ion_list):
         if idx == len(ion_list) - 1:
             # get eliminated concentrations from previous global step
-            c_e_ = ion_list[-1]['c_e']
-            c_i_ = ion_list[-1]['c_i']
+            c_e_ = ion_list[-1]['c_0']
+            c_i_ = ion_list[-1]['c_1']
         else:
             # get concentrations from previous global step
             c_e_ = c_e_prev[idx]
@@ -139,8 +133,8 @@ def create_lhs(u, v, phi, dx, dS, ion_list, physical_parameters, dt, splitting_s
 
     # get psi
     psi = physical_parameters['psi']
-    phi_e = phi['e']
-    phi_i = phi['i']
+    phi_e = phi[0]
+    phi_i = phi[1]
 
     # initialize form
     a = 0
@@ -180,8 +174,8 @@ def create_rhs(v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
     C_M = physical_parameters['C_M']        # membrane capacitance
     F = physical_parameters['F']            # Faraday's constant
 
-    phi_e = phi['e']
-    phi_i = phi['i']
+    phi_e = phi[0]
+    phi_i = phi[1]
 
     # initialize form
     L = 0
@@ -253,8 +247,8 @@ def get_rhs_mms(v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
     C_M = physical_parameters['C_M']        # membrane capacitance
     F = physical_parameters['F']            # Faraday's constant
 
-    phi_e = phi['e']
-    phi_i = phi['i']
+    phi_e = phi[0]
+    phi_i = phi[1]
 
     # initialize form
     L = 0
@@ -311,12 +305,12 @@ def knp_system(meshes, ct, ft, physical_parameters, ion_list, mem_models,
     MMS_FLAG = False if mms is None else True
 
     # Extract functions for solution concentrations
-    c_e = c['e']
-    c_i = c['i']
+    c_e = c[0]
+    c_i = c[1]
 
     # Extract functions for previous concentrations
-    c_e_prev = c_prev['e']
-    c_i_prev = c_prev['i']
+    c_e_prev = c_prev[0]
+    c_i_prev = c_prev[1]
 
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])

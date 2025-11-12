@@ -11,8 +11,8 @@ def set_initial_conditions(ion_list, c_prev):
 
         # Determine the target objects (c_e and c_i) based on the ion's index
         is_last = (idx == len(ion_list) - 1)
-        c_e = ion_list[-1]['c_e'] if is_last else c_prev['e'][idx]
-        c_i = ion_list[-1]['c_i'] if is_last else c_prev['i'][idx]
+        c_e = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
+        c_i = ion_list[-1]['c_1'] if is_last else c_prev[1][idx]
 
         # Apply initial conditions and scatter the data
         c_e.x.array[:] = ion['c_init'][0]

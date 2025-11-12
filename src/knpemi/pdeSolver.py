@@ -17,8 +17,8 @@ def create_solver_emi(a, L, phi, entity_maps, comm, bcs=None):
         }
 
     # Extract extra and intracellular potentials
-    phi_e = phi['e']
-    phi_i = phi['i']
+    phi_e = phi[0]
+    phi_i = phi[1]
 
     # Extract extra and intracellular potentials
     problem = dolfinx.fem.petsc.LinearProblem(
@@ -58,8 +58,8 @@ def create_solver_knp(a, L, c, entity_maps, bcs=None):
     }
 
     # Extract extra and intracellular concentrations
-    c_e = c['e']
-    c_i = c['i']
+    c_e = c[0]
+    c_i = c[1]
 
     # Extract extra and intracellular potentials
     problem = dolfinx.fem.petsc.LinearProblem(

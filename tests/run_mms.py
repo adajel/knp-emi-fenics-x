@@ -48,16 +48,16 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
     R = physical_parameters['R']
     rho = physical_parameters['rho']
 
-    phi_i = phi['i']
-    phi_e = phi['e']
+    phi_e = phi[0]
+    phi_i = phi[1]
 
     # Update previous extra and intracellular concentrations
     for idx in range(N_ions):
-        c_prev['e'][idx].x.array[:] = c['e'][idx].x.array
-        c_prev['i'][idx].x.array[:] = c['i'][idx].x.array
+        c_prev[0][idx].x.array[:] = c[0][idx].x.array
+        c_prev[1][idx].x.array[:] = c[1][idx].x.array
         # Scatter
-        c_prev['e'][idx].x.scatter_forward()
-        c_prev['i'][idx].x.scatter_forward()
+        c_prev[0][idx].x.scatter_forward()
+        c_prev[1][idx].x.scatter_forward()
 
     # Update previous membrane potential (source term PDEs)
     Q = phi_M_prev.function_space
@@ -72,8 +72,8 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
     # Update Nernst potentials for next global time level
     for idx, ion in enumerate(ion_list[:-1]):
         # Get previous extra and intracellular concentrations
-        c_e = c_prev['e'][idx]
-        c_i = c_prev['i'][idx]
+        c_e = c_prev[0][idx]
+        c_i = c_prev[1][idx]
         # Update Nernst potential
         ion['E'] = R * temperature / (F * ion['z']) * ln(c_e(e_res) / c_i(i_res))
 
@@ -82,8 +82,8 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
         c_i_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_i
 
     # Interpolate eliminated ion concentration sum onto function spaces
-    V_e = c['e'][0].function_space
-    V_i = c['i'][1].function_space
+    V_e = c[0][0].function_space
+    V_i = c[1][1].function_space
 
     c_e_elim = dolfinx.fem.Function(V_e)
     c_i_elim = dolfinx.fem.Function(V_i)
@@ -106,28 +106,28 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
 def write_to_file(xdmf_e, xdmf_i, phi, c, phi_M, ion_list, t):
 
     # Write results to file
-    #xdmf_e.write_function(phi['e'], t=float(t))
-    #xdmf_i.write_function(phi['i'], t=float(t))
+    #xdmf_e.write_function(phi[0], t=float(t))
+    #xdmf_i.write_function(phi[1], t=float(t))
     #xdmf.write_function(phi_M, t=float(t))
 
-    c_e = c['e'][0]
+    c_e = c[0][0]
     xdmf_e.write_function(c_e, t=float(t))
 
-    c_i = c['i'][0]
+    c_i = c[1][0]
     xdmf_i.write_function(c_i, t=float(t))
 
-    c_e = c['e'][1]
+    c_e = c[0][1]
     xdmf_e.write_function(c_e, t=float(t))
 
-    c_i = c['i'][1]
+    c_i = c[1][1]
     xdmf_i.write_function(c_i, t=float(t))
 
     for idx in range(len(ion_list)):
         # Determine the function source based on the index
         is_last = (idx == len(ion_list) - 1)
 
-        c_i = ion_list[-1]['c_i'] if is_last else c['i'][idx]
-        c_e = ion_list[-1]['c_e'] if is_last else c['e'][idx]
+        c_i = ion_list[-1]['c_i'] if is_last else c[1][idx]
+        c_e = ion_list[-1]['c_e'] if is_last else c[0][idx]
 
         # Write the functions to file
         #(xdmf.write_function(f, t=float(t)) for f in (c_i, c_e))
@@ -170,12 +170,13 @@ def solve_system(resolution):
 
     # gamma markers
     interface_marker = 1
+    subdomain_tags = [0, 1]
 
-    mesh_i, i_to_parent, _, _, _ = scifem.extract_submesh(
+    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(
             mesh, ct, interior_marker
     )
 
-    mesh_e, e_to_parent, e_vertex_to_parent, _, _ = scifem.extract_submesh(
+    mesh_sub_0, e_to_parent, e_vertex_to_parent, _, _ = scifem.extract_submesh(
             mesh, ct, exterior_marker
     )
 
@@ -183,10 +184,11 @@ def solve_system(resolution):
             mesh, ft, interface_marker
     )
 
-    meshes = {"mesh":mesh, "mesh_e":mesh_e, "mesh_i":mesh_i, "mesh_g":mesh_g,
+    meshes = {"mesh":mesh, "mesh_sub_0":mesh_sub_0, "mesh_sub_1":mesh_sub_1, "mesh_g":mesh_g,
               "ct":ct, "ft":ft, "e_to_parent":e_to_parent,
               "i_to_parent":i_to_parent, "g_to_parent":g_to_parent,
-              "e_vertex_to_parent": e_vertex_to_parent}
+              "e_vertex_to_parent": e_vertex_to_parent,
+              "subdomain_tags":subdomain_tags}
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -225,8 +227,8 @@ def solve_system(resolution):
     n_i = n(i_res)
 
     # set background charge (no background charge in this scenario)
-    rho = {0:dolfinx.fem.Constant(mesh_e, 0.0),
-           1:dolfinx.fem.Constant(mesh_i, 0.0)}
+    rho = {0:dolfinx.fem.Constant(mesh_sub_0, 0.0),
+           1:dolfinx.fem.Constant(mesh_sub_1, 0.0)}
 
     # Set parameters
     physical_parameters = {'dt':dolfinx.fem.Constant(mesh, dt),
@@ -314,24 +316,24 @@ def solve_system(resolution):
     f_I_M = Im_intra + Im_extra
 
     # diffusion coefficients for each sub-domain
-    D_a = {0:dolfinx.fem.Constant(mesh_e, D_a_e),
-           1:dolfinx.fem.Constant(mesh_i, D_a_i)}
+    D_a = {0:dolfinx.fem.Constant(mesh_sub_0, D_a_e),
+           1:dolfinx.fem.Constant(mesh_sub_1, D_a_i)}
 
-    D_b = {0:dolfinx.fem.Constant(mesh_e, D_b_e),
-           1:dolfinx.fem.Constant(mesh_i, D_b_i)}
+    D_b = {0:dolfinx.fem.Constant(mesh_sub_0, D_b_e),
+           1:dolfinx.fem.Constant(mesh_sub_1, D_b_i)}
 
-    D_c = {0:dolfinx.fem.Constant(mesh_e, D_c_e),
-           1:dolfinx.fem.Constant(mesh_i, D_c_i)}
+    D_c = {0:dolfinx.fem.Constant(mesh_sub_0, D_c_e),
+           1:dolfinx.fem.Constant(mesh_sub_1, D_c_i)}
 
     # diffusion coefficients for each sub-domain
-    C_a = {0:dolfinx.fem.Constant(mesh_e, C_a_e),
-           1:dolfinx.fem.Constant(mesh_i, C_a_i)}
+    C_a = {0:dolfinx.fem.Constant(mesh_sub_0, C_a_e),
+           1:dolfinx.fem.Constant(mesh_sub_1, C_a_i)}
 
-    C_b = {0:dolfinx.fem.Constant(mesh_e, C_b_e),
-           1:dolfinx.fem.Constant(mesh_i, C_b_i)}
+    C_b = {0:dolfinx.fem.Constant(mesh_sub_0, C_b_e),
+           1:dolfinx.fem.Constant(mesh_sub_1, C_b_i)}
 
-    C_c = {0:dolfinx.fem.Constant(mesh_e, C_c_e),
-           1:dolfinx.fem.Constant(mesh_i, C_c_i)}
+    C_c = {0:dolfinx.fem.Constant(mesh_sub_0, C_c_e),
+           1:dolfinx.fem.Constant(mesh_sub_1, C_c_i)}
 
     # Create ions (channel conductivity is set below for each model)
     a = {'z':z_a,
@@ -375,8 +377,8 @@ def solve_system(resolution):
     phi, phi_M_prev = create_functions_emi(meshes, degree=1)
     c, c_prev = create_functions_knp(meshes, ion_list, degree=1)
 
-    V_e = phi['e'].function_space
-    V_i = phi['i'].function_space
+    V_e = phi[0].function_space
+    V_i = phi[1].function_space
 
     # Set initial conditions
     a_e_expr = dolfinx.fem.Expression(a_e_exact, V_e.element.interpolation_points)
@@ -426,10 +428,10 @@ def solve_system(resolution):
 
     # ---------------------------------------
     # TODO
-    V_e = phi['e'].function_space
-    V_i = phi['i'].function_space
-    phi['e'] = phi_e_exact
-    phi['i'] = phi_i_exact
+    V_e = phi[0].function_space
+    V_i = phi[1].function_space
+    phi[0] = phi_e_exact
+    phi[1] = phi_i_exact
     phi_M_pre = phi_i_exact - phi_e_exact
     #f_phi_e_exact = dolfinx.fem.Function(V_e)
     #f_phi_i_exact = dolfinx.fem.Function(V_i)
@@ -463,8 +465,8 @@ def solve_system(resolution):
     xdmf_i = dolfinx.io.XDMFFile(mesh.comm, "results/results_i.xdmf", "w")
 
     # write mesh and mesh tags to file
-    xdmf_e.write_mesh(mesh_e)
-    xdmf_i.write_mesh(mesh_i)
+    xdmf_e.write_mesh(mesh_sub_0)
+    xdmf_i.write_mesh(mesh_sub_1)
 
     """
     for k in range(int(round(Tstop/float(dt)))):
@@ -493,7 +495,7 @@ def solve_system(resolution):
     xdmf_i.close()
 
     xdmf_e_exact = dolfinx.io.XDMFFile(mesh.comm, "results/results_e_exact.xdmf", "w")
-    xdmf_e_exact.write_mesh(mesh_e)
+    xdmf_e_exact.write_mesh(mesh_sub_0)
 
     func_a_e_exaxt = dolfinx.fem.Function(V_e)
     expr_a_e = dolfinx.fem.Expression(a_e_exact, V_e.element.interpolation_points)
@@ -504,18 +506,17 @@ def solve_system(resolution):
     xdmf_e_exact.close()
 
     xdmf_a_e = dolfinx.io.XDMFFile(mesh.comm, "results/results_a_e.xdmf", "w")
-    xdmf_a_e.write_mesh(mesh_e)
-    xdmf_a_e.write_function(c['e'][0], t=float(t))
+    xdmf_a_e.write_mesh(mesh_sub_0)
+    xdmf_a_e.write_function(c[0][0], t=float(t))
     xdmf_a_e.close()
 
     xdmf_b_e = dolfinx.io.XDMFFile(mesh.comm, "results/results_b_e.xdmf", "w")
-    xdmf_b_e.write_mesh(mesh_e)
-    xdmf_b_e.write_function(c['e'][1], t=float(t))
+    xdmf_b_e.write_mesh(mesh_sub_0)
+    xdmf_b_e.write_function(c[0][1], t=float(t))
     xdmf_b_e.close()
 
-
     xdmf_i_exact = dolfinx.io.XDMFFile(mesh.comm, "results/results_i_exact.xdmf", "w")
-    xdmf_i_exact.write_mesh(mesh_i)
+    xdmf_i_exact.write_mesh(mesh_sub_1)
 
     func_a_i_exaxt = dolfinx.fem.Function(V_i)
     expr_a_i = dolfinx.fem.Expression(a_i_exact, V_i.element.interpolation_points)
@@ -526,18 +527,18 @@ def solve_system(resolution):
     xdmf_i_exact.close()
 
     xdmf_a_i = dolfinx.io.XDMFFile(mesh.comm, "results/results_a_i.xdmf", "w")
-    xdmf_a_i.write_mesh(mesh_i)
-    xdmf_a_i.write_function(c['i'][0], t=float(t))
+    xdmf_a_i.write_mesh(mesh_sub_1)
+    xdmf_a_i.write_function(c[1][0], t=float(t))
     xdmf_a_i.close()
 
     xdmf_b_i = dolfinx.io.XDMFFile(mesh.comm, "results/results_b_i.xdmf", "w")
-    xdmf_b_i.write_mesh(mesh_i)
-    xdmf_b_i.write_function(c['i'][1], t=float(t))
+    xdmf_b_i.write_mesh(mesh_sub_1)
+    xdmf_b_i.write_function(c[1][1], t=float(t))
     xdmf_b_i.close()
 
     #phi = problem_emi.u
-    phi_e = phi['e']
-    phi_i = phi['i']
+    phi_e = phi[0]
+    phi_i = phi[1]
     #phi_e, phi_i= problem_emi.u
 
     # calculate ICS error

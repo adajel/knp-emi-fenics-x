@@ -71,12 +71,13 @@ def solve_system(resolution):
 
     # gamma markers
     interface_marker = 1
+    subdomain_tags = [0, 1]
 
-    mesh_i, i_to_parent, _, _, _ = scifem.extract_submesh(
+    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(
             mesh, ct, interior_marker
     )
 
-    mesh_e, e_to_parent, e_vertex_to_parent, _, _ = scifem.extract_submesh(
+    mesh_sub_0, e_to_parent, e_vertex_to_parent, _, _ = scifem.extract_submesh(
             mesh, ct, exterior_marker
     )
 
@@ -84,10 +85,11 @@ def solve_system(resolution):
             mesh, ft, interface_marker
     )
 
-    meshes = {"mesh":mesh, "mesh_e":mesh_e, "mesh_i":mesh_i, "mesh_g":mesh_g,
+    meshes = {"mesh":mesh, "mesh_sub_0":mesh_sub_0, "mesh_sub_1":mesh_sub_1, "mesh_g":mesh_g,
               "ct":ct, "ft":ft, "e_to_parent":e_to_parent,
               "i_to_parent":i_to_parent, "g_to_parent":g_to_parent,
-              "e_vertex_to_parent": e_vertex_to_parent}
+              "e_vertex_to_parent": e_vertex_to_parent,
+              "subdomain_tags":subdomain_tags}
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -118,8 +120,8 @@ def solve_system(resolution):
     n_i = n(i_res)
 
     # set background charge (no background charge in this scenario)
-    rho = {0:dolfinx.fem.Constant(mesh_e, 0.0),
-           1:dolfinx.fem.Constant(mesh_i, 0.0)}
+    rho = {0:dolfinx.fem.Constant(mesh_sub_0, 0.0),
+           1:dolfinx.fem.Constant(mesh_sub_1, 0.0)}
 
     # Set parameters
     physical_parameters = {'dt':dolfinx.fem.Constant(mesh, dt),
@@ -186,14 +188,14 @@ def solve_system(resolution):
     f_I_M = Im_intra + Im_extra
 
     # diffusion coefficients for each sub-domain
-    D_a = {0:dolfinx.fem.Constant(mesh_e, D_a_e),
-           1:dolfinx.fem.Constant(mesh_i, D_a_i)}
+    D_a = {0:dolfinx.fem.Constant(mesh_sub_0, D_a_e),
+           1:dolfinx.fem.Constant(mesh_sub_1, D_a_i)}
 
-    D_b = {0:dolfinx.fem.Constant(mesh_e, D_b_e),
-           1:dolfinx.fem.Constant(mesh_i, D_b_i)}
+    D_b = {0:dolfinx.fem.Constant(mesh_sub_0, D_b_e),
+           1:dolfinx.fem.Constant(mesh_sub_1, D_b_i)}
 
-    D_c = {0:dolfinx.fem.Constant(mesh_e, D_c_e),
-           1:dolfinx.fem.Constant(mesh_i, D_c_i)}
+    D_c = {0:dolfinx.fem.Constant(mesh_sub_0, D_c_e),
+           1:dolfinx.fem.Constant(mesh_sub_1, D_c_i)}
 
     # Create ions (channel conductivity is set below for each model)
     a = {'z':z_a,
@@ -225,8 +227,8 @@ def solve_system(resolution):
     phi, phi_M_prev = create_functions_emi(meshes, degree=1)
     c, c_prev = create_functions_knp(meshes, ion_list, degree=1)
 
-    V_e = phi['e'].function_space
-    V_i = phi['i'].function_space
+    V_e = phi[0].function_space
+    V_i = phi[1].function_space
 
     # Set initial conditions
     a_e_expr = dolfinx.fem.Expression(a_e_exact, V_e.element.interpolation_points)
