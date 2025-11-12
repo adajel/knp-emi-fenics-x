@@ -47,10 +47,7 @@ def create_measures(meshes, ct, ft):
     return dx, dS, ds
 
 
-def create_functions_knp(meshes, ion_list, degree=1):
-
-    # Get subdomain tags
-    subdomain_tags = meshes['subdomain_tags']
+def create_functions_knp(subdomain_list, ion_list, degree=1):
 
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
@@ -64,10 +61,12 @@ def create_functions_knp(meshes, ion_list, degree=1):
     # For summing up lists of function-spaces in mixed function-space
     Vs_list = []
 
-    for tag in subdomain_tags:
+    #for tag in subdomain_tags:
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        mesh = subdomain['mesh_sub']
         # Create list of function-spaces for each concentration in the
         # subdomain tagged with tag
-        mesh = meshes[f'mesh_sub_{tag}']
         V = dolfinx.fem.functionspace(mesh, ("CG", degree))
         V_list = [V.clone() for _ in range(N_ions)]
 

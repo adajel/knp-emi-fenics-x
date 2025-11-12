@@ -91,6 +91,21 @@ def solve_system(resolution):
               "e_vertex_to_parent": e_vertex_to_parent,
               "subdomain_tags":subdomain_tags}
 
+    # Create subdomains (ECS and cells)
+    ECS = {"tag":0,
+           "name":"ECS",
+           "mesh_sub":mesh_sub_0,
+           "sub_to_parent":e_to_parent}
+
+    neuron = {"tag":1,
+              "name":"neuron",
+              "mesh_sub":mesh_sub_1,
+              "sub_to_parent":i_to_parent,
+              "mesh_mem":mesh_g,
+              "mem_to_parent":g_to_parent}
+
+    subdomain_list = [ECS, neuron]
+
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
     dt = 1.0                            # global time step (ms)
@@ -224,7 +239,7 @@ def solve_system(resolution):
            }
 
     # get functions
-    phi, phi_M_prev = create_functions_emi(meshes, degree=1)
+    phi, phi_M_prev = create_functions_emi(subdomain_list, degree=1)
     c, c_prev = create_functions_knp(meshes, ion_list, degree=1)
 
     V_e = phi[0].function_space
@@ -271,8 +286,8 @@ def solve_system(resolution):
 
     # Create variational form emi problem
     a_emi, L_emi, dx = emi_system(
-            meshes, ct, ft, physical_parameters, ion_list, mem_models,
-            phi, phi_M_prev, c_prev, dt, mms=mms,
+            mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
+            mem_models, phi, phi_M_prev, c_prev, dt, mms=mms,
     )
 
     # Specify entity maps for each sub-mesh to ensure correct assembly

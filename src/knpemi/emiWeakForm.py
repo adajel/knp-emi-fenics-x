@@ -21,8 +21,7 @@ exterior_marker = 0
 i_res = "+" if interior_marker < exterior_marker else "-"
 e_res = "-" if interior_marker < exterior_marker else "+"
 
-def create_measures(meshes, ct, ft):
-    mesh = meshes['mesh']
+def create_measures(mesh, ct, ft):
     gamma_tags = np.unique(ft.values)
 
     # Define measures
@@ -44,13 +43,13 @@ def create_measures(meshes, ct, ft):
 
     return dx, dS, ds
 
-def create_functions_emi(meshes, degree=1):
+def create_functions_emi(subdomain_list, degree=1):
 
     phi = {}
-    subdomain_tags = meshes['subdomain_tags']
 
-    for tag in subdomain_tags:
-        mesh = meshes[f"mesh_sub_{tag}"]
+    for subdomain in subdomain_list:
+        tag = subdomain["tag"]
+        mesh = subdomain["mesh_sub"]
         # Create local functions space for local potential ..
         V = dolfinx.fem.functionspace(mesh, ("CG", degree))
         # ... and create and name function for local potential.
@@ -62,7 +61,8 @@ def create_functions_emi(meshes, degree=1):
 
         print(tag)
 
-    mesh_g = meshes["mesh_g"]
+    neuron = subdomain_list[1]
+    mesh_g = neuron["mesh_mem"]
     # create function space over gamma for membrane potential (phi_M)
     Q = dolfinx.fem.functionspace(mesh_g, ("CG", degree))
     # current potential
@@ -74,7 +74,7 @@ def create_functions_emi(meshes, degree=1):
     return phi, phi_M_prev
 
 
-def initialize_variables(ion_list, c_prev, physical_params, mem_models, meshes):
+def initialize_variables(ion_list, c_prev, physical_params, mem_models, subdomain_list):
     """ Calculate kappa (tissue conductance) and set Nernst potentials """
     # Get physical parameters
     F = physical_params['F']
@@ -84,11 +84,12 @@ def initialize_variables(ion_list, c_prev, physical_params, mem_models, meshes):
 
     # Initialize dictionary
     kappa = {}
-    subdomain_tags = meshes['subdomain_tags']
 
-    for tag in subdomain_tags:
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
         # Initialize kappa for each subdomain
         kappa_sub = 0
+
         # For each ion ...
         for idx, ion in enumerate(ion_list):
             # Determine the function source based on the index
@@ -238,17 +239,16 @@ def get_rhs_mms(v, dx, dS, ds, dt, n, c_prev,
 
     return L
 
-def emi_system(meshes, ct, ft, physical_params, ion_list, mem_models,
+def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_models,
         phi, phi_M_prev, c_prev, dt, degree=1, splitting_scheme=True, mms=None):
     """ Create and return EMI weak formulation """
 
     MMS_FLAG = False if mms is None else True
 
-    subdomain_tags = meshes['subdomain_tags']
-
     # Create function-space for each subdomain
     Vs = []
-    for tag in subdomain_tags:
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
         V = phi[tag].function_space
         Vs.append(V)
 
@@ -265,12 +265,12 @@ def emi_system(meshes, ct, ft, physical_params, ion_list, mem_models,
     for tag, v_ in enumerate(vs): v[tag] = v_
 
     # Create measures and facet normal
-    dx, dS, ds = create_measures(meshes, ct, ft)
-    n = FacetNormal(meshes['mesh'])
+    dx, dS, ds = create_measures(mesh, ct, ft)
+    n = FacetNormal(mesh)
 
     # Get tissue conductance and set Nernst potentials
     kappa, I_ch = initialize_variables(
-            ion_list, c_prev, physical_params, mem_models, meshes,
+            ion_list, c_prev, physical_params, mem_models, subdomain_list,
     )
 
     # if MMS (i.e. no ODEs to solve), set splitting_scheme to false

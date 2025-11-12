@@ -254,22 +254,29 @@ def solve_system():
     subdomain_tags = [0, 1]
     membrane_tags = [1]
 
-    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(
-            mesh, ct, interior_marker
-    )
-
-    mesh_sub_0, e_to_parent, _, _, _ = scifem.extract_submesh(
-            mesh, ct, exterior_marker
-    )
-
-    mesh_g, g_to_parent, g_vertex_to_parent, _, _ = scifem.extract_submesh(
-            mesh, ft, interface_marker
-    )
+    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(mesh, ct, interior_marker)
+    mesh_sub_0, e_to_parent, _, _, _ = scifem.extract_submesh(mesh, ct, exterior_marker)
+    mesh_g, g_to_parent, g_vertex_to_parent, _, _ = scifem.extract_submesh(mesh, ft, interface_marker)
 
     meshes = {"mesh":mesh, "mesh_sub_0":mesh_sub_0, "mesh_sub_1":mesh_sub_1, "mesh_g":mesh_g,
               "ct":ct, "ft":ft, "e_to_parent":e_to_parent,
               "i_to_parent":i_to_parent, "g_to_parent":g_to_parent,
               "subdomain_tags":subdomain_tags, "membrane_tags":membrane_tags}
+
+    # Create subdomains (ECS and cells)
+    ECS = {"tag":0,
+           "name":"ECS",
+           "mesh_sub":mesh_sub_0,
+           "sub_to_parent":e_to_parent}
+
+    neuron = {"tag":1,
+              "name":"neuron",
+              "mesh_sub":mesh_sub_1,
+              "sub_to_parent":i_to_parent,
+              "mesh_mem":mesh_g,
+              "mem_to_parent":g_to_parent}
+
+    subdomain_list = [ECS, neuron]
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -288,23 +295,6 @@ def solve_system():
     D_Cl = 2.03e-9                      # diffusion coefficients Cl (cm/ms)
     psi = F / (R * temperature)         # shorthand
     C_phi = C_M / dt                    # shorthand
-
-    """
-    dt = 0.1                            # global time step (ms)
-    Tstop = 10                          # global end time (ms)
-    n_steps_ODE = 25                    # number of ODE steps
-
-    # Physical parameters
-    C_M = 2.0                           # capacitance
-    temperature = 300.0e3               # temperature (mK)
-    F = 96485.0e3                       # Faraday's constant (mC/mol)
-    R = 8.314e3                         # Gas Constant (mJ/(K*mol))
-    D_Na = 1.33e-8                      # diffusion coefficients Na (cm/ms)
-    D_K = 1.96e-8                       # diffusion coefficients K (cm/ms)
-    D_Cl = 2.03e-8                      # diffusion coefficients Cl (cm/ms)
-    psi = F / (R * temperature)         # shorthand
-    C_phi = C_M / dt                    # shorthand
-    """
 
     # Initial values
     Na_i_init = 12.838513108648856      # Intracellular Na concentration
@@ -379,28 +369,8 @@ def solve_system():
     # Create ion list. NB! The last ion in list will be eliminated
     ion_list = [K, Cl, Na]
 
-    # Membrane parameters
-    g_syn_bar = 10                     # synaptic conductivity (S/m**2)
-
-    # Set stimulus ODE
-    stimulus = {'stim_amplitude': g_syn_bar}
-    stimulus_locator = lambda x: (x[0] < 20e-6)
-    #stimulus_locator = lambda x: True
-
-    # Set membrane parameters
-    stim_params = {'g_syn_bar':g_syn_bar, 'stimulus':stimulus,
-                   'stimulus_locator':stimulus_locator}
-
-    # Create cells
-    #neuron = {"tag":1,
-    #         "cell_mesh":mesh_sub_1,
-    #         "mem_mesh": mesh_g,
-    #         "mem_model": mem_model}
-
-    #cells = [ECS, neuron, glial]
-
-    phi, phi_M_prev = create_functions_emi(meshes, degree=1)
-    c, c_prev = create_functions_knp(meshes, ion_list, degree=1)
+    phi, phi_M_prev = create_functions_emi(subdomain_list, degree=1)
+    c, c_prev = create_functions_knp(subdomain_list, ion_list, degree=1)
 
     # Set initial conditions for PDE system
     set_initial_conditions(ion_list, c_prev)
@@ -422,13 +392,25 @@ def solve_system():
     # Dictionary with membrane models (key is facet tag, value is ode model)
     ode_models = {1: mm_hh}
 
+    # Membrane parameters
+    g_syn_bar = 10                     # synaptic conductivity (S/m**2)
+
+    # Set stimulus ODE
+    stimulus = {'stim_amplitude': g_syn_bar}
+    stimulus_locator = lambda x: (x[0] < 20e-6)
+    #stimulus_locator = lambda x: True
+
+    # Set membrane parameters
+    stim_params = {'g_syn_bar':g_syn_bar, 'stimulus':stimulus,
+                   'stimulus_locator':stimulus_locator}
+
     mem_models = setup_membrane_model(stim_params, physical_parameters,
             ode_models, ct_g, phi_M_prev.function_space, ion_list)
 
     # Create variational form emi problem
     a_emi, L_emi = emi_system(
-            meshes, ct, ft, physical_parameters, ion_list, mem_models,
-            phi, phi_M_prev, c_prev, dt,
+            mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
+            mem_models, phi, phi_M_prev, c_prev, dt,
     )
 
     # Create variational form knp problem
