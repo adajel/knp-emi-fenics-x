@@ -111,7 +111,7 @@ def initialize_variables(ion_list, mem_models, meshes, c_prev):
             c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
             # Update alpha sum
-            alpha_sum_sub += ion['D'][0] * ion['z'] * ion['z'] * c
+            alpha_sum_sub += ion['D'][tag] * ion['z'] * ion['z'] * c
 
         # Set alpha sum in dictionary
         alpha_sum[tag] = alpha_sum_sub
