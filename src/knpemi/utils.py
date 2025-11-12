@@ -69,14 +69,22 @@ def setup_membrane_model(stim_params, physical_params, ode_models, ct, Q,
 
     return mem_models
 
-def interpolate_to_membrane(ue, ui, Q, meshes):
+def interpolate_to_membrane(ue, ui, Q, mesh, ct, subdomain_list, tag):
 
-    mesh = meshes['mesh']
-    mesh_g = meshes['mesh_g']
-    e_to_parent = meshes['e_to_parent']
-    i_to_parent = meshes['i_to_parent']
-    g_to_parent = meshes['g_to_parent']
-    ct = meshes['ct']
+    #mesh = meshes['mesh']
+    #mesh_g = meshes['mesh_g']
+    #e_to_parent = meshes['e_to_parent']
+    #i_to_parent = meshes['i_to_parent']
+    #g_to_parent = meshes['g_to_parent']
+    #ct = meshes['ct']
+
+    ECS = subdomain_list[0]
+    ICS = subdomain_list[tag]
+
+    mesh_g = ICS['mesh_mem']
+    e_to_parent = ECS['sub_to_parent']
+    i_to_parent = ICS['sub_to_parent']
+    g_to_parent = ICS['mem_to_parent']
 
     num_facets_local = (
         mesh_g.topology.index_map(mesh_g.topology.dim).size_local

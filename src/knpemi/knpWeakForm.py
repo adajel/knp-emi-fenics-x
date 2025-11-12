@@ -14,15 +14,11 @@ from ufl import (
     FacetNormal,
 )
 
-interior_marker = 1
-exterior_marker = 0
+i_res = "-"
+e_res = "+"
 
-i_res = "+" if interior_marker < exterior_marker else "-"
-e_res = "-" if interior_marker < exterior_marker else "+"
-
-def create_measures(meshes, ct, ft):
+def create_measures(mesh, ct, ft):
     # Get mesh and interface/membrane tags associated with the membrane models
-    mesh = meshes['mesh']
     gamma_tags = np.unique(ft.values)
 
     # Define measures
@@ -95,12 +91,12 @@ def create_functions_knp(subdomain_list, ion_list, degree=1):
     return c, c_prev
 
 
-def initialize_variables(ion_list, mem_models, meshes, c_prev):
+def initialize_variables(ion_list, subdomain_list, mem_models, c_prev):
     """ Calculate sum of alpha_sum and total ionic current """
     alpha_sum = {}
-    subdomain_tags = meshes['subdomain_tags']
 
-    for tag in subdomain_tags:
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
         # Initialize sum for current tag
         alpha_sum_sub = 0
 
@@ -297,27 +293,23 @@ def get_rhs_mms(v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
 
     return L
 
-def knp_system(meshes, ct, ft, physical_parameters, ion_list, mem_models,
+def knp_system(mesh, ct, ft, physical_parameters, ion_list, subdomain_list, mem_models,
         phi, phi_M_prev_PDE, c, c_prev, dt, degree=1, splitting_scheme=True,
         mms=None):
     """ Create and return EMI weak formulation """
 
     MMS_FLAG = False if mms is None else True
 
-    subdomain_tags = meshes['subdomain_tags']
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
-
-    print("N_ions", N_ions)
 
     # Create function-space for each subdomain
     V_list_total = []
 
-    for tag in subdomain_tags:
-        # Get function spaces of all ions in subdomain tagged with tag
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        # List with function spaces of all ions in subdomain tagged with tag
         V_list = [c[tag][i].function_space for i in range(N_ions)]
-
-        # Add to total list
         V_list_total += V_list
 
     # Create mixed space (for each ion in each subspace)
@@ -331,40 +323,18 @@ def knp_system(meshes, ct, ft, physical_parameters, ion_list, mem_models,
     u = {}; v = {}
     # Get list of ions for each subdomain (ECS and cells) and insert into 
     # dictionary with cell tag as key
-    for tag in subdomain_tags:
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
         u[tag] = us[tag * N_ions:(tag + 1) * N_ions]
         v[tag] = vs[tag * N_ions:(tag + 1) * N_ions]
 
-    # Extract functions for solution concentrations
-    c_e = c[0]
-    c_i = c[1]
-
-    # Extract functions for previous concentrations
-    c_e_prev = c_prev[0]
-    c_i_prev = c_prev[1]
-
-    # Number of ions to solve for
-    N_ions = len(ion_list[:-1])
-
-    # Create measures
-    dx, dS, ds = create_measures(meshes, ct, ft)
-
-    # Get extra and intracellular function-spaces
-    V_list_e = [c_e[i].function_space for i in range(N_ions)]
-    V_list_i = [c_i[i].function_space for i in range(N_ions)]
-
-    # Create mixed space (for each ion in each subspace)
-    W = MixedFunctionSpace(*(V_list_e + V_list_i))
-
-    # Create trial and test functions
-    us = TrialFunctions(W)
-    vs = TestFunctions(W)
-
-    n = FacetNormal(meshes['mesh'])
+    # Create measures and facet normal
+    dx, dS, ds = create_measures(mesh, ct, ft)
+    n = FacetNormal(mesh)
 
     # Initialize variational formulation
     alpha_sum, I_ch = initialize_variables(
-            ion_list, mem_models, meshes, c_prev,
+            ion_list, subdomain_list, mem_models, c_prev,
     )
 
     # if MMS (i.e. no ODEs to solve), set splitting_scheme to false
@@ -378,7 +348,7 @@ def knp_system(meshes, ct, ft, physical_parameters, ion_list, mem_models,
 
     # Create right hand side knp system
     L = create_rhs(
-            v, phi, phi_M_prev_PDE, c_e_prev, c_i_prev, dx, dS,
+            v, phi, phi_M_prev_PDE, c_prev[0], c_prev[1], dx, dS,
             physical_parameters, ion_list, mem_models, I_ch, alpha_sum,
             dt, splitting_scheme
     )

@@ -22,8 +22,8 @@ from ufl import (
 interior_marker = 1
 exterior_marker = 0
 
-i_res = "+" if interior_marker < exterior_marker else "-"
-e_res = "-" if interior_marker < exterior_marker else "+"
+i_res = "-"
+e_res = "+"
 
 comm = MPI.COMM_WORLD
 
@@ -54,7 +54,8 @@ def evaluate_function_in_point(mesh, u, x, y):
 
     return u_values
 
-def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, meshes, k):
+def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, mesh, ct,
+        subdomain_list, k):
     """ Update parameters in ODE solver (based on previous PDEs step)
         specific to membrane model
     """
@@ -65,9 +66,9 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, meshes, k):
     Q = phi_M_prev.function_space
 
     # Get traces (in Q) of ECS and ICS concentrations
-    K_e, K_i = interpolate_to_membrane(c_e[0], c_i[0], Q, meshes)
-    Cl_e, Cl_i = interpolate_to_membrane(c_e[1], c_i[1], Q, meshes)
-    Na_e, Na_i = interpolate_to_membrane(ion_list[-1]['c_0'], ion_list[-1]['c_1'], Q, meshes)
+    K_e, K_i = interpolate_to_membrane(c_e[0], c_i[0], Q, mesh, ct, subdomain_list, 1)
+    Cl_e, Cl_i = interpolate_to_membrane(c_e[1], c_i[1], Q, mesh, ct, subdomain_list, 1)
+    Na_e, Na_i = interpolate_to_membrane(ion_list[-1]['c_0'], ion_list[-1]['c_1'], Q, mesh, ct, subdomain_list, 1)
 
     # Set traces of ECS and ICS concentrations in ODE solver
     ode_model.set_parameter('K_e', K_e)
@@ -92,7 +93,8 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list, meshes, k):
 
     return
 
-def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_list, meshes):
+def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, 
+        ion_list, mesh, ct, subdomain_list):
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
 
@@ -115,7 +117,7 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
 
     # Update previous membrane potential (source term PDEs)
     Q = phi_M_prev.function_space
-    tr_phi_e, tr_phi_i = interpolate_to_membrane(phi_e, phi_i, Q, meshes)
+    tr_phi_e, tr_phi_i = interpolate_to_membrane(phi_e, phi_i, Q, mesh, ct, subdomain_list, 1)
     phi_M_prev.x.array[:] = tr_phi_i.x.array - tr_phi_e.x.array
     phi_M_prev.x.scatter_forward()
 
@@ -186,15 +188,16 @@ def write_to_file(xdmf_e, xdmf_i, phi, c, phi_M, ion_list, t):
 
 
 def solve_odes(mem_models, c_prev, phi_M_prev, ion_list, stim_params, dt,
-        meshes, k):
+        mesh, ct, subdomain_list, k):
     # Solve ODEs (membrane models) for each membrane tag
     for mem_model in mem_models:
 
         # Update ODE variables based on PDEs output
         ode_model = mem_model['ode']
         update_ode_variables(
-                ode_model, c_prev, phi_M_prev, ion_list, meshes, k
+            ode_model, c_prev, phi_M_prev, ion_list, mesh, ct, subdomain_list, k
         )
+
 
         # Solve ODEs
         ode_model.step_lsoda(
@@ -245,31 +248,22 @@ def solve_system():
     mesh_path = 'meshes/2D/mesh_2.xdmf'
     mesh, ct, ft = read_mesh(mesh_path)
 
-    # subdomain markers
-    exterior_marker = 0; interior_marker = 1,
+    # Subdomain tags (same as is mesh). NB! ECS tag must always be zero.
+    ECS_tag = 0
+    neuron_tag = 1
 
-    # gamma markers
-    interface_marker = 1
+    # Extract sub-meshes
+    mesh_sub_0, e_to_parent, _, _, _ = scifem.extract_submesh(mesh, ct, ECS_tag)
+    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(mesh, ct, neuron_tag)
+    mesh_g, g_to_parent, g_vertex_to_parent, _, _ = scifem.extract_submesh(mesh, ft, neuron_tag)
 
-    subdomain_tags = [0, 1]
-    membrane_tags = [1]
-
-    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(mesh, ct, interior_marker)
-    mesh_sub_0, e_to_parent, _, _, _ = scifem.extract_submesh(mesh, ct, exterior_marker)
-    mesh_g, g_to_parent, g_vertex_to_parent, _, _ = scifem.extract_submesh(mesh, ft, interface_marker)
-
-    meshes = {"mesh":mesh, "mesh_sub_0":mesh_sub_0, "mesh_sub_1":mesh_sub_1, "mesh_g":mesh_g,
-              "ct":ct, "ft":ft, "e_to_parent":e_to_parent,
-              "i_to_parent":i_to_parent, "g_to_parent":g_to_parent,
-              "subdomain_tags":subdomain_tags, "membrane_tags":membrane_tags}
-
-    # Create subdomains (ECS and cells)
-    ECS = {"tag":0,
+    # Create subdomains (extracellular space and cells)
+    ECS = {"tag":ECS_tag,
            "name":"ECS",
            "mesh_sub":mesh_sub_0,
            "sub_to_parent":e_to_parent}
 
-    neuron = {"tag":1,
+    neuron = {"tag":neuron_tag,
               "name":"neuron",
               "mesh_sub":mesh_sub_1,
               "sub_to_parent":i_to_parent,
@@ -415,8 +409,8 @@ def solve_system():
 
     # Create variational form knp problem
     a_knp, L_knp = knp_system(
-            meshes, ct, ft, physical_parameters, ion_list, mem_models,
-            phi, phi_M_prev, c, c_prev, dt,
+            mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
+            mem_models, phi, phi_M_prev, c, c_prev, dt,
     )
 
     # Specify entity maps for each sub-mesh to ensure correct assembly
@@ -477,7 +471,7 @@ def solve_system():
         # Solve ODEs
         solve_odes(
                 mem_models, c_prev, phi_M_prev, ion_list, stim_params,
-                dt, meshes, k
+                dt, mesh, ct, subdomain_list, k
         )
 
         # Solve PDEs
@@ -487,7 +481,7 @@ def solve_system():
         # update PDE variables
         update_pde_variables(
                 c_prev, c, phi, phi_M_prev, physical_parameters,
-                ion_list, meshes
+                ion_list, mesh, ct, subdomain_list
         )
 
         # update time

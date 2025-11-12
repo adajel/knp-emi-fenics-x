@@ -15,11 +15,8 @@ from ufl import (
     FacetNormal,
 )
 
-interior_marker = 1
-exterior_marker = 0
-
-i_res = "+" if interior_marker < exterior_marker else "-"
-e_res = "-" if interior_marker < exterior_marker else "+"
+i_res = "-"
+e_res = "+"
 
 def create_measures(mesh, ct, ft):
     gamma_tags = np.unique(ft.values)

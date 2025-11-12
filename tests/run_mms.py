@@ -27,18 +27,16 @@ from ufl import (
         inner,
 )
 
-interior_marker = 1
-exterior_marker = 0
-
-i_res = "+" if interior_marker < exterior_marker else "-"
-e_res = "-" if interior_marker < exterior_marker else "+"
+i_res = "-"
+e_res = "+"
 
 comm = MPI.COMM_WORLD
 
 class MMSMembraneModel:
     pass
 
-def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_list, meshes):
+def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters,
+        ion_list, mesh, ct, subdomain_list):
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
 
@@ -61,7 +59,8 @@ def update_pde_variables(c_prev, c, phi, phi_M_prev, physical_parameters, ion_li
 
     # Update previous membrane potential (source term PDEs)
     Q = phi_M_prev.function_space
-    tr_phi_e, tr_phi_i = interpolate_to_membrane(phi_e, phi_i, Q, meshes)
+    tr_phi_e, tr_phi_i = interpolate_to_membrane(phi_e, phi_i, Q, mesh, ct, subdomain_list, 1)
+
     phi_M_prev.x.array[:] = tr_phi_i.x.array - tr_phi_e.x.array
     phi_M_prev.x.scatter_forward()
 
@@ -165,45 +164,36 @@ def solve_system(resolution):
     mesh_path = f'meshes/mms/mesh_{resolution}.xdmf'
     mesh, ct, ft = read_mesh(mesh_path)
 
-    # subdomain markers
-    exterior_marker = 0; interior_marker = 1,
-
-    # gamma markers
-    interface_marker = 1
-    subdomain_tags = [0, 1]
+    # Subdomain tags (NB! ECS tag must always be zero)
+    ECS_tag = 0
+    cell_tag = 1
 
     mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(
-            mesh, ct, interior_marker
+            mesh, ct, cell_tag
     )
 
     mesh_sub_0, e_to_parent, e_vertex_to_parent, _, _ = scifem.extract_submesh(
-            mesh, ct, exterior_marker
+            mesh, ct, ECS_tag
     )
 
     mesh_g, g_to_parent, g_vertex_to_parent, _, _ = scifem.extract_submesh(
-            mesh, ft, interface_marker
+            mesh, ft, cell_tag
     )
 
-    meshes = {"mesh":mesh, "mesh_sub_0":mesh_sub_0, "mesh_sub_1":mesh_sub_1, "mesh_g":mesh_g,
-              "ct":ct, "ft":ft, "e_to_parent":e_to_parent,
-              "i_to_parent":i_to_parent, "g_to_parent":g_to_parent,
-              "e_vertex_to_parent": e_vertex_to_parent,
-              "subdomain_tags":subdomain_tags}
-
     # Create subdomains (ECS and cells)
-    ECS = {"tag":0,
+    ECS = {"tag":ECS_tag,
            "name":"ECS",
            "mesh_sub":mesh_sub_0,
            "sub_to_parent":e_to_parent}
 
-    neuron = {"tag":1,
-              "name":"neuron",
-              "mesh_sub":mesh_sub_1,
-              "sub_to_parent":i_to_parent,
-              "mesh_mem":mesh_g,
-              "mem_to_parent":g_to_parent}
+    cell = {"tag":cell_tag,
+            "name":"neuron",
+            "mesh_sub":mesh_sub_1,
+            "sub_to_parent":i_to_parent,
+            "mesh_mem":mesh_g,
+            "mem_to_parent":g_to_parent}
 
-    subdomain_list = [ECS, neuron]
+    subdomain_list = [ECS, cell]
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -456,14 +446,14 @@ def solve_system(resolution):
     #f_phi_i_exact.interpolate(expr_i)
 
     #Q = phi_M_prev.function_space
-    #tr_phi_e, tr_phi_i = interpolate_to_membrane(f_phi_e_exact, f_phi_i_exact, Q, meshes)
+    #tr_phi_e, tr_phi_i = interpolate_to_membrane(f_phi_e_exact, f_phi_i_exact, Q, mesh, ct, subdomain_list
     #phi_M_prev.x.array[:] = tr_phi_i.x.array - tr_phi_e.x.array
     # TODO
     # ---------------------------------------
 
     # Create variational form knp problem
     a_knp, L_knp, dx = knp_system(
-            meshes, ct, ft, physical_parameters, ion_list, mem_models,
+            mesh, ct, ft, physical_parameters, ion_list, subdomain_list, mem_models,
             phi, phi_M_prev, c, c_prev, dt, mms=mms,
     )
 
@@ -494,7 +484,7 @@ def solve_system(resolution):
         # update PDE variables
         update_pde_variables(
                 c_prev, c, phi, phi_M_prev, physical_parameters,
-                ion_list, meshes
+                ion_list, mesh, ct, subdomain_list
         )
 
         # update time
