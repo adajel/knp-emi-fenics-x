@@ -72,22 +72,18 @@ def create_functions_emi(subdomain_list, degree=1):
     return phi, phi_M_prev
 
 
-def initialize_variables(ion_list, c_prev, physical_params, mem_models, subdomain_list):
+def initialize_variables(ion_list, subdomain_list, c_prev, physical_params):
     """ Calculate kappa (tissue conductance) and set Nernst potentials """
     # Get physical parameters
     F = physical_params['F']
-    R = physical_params['R']
     psi = physical_params['psi']
-    temperature = physical_params['temperature']
 
     # Initialize dictionary
     kappa = {}
-
     for subdomain in subdomain_list:
         tag = subdomain['tag']
         # Initialize kappa for each subdomain
         kappa_sub = 0
-
         # For each ion ...
         for idx, ion in enumerate(ion_list):
             # Determine the function source based on the index
@@ -97,69 +93,74 @@ def initialize_variables(ion_list, c_prev, physical_params, mem_models, subdomai
             # Add contribution to kappa (tissue conductance)
             kappa_sub += F * ion['z'] * ion['z'] * ion['D'][tag] * psi * c
 
+            # Calculate and set Nernst potential for cells (all subdomains but ECS)
             if tag != 0:
-                # Get ECS concentration (ECS is subdomain with tag 0)
+                # ECS concentration (ECS is subdomain with tag 0)
                 c_e = ion_list[-1][f'c_0'] if is_last else c_prev[0][idx]
                 # Calculate and set Nernst potential
-                ion[f'E_{tag}'] = R * temperature / (F * ion['z']) * ln(c_e(e_res) / c(i_res))
+                ion[f'E_{tag}'] = 1 / (psi * ion['z']) * ln(c_e(e_res) / c(i_res))
 
         # Add to dictionary
         kappa[tag] = kappa_sub
 
-    # sum of ion specific channel currents for each membrane tag
-    I_ch = [0]*len(mem_models)
+    # Calculate sum of ion specific channel currents for each cell (all
+    # subdomain but the ECS) and each membrane model
+    I_ch = {}
+    for subdomain in subdomain_list[1:]:
+        tag = subdomain['tag']
+        mem_models = subdomain['mem_models']
+        I_ch_tag = [0]*len(mem_models)
 
-    # loop though membrane models to set total ionic current
-    for jdx, mm in enumerate(mem_models):
-        # loop through ion species
-        for key, value in mm['I_ch_k'].items():
-            # update total channel current for each tag
-            I_ch[jdx] += mm['I_ch_k'][key]
+        # Loop though membrane models to set total ionic current
+        for jdx, mm in enumerate(mem_models):
+            # loop through ion species
+            for key, value in mm['I_ch_k'].items():
+                # update total channel current for each tag
+                I_ch_tag[jdx] += mm['I_ch_k'][key]
+
+        # Set I_ch sum in dictionary
+        I_ch[tag] = I_ch_tag
 
     return kappa, I_ch
 
 
-def get_lhs(kappa, u, v, dx, dS, physical_params, mem_models,
-        splitting_scheme):
-    """ setup variational form for the emi system """
-
+def get_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting_scheme):
+    """ Setup left hand side of the variational form for the emi system """
     C_phi = physical_params['C_phi']
-    F = physical_params['F']
-    psi = physical_params['psi']
-    C_M = physical_params['C_M']
-    R = physical_params['R']
-    temperature = physical_params['temperature']
+    a = 0
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        # Get test and trial functions
+        u = us[tag]; v = vs[tag]
 
-    kappa_e = kappa[0]
-    kappa_i = kappa[1]
+        # Add contribution of subdomain to equation for potential (drift terms)
+        a += inner(kappa[tag] * grad(u), grad(v)) * dx(tag)
 
-    # get test and trial functions for each of the sub-domains
-    u_e = u[0]; u_i = u[1]
-    v_e = v[0]; v_i = v[1]
+        # Add membrane dynamics for each cell (all subdomain but ECS)
+        if tag > 0:
+            # ECS and ICS (i.e. current subdomain) shorthands
+            u_e = us[0]; u_i = u # trial functions
+            v_e = vs[0]; v_i = v # test functions
 
-    # equation potential (drift terms)
-    a = inner(kappa_e * grad(u_e), grad(v_e)) * dx(0) \
-      + inner(kappa_i * grad(u_i), grad(v_i)) * dx(1) \
-
-    for mm in mem_models:
-        # get tag
-        tag = mm['ode'].tag
-        # add coupling term at interface
-        a += C_phi * (u_i(i_res) - u_e(e_res)) * v_i(i_res) * dS[tag] \
-           - C_phi * (u_i(e_res) - u_e(i_res)) * v_e(e_res) * dS[tag]
+            # Loop through each membrane model (one cell tagged with tag
+            # might have several membrane models with different membrane
+            # tags tag_mm).
+            mem_models = subdomain['mem_models']
+            for mm in mem_models:
+                # Get membrane model tag
+                tag_mm = mm['ode'].tag
+                # add coupling term at interface
+                a += C_phi * (u_i(i_res) - u_e(e_res)) * v_i(i_res) * dS[tag_mm] \
+                   - C_phi * (u_i(e_res) - u_e(i_res)) * v_e(e_res) * dS[tag_mm]
 
     return a
 
 def get_rhs(c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,
         mem_models, I_ch, splitting_scheme):
-    """ setup variational form for the emi system """
+    """ Setup right hand side of variational form for the EMI system """
 
     C_phi = physical_params['C_phi']
     F = physical_params['F']
-    psi = physical_params['psi']
-    C_M = physical_params['C_M']
-    R = physical_params['R']
-    temperature = physical_params['temperature']
 
     v_e = v[0]
     v_i = v[1]
@@ -268,7 +269,7 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
 
     # Get tissue conductance and set Nernst potentials
     kappa, I_ch = initialize_variables(
-            ion_list, c_prev, physical_params, mem_models, subdomain_list,
+            ion_list, subdomain_list, c_prev, physical_params
     )
 
     # if MMS (i.e. no ODEs to solve), set splitting_scheme to false
@@ -276,9 +277,8 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
 
     # get standard variational formulation
     a = get_lhs(
-            kappa, u, v, dx, dS, physical_params, mem_models,
-            splitting_scheme
-        )
+            u, v, dx, dS, subdomain_list, physical_params, kappa, splitting_scheme
+    )
 
     L = get_rhs(
             c_prev, v, dx, dS, ion_list, physical_params, phi_M_prev,

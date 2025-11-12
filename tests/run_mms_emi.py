@@ -270,8 +270,11 @@ def solve_system(resolution):
     set_initial_conditions(ion_list, c_prev)
 
     # Create dummy membrane models for MMS case
-    mm_mms_1 = MMSMembraneModel(); mm_mms_1.tag = 1
-    mem_models = [{'ode':mm_mms_1, 'I_ch_k':{'a':0.0, 'b':0.0, 'c':0.0}}]
+    mm_mms = MMSMembraneModel()
+    mm_mms.tag = 1
+    mem_models = [{'ode':mm_mms,
+                  'I_ch_k':{'a':0.0, 'b':0.0, 'c':0.0}}]
+    subdomain_list[1]['mem_models'] = mem_models
 
     # Create new cell marker on gamma mesh
     cell_marker = 1

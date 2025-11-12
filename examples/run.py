@@ -82,9 +82,7 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
     # Get physical parameters
-    temperature = physical_parameters['temperature']
-    F = physical_parameters['F']
-    R = physical_parameters['R']
+    psi = physical_parameters['psi']
     rho = physical_parameters['rho']
 
     for subdomain in subdomain_list:
@@ -118,12 +116,12 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
                 c_e = c_prev[0][idx]
                 c_i = c_prev[tag][idx]
                 # Update Nernst potential
-                ion['E'] = R * temperature / (F * ion['z']) * ln(c_e(e_res) / c_i(i_res))
+                ion['E'] =  1 / (psi * ion['z']) * ln(c_e(e_res) / c_i(i_res))
 
             # Update Nernst potential for eliminated ion
             c_e_elim = ion_list[-1][f'c_0']
             c_i_elim = ion_list[-1][f'c_{tag}']
-            ion_list[-1]['E'] = R * temperature / (F * ion['z']) * ln(c_e_elim(e_res) / c_i_elim(i_res))
+            ion_list[-1]['E'] = 1 / (psi * ion['z']) * ln(c_e_elim(e_res) / c_i_elim(i_res))
 
             # Update membrane potential
             phi_e = phi[0]
@@ -381,7 +379,7 @@ def solve_system():
             phi_M_prev[neuron_tag].function_space, ion_list
     )
 
-    # add membrane model to neuron in subdomain list
+    # Add membrane model to neuron in subdomain list
     subdomain_list[1]['mem_models'] = mem_models_neuron
 
     # Create variational form emi problem

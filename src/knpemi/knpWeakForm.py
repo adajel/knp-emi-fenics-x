@@ -80,9 +80,9 @@ def create_functions_knp(subdomain_list, ion_list, degree=1):
     return c, c_prev
 
 
-def initialize_variables(ion_list, subdomain_list, mem_models, c_prev):
-    """ Calculate sum of alphas and total ionic current I_ch """
-
+def initialize_variables(ion_list, subdomain_list, c_prev):
+    """ Calculate sum of alphas for each subdomain, and total ionic current
+        I_ch for each cell (all subdomains but ECS) and each membrane model """
     # Calculate sum of alpha for each subdomain
     alpha_sum = {}
     for subdomain in subdomain_list:
@@ -100,194 +100,186 @@ def initialize_variables(ion_list, subdomain_list, mem_models, c_prev):
         # Set alpha sum in dictionary
         alpha_sum[tag] = alpha_sum_sub
 
-    # Sum of ion specific channel currents for each membrane tag
-    I_ch = [0]*len(mem_models)
-    # loop though membrane models to set total ionic current
-    for jdx, mm in enumerate(mem_models):
-        # loop through ion species
-        for key, value in mm['I_ch_k'].items():
-            # update total channel current for each tag
-            I_ch[jdx] += mm['I_ch_k'][key]
+    # Calculate sum of ion specific channel currents for each cell (all
+    # subdomain but the ECS) and each membrane model
+    I_ch = {}
+    for subdomain in subdomain_list[1:]:
+        tag = subdomain['tag']
+        mem_models = subdomain['mem_models']
+        I_ch_tag = [0]*len(mem_models)
+
+        # Loop though membrane models to set total ionic current
+        for jdx, mm in enumerate(mem_models):
+            # loop through ion species
+            for key, value in mm['I_ch_k'].items():
+                # update total channel current for each tag
+                I_ch_tag[jdx] += mm['I_ch_k'][key]
+
+        # Set I_ch sum in dictionary
+        I_ch[tag] = I_ch_tag
 
     return alpha_sum, I_ch
 
 
-def create_lhs(u, v, phi, dx, dS, ion_list, physical_parameters, dt, splitting_scheme):
-    """ setup variational form for the knp system """
-
-    # get psi
-    psi = physical_parameters['psi']
-    phi_e = phi[0]
-    phi_i = phi[1]
-
-    # initialize form
+def create_lhs(us, vs, phi, dx, ion_list, subdomain_list, physical_params, dt):
+    """ Setup left hand side of variational form for the KNP system by adding
+        up the contributions from each ion species in each subdomain """
+    psi = physical_params['psi']
+    # Initialize form
     a = 0
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        for idx, ion in enumerate(ion_list[:-1]):
+            # Get trial and test functions
+            u = us[tag][idx]; v = vs[tag][idx]
+            # Get diffusion coefficient and valence of ion
+            D = ion['D'][tag]; z = ion['z']
 
-    # loop over ions
-    for idx, ion in enumerate(ion_list[:-1]):
-
-        # get extra and intracellular trial and test functions
-        u_e = u[0][idx]; v_e = v[0][idx]
-        u_i = u[1][idx]; v_i = v[1][idx]
-
-        # get valence and diffusion coefficients
-        z = ion['z']
-        D_e = ion['D'][0]
-        D_i = ion['D'][1]
-
-        # equation ion concentration diffusive + advective terms ECS contribution
-        a += 1.0/dt * u_e * v_e * dx(0) \
-           + inner(D_e * grad(u_e), grad(v_e)) * dx(0) \
-           + z * psi * inner(D_e * u_e * grad(phi_e), grad(v_e)) * dx(0)
-
-        # equation ion concentration diffusive + advective terms ICS contribution
-        a += 1.0/dt * u_i * v_i * dx(1) \
-           + inner(D_i * grad(u_i), grad(v_i)) * dx(1) \
-           + z * psi * inner(D_i * u_i * grad(phi_i), grad(v_i)) * dx(1)
+            # Bulk dynamics equation for ion concentration (diffusive +
+            # advective terms) for each ion in each subdomain
+            a += 1.0/dt * u * v * dx(tag) \
+               + inner(D * grad(u), grad(v)) * dx(tag) \
+               + z * psi * inner(D * u * grad(phi[tag]), grad(v)) * dx(tag)
 
     return a
 
 
-def create_rhs(v, phi, phi_M_prev_PDE_all, c_e_prev, c_i_prev, dx, dS,
-        physical_parameters, ion_list, mem_models, I_ch, alpha_sum,
-        dt, splitting_scheme):
-    """ setup right hand side of variational form for KNP system """
+def create_rhs(vs, phi, phi_M_prev, c_prev, dx, dS, physical_params, ion_list,
+        subdomain_list, I_ch, alpha_sum, dt, splitting_scheme):
+    """ Setup right hand side of variational form for KNP system """
+    C_M = physical_params['C_M']        # membrane capacitance
+    F = physical_params['F']            # Faraday's constant
 
-    psi = physical_parameters['psi']        # combination of physical constants
-    C_phi = physical_parameters['C_phi']    # physical parameters
-    C_M = physical_parameters['C_M']        # membrane capacitance
-    F = physical_parameters['F']            # Faraday's constant
-
-    phi_e = phi[0]
-    phi_i = phi[1]
-
-    # initialize form
+    # Initialize form
     L = 0
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        for idx, ion in enumerate(ion_list[:-1]):
+            # Shorthands
+            v = vs[tag][idx]     # test function
+            c = c_prev[tag][idx] # previous concentration
 
-    for idx, ion in enumerate(ion_list[:-1]):
-        # get extra and intracellular test functions
-        v_e = v[0][idx]; v_i = v[1][idx]
+            # Approximating time derivative
+            L += 1.0/dt * c * v * dx(tag)
 
-        # get previous concentration
-        c_e_ = c_e_prev[idx]
-        c_i_ = c_i_prev[idx]
+            # Add src terms for ion injection in extracellular space
+            if tag == 0:
+                L += ion['f_source'] * v * dx(tag)
 
-        # get valence and diffusion coefficients
-        z = ion['z']
-        D_e = ion['D'][0]
-        D_i = ion['D'][1]
+            # Add membrane dynamics for each cell (all subdomain but ECS)
+            if tag > 0:
+                # ECS and ICS (i.e. current subdomain) shorthands
+                c_e = c_prev[0][idx]; c_i = c          # concentrations
+                v_e = vs[0][idx]; v_i = v              # test functions
+                D_e = ion['D'][0]; D_i = ion['D'][tag] # diffusion coefficients
+                phi_e = phi[0]; phi_i = phi[tag]       # potentials
+                z = ion['z']
 
-        # approximating time derivative extra and intracellular contribution
-        L += 1.0/dt * c_e_ * v_e * dx(0)
-        L += 1.0/dt * c_i_ * v_i * dx(1)
+                # Calculate alpha
+                alpha_e = D_e * z * z * c_e / alpha_sum[0]
+                alpha_i = D_i * z * z * c_i / alpha_sum[tag]
+                # Calculate coupling coefficient
+                C_e = alpha_e(e_res) * C_M / (F * z * dt)
+                C_i = alpha_i(i_res) * C_M / (F * z * dt)
 
-        # add src terms for ion injection in extracellular space
-        L += ion['f_source'] * v_e * dx(0)
+                # Loop through each membrane model (one cell tagged with tag
+                # might have several membrane models with different membrane
+                # tags tag_mm).
+                mem_models = subdomain['mem_models']
+                phi_M_prev_sub = phi_M_prev[tag]
+                for jdx, mm in enumerate(mem_models):
+                    # Get facet tag
+                    tag_mm = mm['ode'].tag
+                    if splitting_scheme:
+                        # Robin condition terms with splitting
+                        g_robin_e = phi_M_prev_sub \
+                                  - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']] \
+                                  + (dt / C_M) * I_ch[tag][jdx]
+                        g_robin_i = phi_M_prev_sub \
+                                  - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']] \
+                                  + (dt / C_M) * I_ch[tag][jdx]
+                    else:
+                        # Original robin condition terms (without splitting)
+                        g_robin_e = phi_M_prev_sub \
+                                  - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']]
+                        g_robin_i = phi_M_prev_sub\
+                                  - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
 
-        # calculate alpha
-        alpha_e = D_e * z * z * c_e_ / alpha_sum[0]
-        alpha_i = D_i * z * z * c_i_ / alpha_sum[1]
+                    # Add robin coupling condition at interface
+                    L += - C_e * g_robin_e * v_e(e_res) * dS[tag_mm] \
+                         + C_i * g_robin_i * v_i(i_res) * dS[tag_mm]
 
-        # calculate coupling coefficient
-        C_e = alpha_e(e_res) * C_M / (F * z * dt)
-        C_i = alpha_i(i_res) * C_M / (F * z * dt)
-
-        # loop through each membrane model
-        phi_M_prev_PDE = phi_M_prev_PDE_all[1]
-        for jdx, mm in enumerate(mem_models):
-            # get facet tag
-            tag_mm = mm['ode'].tag
-
-            if splitting_scheme:
-                # robin condition terms with splitting
-                g_robin_e = phi_M_prev_PDE \
-                          - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']] \
-                          + (dt / C_M) * I_ch[jdx]
-                g_robin_i = phi_M_prev_PDE \
-                          - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']] \
-                          + (dt / C_M) * I_ch[jdx]
-            else:
-                # original robin condition terms (without splitting)
-                g_robin_e = phi_M_prev_PDE \
-                          - dt / (C_M * alpha_e(e_res)) * mm['I_ch_k'][ion['name']]
-                g_robin_i = phi_M_prev_PDE \
-                          - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
-
-            # add robin coupling condition at interface
-            L += - C_e * g_robin_e * v_e(e_res) * dS[tag_mm] \
-                 + C_i * g_robin_i * v_i(i_res) * dS[tag_mm]
-
-            # add coupling terms on interface
-            L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag_mm] \
-               - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag_mm]
+                    # Add coupling terms on interface
+                    L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag_mm] \
+                       - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag_mm]
 
     return L
 
 
-def get_rhs_mms(v, mem_models, ion_list, mms, phi_M_prev_PDE, dt,
-        physical_parameters, c_prev, phi, dx, dS, ds, n):
-
-    psi = physical_parameters['psi']        # combination of physical constants
-    C_phi = physical_parameters['C_phi']    # physical parameters
-    C_M = physical_parameters['C_M']        # membrane capacitance
-    F = physical_parameters['F']            # Faraday's constant
-
-    phi_e = phi[0]
-    phi_i = phi[1]
-
-    # initialize form
+def get_rhs_mms(vs, ion_list, subdomain_list, mms, dt, c_prev, phi, dx, dS, ds, n):
+    """ Get right hand side of variational form for KNP system for MMS test """
+    # Initialize form
     L = 0
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        for idx, ion in enumerate(ion_list[:-1]):
+            # get test functions
+            v = vs[tag][idx]
+            # get previous concentration
+            c = c_prev[tag][idx]
+            # get valence and diffusion coefficients
+            D = ion['D'][tag]; C = ion['C'][tag]
 
-    for idx, ion in enumerate(ion_list[:-1]):
-        # get extra and intracellular test functions
-        v_e = v[0][idx]
-        v_i = v[1][idx]
+            # Approximating time derivative extra and intracellular contribution
+            L += 1.0/dt * c * v * dx(tag)
 
-        # get previous concentration
-        c_e_ = c_prev[0][idx]
-        c_i_ = c_prev[1][idx]
+            # Add source terms equation concentration
+            if tag == 0: L += inner(ion['f_k_e'], v) * dx(tag)
+            if tag == 1: L += inner(ion['f_k_i'], v) * dx(tag)
 
-        # get valence and diffusion coefficients
-        z = ion['z']
-        D_e = ion['D'][0]
-        D_i = ion['D'][1]
-        C_e = ion['C'][0]
-        C_i = ion['C'][1]
+            # Add membrane dynamics for each cell (all subdomain but ECS)
+            if tag > 0:
+                # ECS and ICS (i.e. current subdomain) shorthands
+                C_e = ion['C'][0]; C_i = C             # coupling coefficients
+                c_e = c_prev[0][idx]; c_i = c          # concentrations
+                v_e = vs[0][idx]; v_i = v              # test functions
+                D_e = ion['D'][0]; D_i = ion['D'][tag] # diffusion coefficients
+                phi_e = phi[0]; phi_i = phi[tag]       # potentials
+                z = ion['z']
 
-        # approximating time derivative extra and intracellular contribution
-        L += 1.0/dt * c_e_ * v_e * dx(0)
-        L += 1.0/dt * c_i_ * v_i * dx(1)
+                # Get dummy membrane models for MMS
+                mem_models = subdomain['mem_models']
+                for jdx, mm in enumerate(mem_models):
+                    # Get facet tag
+                    tag_mm = mm['ode'].tag
 
-        # get facet tag
-        tag_mm = 1
+                    # original robin condition terms (without splitting)
+                    g_robin_e = ion['f_phi_m_e']
+                    g_robin_i = ion['f_phi_m_i']
+                    f_I_M = mms['f_I_M']
 
-        # original robin condition terms (without splitting)
-        g_robin_e = ion['f_phi_m_e']
-        g_robin_i = ion['f_phi_m_i']
-        f_I_M = mms['f_I_M']
+                    # add robin coupling condition at interface
+                    L += C_i * g_robin_i * v_i(i_res) * dS[tag_mm] \
+                       - C_e * g_robin_e * v_e(e_res) * dS[tag_mm]
 
-        # add robin coupling condition at interface
-        L += C_i * g_robin_i * v_i(i_res) * dS[tag_mm] \
-           - C_e * g_robin_e * v_e(e_res) * dS[tag_mm]
+                    # add coupling terms on interface
+                    L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag_mm] \
+                       - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag_mm]
 
-        # add coupling terms on interface
-        L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag_mm] \
-           - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag_mm]
-
-        L += inner(ion['f_k_e'], v_e) * dx(0)
-        L += inner(ion['f_k_i'], v_i) * dx(1)
-
-        # MMS specific: add neumann contribution
-        L += - dot(ion['J_k_e'], n) * v_e * ds(5)
+                    # MMS specific: add neumann contribution
+                    L += - dot(ion['J_k_e'], n) * v_e * ds(5)
 
     return L
 
-def knp_system(mesh, ct, ft, physical_parameters, ion_list, subdomain_list, mem_models,
-        phi, phi_M_prev_PDE, c, c_prev, dt, degree=1, splitting_scheme=True,
+def knp_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_models,
+        phi, phi_M_prev, c, c_prev, dt, degree=1, splitting_scheme=True,
         mms=None):
     """ Create and return EMI weak formulation """
 
     MMS_FLAG = False if mms is None else True
+
+    # If MMS (i.e. no ODEs to solve), set splitting_scheme to false
+    if MMS_FLAG: splitting_scheme = False
 
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
@@ -308,10 +300,10 @@ def knp_system(mesh, ct, ft, physical_parameters, ion_list, subdomain_list, mem_
     us = TrialFunctions(W)
     vs = TestFunctions(W)
 
-    # Reorganize test and trial functions from lists into dictionary
-    u = {}; v = {}
-    # Get list of ions for each subdomain (ECS and cells) and insert into 
+    # Reorganize test and trial functions: get one list of (trial or test)
+    # functions for ions for each subdomain (ECS and cells) and insert into 
     # dictionary with cell tag as key
+    u = {}; v = {}
     for subdomain in subdomain_list:
         tag = subdomain['tag']
         u[tag] = us[tag * N_ions:(tag + 1) * N_ions]
@@ -322,31 +314,21 @@ def knp_system(mesh, ct, ft, physical_parameters, ion_list, subdomain_list, mem_
     n = FacetNormal(mesh)
 
     # Initialize variational formulation
-    alpha_sum, I_ch = initialize_variables(
-            ion_list, subdomain_list, mem_models, c_prev,
-    )
-
-    # if MMS (i.e. no ODEs to solve), set splitting_scheme to false
-    if MMS_FLAG: splitting_scheme = False
+    alpha_sum, I_ch = initialize_variables(ion_list, subdomain_list, c_prev)
 
     # Create left hand side knp system
     a = create_lhs(
-            u, v, phi, dx, dS, ion_list, physical_parameters, dt,
-            splitting_scheme
-    )
+            u, v, phi, dx, ion_list, subdomain_list, physical_params, dt)
 
     # Create right hand side knp system
-    L = create_rhs(
-            v, phi, phi_M_prev_PDE, c_prev[0], c_prev[1], dx, dS,
-            physical_parameters, ion_list, mem_models, I_ch, alpha_sum,
-            dt, splitting_scheme
+    L = create_rhs(v, phi, phi_M_prev, c_prev, dx, dS, physical_params,
+            ion_list, subdomain_list, I_ch, alpha_sum, dt, splitting_scheme,
     )
 
-    # add terms specific to mms test
-    if MMS_FLAG: 
+    # Add terms specific to mms test
+    if MMS_FLAG:
         L = get_rhs_mms(
-            v, mem_models, ion_list, mms, phi_M_prev_PDE, dt, physical_parameters,
-            c_prev, phi, dx, dS, ds, n
+            v, ion_list, subdomain_list, mms, dt, c_prev, phi, dx, dS, ds, n,
         )
 
         return a, L, dx
