@@ -26,11 +26,8 @@ from ufl import (
         inner,
 )
 
-interior_marker = 1
-exterior_marker = 0
-
-i_res = "+" if interior_marker < exterior_marker else "-"
-e_res = "-" if interior_marker < exterior_marker else "+"
+i_res = "-"
+e_res = "+"
 
 comm = MPI.COMM_WORLD
 
@@ -73,7 +70,7 @@ def solve_system(resolution):
     interface_marker = 1
     subdomain_tags = [0, 1]
 
-    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(
+    mesh_sub_1, i_to_parent, i_vertex_to_parent, _, _ = scifem.extract_submesh(
             mesh, ct, interior_marker
     )
 
@@ -89,12 +86,14 @@ def solve_system(resolution):
     ECS = {"tag":0,
            "name":"ECS",
            "mesh_sub":mesh_sub_0,
-           "sub_to_parent":e_to_parent}
+           "sub_to_parent":e_to_parent,
+           "sub_vertex_to_parent":e_vertex_to_parent}
 
     neuron = {"tag":1,
               "name":"neuron",
               "mesh_sub":mesh_sub_1,
               "sub_to_parent":i_to_parent,
+              "sub_vertex_to_parent":i_vertex_to_parent,
               "mesh_mem":mesh_g,
               "mem_to_parent":g_to_parent}
 
@@ -145,18 +144,23 @@ def solve_system(resolution):
 
     x, y = SpatialCoordinate(mesh)
 
+    x_L = 0.25
+    x_U = 0.75
+    y_L = 0.25
+    y_U = 0.75
+
     # Define intracellular exact solutions
-    a_i_exact = 2 * x * y #sin(2 * pi * y) * cos(2 * pi * x)
-    b_i_exact = 10 * y * y #cos(2 * pi * y) * sin(2 * pi * x)
+    a_i_exact = sin(2 * pi * y) * sin(2 * pi * x)
+    b_i_exact = sin(2 * pi * y) * sin(2 * pi * x)
 
     phi_i_exact = sin(2 * pi * x) * cos(2 * pi * y)
     phi_e_exact = sin(2 * pi * x) * cos(2 * pi * y)
 
-    a_e_exact = 8 * x * x
-    b_e_exact = 4 * y * y * y
+    a_e_exact = sin(2 * pi * y) * sin(2 * pi * x)
+    b_e_exact = sin(2 * pi * y) * sin(2 * pi * x)
 
     c_i_exact = - 1/z_c * (z_a * a_i_exact + z_b * b_i_exact)
-    c_e_exact = - 1/z_c * (z_a * a_i_exact + z_b * b_i_exact)
+    c_e_exact = - 1/z_c * (z_a * a_e_exact + z_b * b_e_exact)
 
     # Exact membrane potential
     phi_M_exact = phi_i_exact - phi_e_exact
@@ -230,9 +234,11 @@ def solve_system(resolution):
            "f_phi_e" : f_phi_e,
            "f_phi_m" : f_phi_m,
            "f_I_M" : f_I_M,
+           "phi_i_exact" : phi_i_exact,
+           "phi_e_exact" : phi_e_exact,
            }
 
-    # get functions
+    # Get functions
     phi, phi_M_prev = create_functions_emi(subdomain_list, degree=1)
     c, c_prev = create_functions_knp(subdomain_list, ion_list, degree=1)
 
@@ -267,7 +273,7 @@ def solve_system(resolution):
     ion_list[2]['c_init'] = {0:c_e_func.x.array, 1:c_i_func.x.array}
 
     # Set initial conditions in solver
-    set_initial_conditions(ion_list, c_prev)
+    set_initial_conditions(ion_list, subdomain_list, c_prev)
 
     # Create dummy membrane models for MMS case
     mm_mms = MMSMembraneModel()
@@ -282,7 +288,7 @@ def solve_system(resolution):
     num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
 
     # Create variational form emi problem
-    a_emi, L_emi, dx = emi_system(
+    a_emi, L_emi, dx, bc = emi_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
             mem_models, phi, phi_M_prev, c_prev, dt, mms=mms,
     )
@@ -291,11 +297,17 @@ def solve_system(resolution):
     entity_maps = [g_to_parent, e_to_parent, i_to_parent]
 
     # Create solver emi problem
-    #problem_emi = create_solver_emi(a_emi, L_emi, phi, entity_maps, comm, bcs=[bc])
-    problem_emi = create_solver_emi(a_emi, L_emi, phi, entity_maps, comm)
+    problem_emi = create_solver_emi(
+            a_emi, L_emi, phi, entity_maps, subdomain_list, comm, bcs=[bc]
+    )
+
+    #problem_emi = create_solver_emi(
+    #        a_emi, L_emi, phi, entity_maps, subdomain_list, comm
+    #)
+
     problem_emi.solve()
 
-    phi_e, phi_i= problem_emi.u
+    phi_e, phi_i = problem_emi.u
 
     # calculate ICS error
     error_phi_i = dolfinx.fem.form(

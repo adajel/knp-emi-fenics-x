@@ -24,33 +24,6 @@ e_res = "+"
 
 comm = MPI.COMM_WORLD
 
-def evaluate_function_in_point(mesh, u, x, y):
-    # TODO get from scifem
-    tdim = mesh.topology.dim
-    left_cells = dolfinx.mesh.locate_entities(mesh, tdim, lambda x: x[0] <= 100)
-
-    bb_tree = dolfinx.geometry.bb_tree(mesh, mesh.topology.dim, padding=1e-10)
-    sub_bb_tree = dolfinx.geometry.bb_tree(mesh, mesh.topology.dim, entities=left_cells, padding=1e-10)
-
-    points = np.array([[x, y, 0]], dtype=mesh.geometry.x.dtype)
-    potential_colliding_cells = dolfinx.geometry.compute_collisions_points(bb_tree, points)
-    colliding_cells = dolfinx.geometry.compute_colliding_cells(mesh, potential_colliding_cells, points)
-
-    points_on_proc = []
-    cells = []
-
-    for i, point in enumerate(points):
-        if len(colliding_cells.links(i)) > 0:
-            points_on_proc.append(point)
-            cells.append(colliding_cells.links(i)[0])
-
-    points_on_proc = np.array(points_on_proc, dtype=np.float64).reshape(-1, 3)
-    cells = np.array(cells, dtype=np.int32)
-
-    u_values = u.eval(points_on_proc, cells)
-
-    return u_values
-
 def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list,
         subdomain_list, mesh, ct, tag, k):
     """ Update parameters in ODE solver (based on previous PDEs step) """
@@ -231,22 +204,24 @@ def solve_system():
     neuron_tag = 1
 
     # Extract sub-meshes
-    mesh_sub_0, e_to_parent, _, _, _ = scifem.extract_submesh(mesh, ct, ECS_tag)
-    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(mesh, ct, neuron_tag)
-    mesh_g, g_to_parent, g_vertex_to_parent, _, _ = scifem.extract_submesh(mesh, ft, neuron_tag)
+    mesh_sub_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS_tag)
+    mesh_sub_1, sub_to_parent_1, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ct, neuron_tag)
+    mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, neuron_tag)
 
     # Create subdomains (extracellular space and cells)
     ECS = {"tag":ECS_tag,
            "name":"ECS",
            "mesh_sub":mesh_sub_0,
-           "sub_to_parent":e_to_parent}
+           "sub_to_parent":sub_to_parent_0,
+           "sub_vertex_to_parent":sub_vertex_to_parent_0}
 
     neuron = {"tag":neuron_tag,
               "name":"neuron",
               "mesh_sub":mesh_sub_1,
-              "sub_to_parent":i_to_parent,
-              "mesh_mem":mesh_g,
-              "mem_to_parent":g_to_parent}
+              "sub_to_parent":sub_to_parent_1,
+              "sub_vertex_to_parent":sub_vertex_to_parent_1,
+              "mesh_mem":mesh_mem_1,
+              "mem_to_parent":mem_to_parent_1}
 
     subdomain_list = [ECS, neuron]
 
@@ -349,16 +324,16 @@ def solve_system():
 
     # Create new cell marker on gamma mesh
     cell_marker = 1
-    cell_map_g = mesh_g.topology.index_map(mesh_g.topology.dim)
+    cell_map_g = mesh_mem_1.topology.index_map(mesh_mem_1.topology.dim)
     num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
 
     # Transfer mesh tags from ct to tags for gamma mesh on interface
     ct_g, _ = scifem.transfer_meshtags_to_submesh(
-            ft, mesh_g, g_vertex_to_parent, g_to_parent
+            ft, mesh_mem_1, mem_vertex_to_parent_1, mem_to_parent_1
     )
 
     #ct_g = dolfinx.mesh.meshtags(
-        #mesh_g, mesh_g.topology.dim, np.arange(num_cells_local, dtype=np.int32), cell_marker
+        #mesh_mem_1, mesh_mem_1.topology.dim, np.arange(num_cells_local, dtype=np.int32), cell_marker
     #)
 
     # Dictionary with membrane models (key is facet tag, value is ode model)
@@ -395,12 +370,17 @@ def solve_system():
     )
 
     # Specify entity maps for each sub-mesh to ensure correct assembly
-    entity_maps = [g_to_parent, e_to_parent, i_to_parent]
+    entity_maps = [mem_to_parent_1, sub_to_parent_0, sub_to_parent_1]
 
     # Create solver emi problem
-    problem_emi = create_solver_emi(a_emi, L_emi, phi, entity_maps, comm)
+    problem_emi = create_solver_emi(
+            a_emi, L_emi, phi, entity_maps, subdomain_list, comm
+    )
+
     # Create solver knp problem
-    problem_knp = create_solver_knp(a_knp, L_knp, c, entity_maps, comm)
+    problem_knp = create_solver_knp(
+            a_knp, L_knp, c, entity_maps, subdomain_list, comm
+    )
 
     l_I_Na = []
     l_I_K = []
@@ -442,6 +422,9 @@ def solve_system():
     # mid point inside axon A (ICS)
     x_i = 25; y_i = 2
 
+    point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6]])
+    point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6]])
+
     for k in range(int(round(Tstop/float(dt)))):
         print(f'solving for t={float(t)}')
 
@@ -466,19 +449,19 @@ def solve_system():
         # Write results from previous time step to file
         write_to_file(xdmf_e, xdmf_i, phi, c, phi_M_prev, ion_list, t)
 
-        K_e_val = evaluate_function_in_point(mesh_sub_0, c[0][0], x_e*1.0e-6, y_e*1.0e-6)
+        K_e_val = scifem.evaluate_function(c[0][0], point_e)
         K_e.append(K_e_val[0])
-        K_i_val = evaluate_function_in_point(mesh_sub_1, c[1][0], x_i*1.0e-6, y_i*1.0e-6)
+        K_i_val = scifem.evaluate_function(c[1][0], point_i)
         K_i.append(K_i_val[0])
 
-        Cl_e_val = evaluate_function_in_point(mesh_sub_0, c[0][1], x_e*1.0e-6, y_e*1.0e-6)
+        Cl_e_val = scifem.evaluate_function(c[0][1], point_e)
         Cl_e.append(Cl_e_val[0])
-        Cl_i_val = evaluate_function_in_point(mesh_sub_1, c[1][1], x_i*1.0e-6, y_i*1.0e-6)
+        Cl_i_val = scifem.evaluate_function(c[1][1], point_i)
         Cl_i.append(Cl_i_val[0])
 
-        Na_e_val = evaluate_function_in_point(mesh_sub_0, ion_list[-1]['c_0'], x_e*1.0e-6, y_e*1.0e-6)
+        Na_e_val = scifem.evaluate_function(ion_list[-1]['c_0'], point_e)
         Na_e.append(Na_e_val[0])
-        Na_i_val = evaluate_function_in_point(mesh_sub_1, ion_list[-1]['c_1'], x_i*1.0e-6, y_i*1.0e-6)
+        Na_i_val = scifem.evaluate_function(ion_list[-1]['c_1'], point_i)
         Na_i.append(Na_i_val[0])
 
         for mem_model in mem_models_neuron:
@@ -617,52 +600,5 @@ def solve_system():
     plt.savefig("gats.png")
     plt.close()
 
-
 if __name__ == "__main__":
     solve_system()
-
-    """
-    resolution = 2
-    mesh_path = f'meshes/mms/mesh_{resolution}.xdmf'
-    mesh, ct, ft = read_mesh(mesh_path)
-
-    # subdomain markers
-    exterior_marker = 0; interior_marker = 1,
-
-    # gamma markers
-    interface_marker = 1
-
-    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(
-            mesh, ct, interior_marker
-    )
-
-    mesh_sub_0, e_to_parent, e_vertex_to_parent, _, _ = scifem.extract_submesh(
-            mesh, ct, exterior_marker
-    )
-
-    mesh_g, g_to_parent, g_vertex_to_parent, _, _ = scifem.extract_submesh(
-            mesh, ft, interface_marker
-    )
-
-    degree = 1
-    V_e = dolfinx.fem.functionspace(mesh_sub_0, ("CG", degree))
-    V_i = dolfinx.fem.functionspace(mesh_sub_1, ("CG", degree))
-
-    u_e = dolfinx.fem.Function(V_e)
-    u_i = dolfinx.fem.Function(V_i)
-
-    u_e.x.array[:] = dolfinx.fem.Constant(mesh_sub_0, 5.0)
-    u_i.x.array[:] = dolfinx.fem.Constant(mesh_sub_1, 3.0)
-
-    x_i = 0.5
-    y_i = 0.5
-    x_e = 0.1
-    y_e = 0.1
-
-    val_i = evaluate_function_in_point(mesh_sub_1, u_i, x_i, y_i)
-    val_e = evaluate_function_in_point(mesh_sub_0, u_e, x_e, y_e)
-
-    print("val_i", val_i[0])
-    print("val_e", val_e[0])
-
-    """

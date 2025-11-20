@@ -5,8 +5,8 @@ from ufl import (
     extract_blocks,
 )
 
-def create_solver_emi(a, L, phi, entity_maps, comm, bcs=None):
-    """ solve emi system using either a direct or iterative solver """
+def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm, bcs=None):
+    """ Solve emi system using either a direct or iterative solver """
 
     petsc_options = {
             "ksp_type": "preonly",
@@ -16,15 +16,17 @@ def create_solver_emi(a, L, phi, entity_maps, comm, bcs=None):
             "ksp_error_if_not_converged": True,
         }
 
-    # Extract extra and intracellular potentials
-    phi_e = phi[0]
-    phi_i = phi[1]
+    # Extract extra and intracellular concentrations
+    u = []
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        u.append(phi[tag])
 
     # Extract extra and intracellular potentials
     problem = dolfinx.fem.petsc.LinearProblem(
               extract_blocks(a),
               extract_blocks(L),
-              u=[phi_e, phi_i],
+              u=u,
               bcs=bcs,
               petsc_options=petsc_options,
               petsc_options_prefix="emi_direct_",
@@ -46,7 +48,7 @@ def create_solver_emi(a, L, phi, entity_maps, comm, bcs=None):
     return problem
 
 
-def create_solver_knp(a, L, c, entity_maps, bcs=None):
+def create_solver_knp(a, L, c, entity_maps, subdomain_list, bcs=None):
     """ Setup solver for the knp sub-problem """
 
     petsc_options = {
@@ -58,14 +60,16 @@ def create_solver_knp(a, L, c, entity_maps, bcs=None):
     }
 
     # Extract extra and intracellular concentrations
-    c_e = c[0]
-    c_i = c[1]
+    u = []
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        u += c[tag]
 
     # Extract extra and intracellular potentials
     problem = dolfinx.fem.petsc.LinearProblem(
             extract_blocks(a),
             extract_blocks(L),
-            u=c_e + c_i,
+            u=u,
             petsc_options=petsc_options,
             petsc_options_prefix="knp_direct_",
             entity_maps=entity_maps,

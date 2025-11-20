@@ -13,10 +13,41 @@ from ufl import (
     ln,
     extract_blocks,
     FacetNormal,
+    SpatialCoordinate,
+    sin,
+    pi,
+    cos,
+    div,
 )
 
 i_res = "-"
 e_res = "+"
+
+x_L = 0.25
+x_U = 0.75
+y_L = 0.25
+y_U = 0.75
+
+
+from mpi4py import MPI
+from petsc4py import PETSc
+
+def lower_bound(x, i, bound, tol=1e-12):
+    return x[i] >= bound - tol
+
+
+def upper_bound(x, i, bound, tol=1e-12):
+    return x[i] <= bound + tol
+
+
+def omega_interior_marker(x, tol=1e-12):
+    return (
+        lower_bound(x, 0, x_L, tol=tol)
+        & lower_bound(x, 1, y_L, tol=tol)
+        & upper_bound(x, 0, x_U, tol=tol)
+        & upper_bound(x, 1, y_U, tol=tol)
+    )
+
 
 def create_measures(mesh, ct, ft):
     """ Create measures, all measure defined on parent mesh """
@@ -52,9 +83,9 @@ def create_functions_emi(subdomain_list, degree=1):
     phi = {}
     for subdomain in subdomain_list:
         tag = subdomain["tag"]
-        mesh = subdomain["mesh_sub"]
+        mesh_sub = subdomain["mesh_sub"]
         # Create local functionspace for local potential ..
-        V = dolfinx.fem.functionspace(mesh, ("CG", degree))
+        V = dolfinx.fem.functionspace(mesh_sub, ("CG", degree))
         # ... and create and name function for local potential.
         phi_sub = dolfinx.fem.Function(V)
         phi_sub.name = f"phi_{tag}"
@@ -94,7 +125,7 @@ def initialize_variables(ion_list, subdomain_list, c_prev, physical_params):
             kappa_sub += F * ion['z'] * ion['z'] * ion['D'][tag] * psi * c
 
             # Calculate and set Nernst potential for cells (all subdomains but ECS)
-            if tag != 0:
+            if tag > 0:
                 # ECS concentration (ECS is subdomain with tag 0)
                 c_e = ion_list[-1][f'c_0'] if is_last else c_prev[0][idx]
                 # Calculate and set Nernst potential
@@ -151,9 +182,10 @@ def get_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting_sc
                 tag_mm = mm['ode'].tag
                 # add coupling term at interface
                 a += C_phi * (u_i(i_res) - u_e(e_res)) * v_i(i_res) * dS[tag_mm] \
-                   - C_phi * (u_i(e_res) - u_e(i_res)) * v_e(e_res) * dS[tag_mm]
+                   - C_phi * (u_i(i_res) - u_e(e_res)) * v_e(e_res) * dS[tag_mm]
 
     return a
+
 
 def get_rhs(c_prev, vs, dx, dS, ion_list, subdomain_list, physical_params, 
         phi_M_prev, I_ch, splitting_scheme):
@@ -296,23 +328,153 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
         )
 
         # Create Dirichlet BC
-        #omega_e = meshes['mesh_sub_0']
-        #e_vertex_to_parent = meshes['e_vertex_to_parent']
-        #exterior_to_parent = meshes['e_to_parent']
-        #boundary_marker = 5
-        #sub_tag, _ = scifem.transfer_meshtags_to_submesh(
-        #    ft, omega_e, e_vertex_to_parent, exterior_to_parent
-        #)
+        omega_e = subdomain_list[0]['mesh_sub']
+        e_vertex_to_parent = subdomain_list[0]['sub_vertex_to_parent']
+        exterior_to_parent = subdomain_list[0]['sub_to_parent']
+        boundary_marker = 5
+        sub_tag, _ = scifem.transfer_meshtags_to_submesh(
+            ft, omega_e, e_vertex_to_parent, exterior_to_parent
+        )
 
-        #omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
-        #bc_dofs = dolfinx.fem.locate_dofs_topological(
-        #    V_e, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
-        #)
+        omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
+        bc_dofs = dolfinx.fem.locate_dofs_topological(
+            Vs[0], omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
+        )
 
-        #u_bc = dolfinx.fem.Function(V_e)
-        #u_bc.interpolate(lambda x: np.sin(2 * np.pi * x[0]) * np.cos(2 * np.pi * x[1]))
-        #bc = dolfinx.fem.dirichletbc(u_bc, bc_dofs)
+        u_bc = dolfinx.fem.Function(Vs[0])
+        u_bc.interpolate(lambda x: np.sin(2 * np.pi * x[0]) * np.cos(2 * np.pi * x[1]))
+        bc = dolfinx.fem.dirichletbc(u_bc, bc_dofs)
 
-        return a, L, dx
+        return a, L, dx, bc
 
     return a, L
+
+    """
+
+    omega = mesh
+
+    omega_e = subdomain_list[0]['mesh_sub']
+    omega_i = subdomain_list[1]['mesh_sub']
+
+    interior_marker = subdomain_list[1]['tag']
+    exterior_marker = subdomain_list[0]['tag']
+
+    e_vertex_to_parent = subdomain_list[0]['sub_vertex_to_parent']
+    exterior_to_parent = subdomain_list[0]['sub_to_parent']
+
+    i_vertex_to_parent = subdomain_list[1]['sub_vertex_to_parent']
+    interior_to_parent = subdomain_list[1]['sub_to_parent']
+
+    interface_marker = 1
+    boundary_marker = 5
+
+    Ve = Vs[0]
+    Vi = Vs[1]
+
+    ve, vi = v[0], v[1]
+    ue, ui = u[0], u[1]
+
+    dGamma = dS[1]
+
+    tr_ui = ui(i_res)
+    tr_ue = ue(e_res)
+    tr_vi = vi(i_res)
+    tr_ve = ve(e_res)
+
+    #x, y = SpatialCoordinate(omega)
+
+    sigma_e = dolfinx.fem.Constant(omega_e, 2.0)
+    sigma_i = dolfinx.fem.Constant(omega_i, 1.0)
+    #Expression
+    #sigma_i_exp = dolfinx.fem.Expression(sin(x), Vi.element.interpolation_points)
+    #sigma_e_exp = dolfinx.fem.Expression(sin(x), Ve.element.interpolation_points)
+
+    #sigma_i = dolfinx.fem.Function(Vi)
+    #sigma_i.interpolate(sigma_i_exp)
+    #sigma_e = dolfinx.fem.Function(Ve)
+    #sigma_e.interpolate(sigma_e_exp)
+
+    kappa = {0:sigma_e, 1:sigma_i}
+
+    Cm = dolfinx.fem.Constant(omega, 1.0)
+    dt = dolfinx.fem.Constant(omega, 1.0)
+
+    ui_exact = mms['phi_i_exact']
+    ue_exact = mms['phi_e_exact']
+
+    n_e = n(e_res)
+    n_i = n(i_res)
+
+    Im_e = kappa[0] * inner(grad(ue_exact), n_e)
+    Im_i = kappa[1] * inner(grad(ui_exact), n_i)
+    g = Im_e + Im_i
+
+    T = Cm / dt
+    f = ui_exact - ue_exact - 1 / T * Im_e
+    f_e = -div(kappa[0] * grad(ue_exact))
+    f_i = -div(kappa[1] * grad(ui_exact))
+
+    # get standard variational formulation
+    a = get_lhs(
+            u, v, dx, dS, subdomain_list, physical_params, kappa, splitting_scheme
+    )
+
+    L = T * inner(f, (tr_vi - tr_ve)) * dGamma
+    L += f_e * ve * dx(0)
+    L += f_i * vi * dx(1)
+    L += inner(g, vi(i_res)) * dGamma
+
+    sub_tag, _ = scifem.transfer_meshtags_to_submesh(
+        ft, omega_e, e_vertex_to_parent, exterior_to_parent
+    )
+    omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
+    bc_dofs = dolfinx.fem.locate_dofs_topological(
+        Ve, omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
+    )
+    u_bc = dolfinx.fem.Function(Ve)
+    u_bc.interpolate(lambda x: np.sin(2 * np.pi * x[0]) * np.cos(2 * np.pi * x[1]))
+    bc = dolfinx.fem.dirichletbc(u_bc, bc_dofs)
+
+    #ui = dolfinx.fem.Function(Vi, name="ui")
+    #ue = dolfinx.fem.Function(Ve, name="ue")
+    #entity_maps = [interior_to_parent, exterior_to_parent]
+
+    #petsc_options = {
+    #                "ksp_type": "preonly",
+    #                "pc_type": "lu",
+    #                "pc_factor_mat_solver_type": "mumps",
+    #                "ksp_monitor": None,
+    #                "ksp_error_if_not_converged": True,
+    #            }
+
+    #problem = dolfinx.fem.petsc.LinearProblem(
+    #    extract_blocks(a),
+    #    extract_blocks(L),
+    #    u=[ue, ui],
+    #    bcs=[bc],
+    #    petsc_options=petsc_options,
+    #    petsc_options_prefix="primal_single_",
+    #    entity_maps=entity_maps,
+    #)
+    ##A = problem.A
+    ##nullspace = PETSc.NullSpace().create(constant=True, comm=omega.comm)
+    ##A.setNullSpace(nullspace)
+
+    #problem.solve()
+
+    #num_iterations = problem.solver.getIterationNumber()
+    #converged_reason = problem.solver.getConvergedReason()
+    #PETSc.Sys.Print(f"Solver converged in: {num_iterations} with reason {converged_reason}")
+
+    #error_ui = dolfinx.fem.form(
+    #    inner(ui - ui_exact, ui - ui_exact) * dx(1), entity_maps=entity_maps
+    #)
+    #error_ue = dolfinx.fem.form(
+    #    inner(ue - ue_exact, ue - ue_exact) * dx(0), entity_maps=entity_maps
+    #)
+    #L2_ui = np.sqrt(scifem.assemble_scalar(error_ui, entity_maps=entity_maps))
+    #L2_ue = np.sqrt(scifem.assemble_scalar(error_ue, entity_maps=entity_maps))
+    #PETSc.Sys.Print(f"L2(ui): {L2_ui:.2e}\nL2(ue): {L2_ue:.2e}")
+
+    return a, L, dx, bc
+    """

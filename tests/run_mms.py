@@ -168,11 +168,11 @@ def solve_system(resolution):
     ECS_tag = 0
     cell_tag = 1
 
-    mesh_sub_1, i_to_parent, _, _, _ = scifem.extract_submesh(
+    mesh_sub_1, i_to_parent, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(
             mesh, ct, cell_tag
     )
 
-    mesh_sub_0, e_to_parent, e_vertex_to_parent, _, _ = scifem.extract_submesh(
+    mesh_sub_0, e_to_parent, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(
             mesh, ct, ECS_tag
     )
 
@@ -184,13 +184,16 @@ def solve_system(resolution):
     ECS = {"tag":ECS_tag,
            "name":"ECS",
            "mesh_sub":mesh_sub_0,
-           "sub_to_parent":e_to_parent}
+           "sub_to_parent":e_to_parent,
+           "sub_vertex_to_parent":sub_vertex_to_parent_0,
+           }
 
     cell = {"tag":cell_tag,
             "name":"neuron",
             "mesh_sub":mesh_sub_1,
             "sub_to_parent":i_to_parent,
             "mesh_mem":mesh_g,
+            "sub_vertex_to_parent":sub_vertex_to_parent_1,
             "mem_to_parent":g_to_parent}
 
     subdomain_list = [ECS, cell]
@@ -259,7 +262,7 @@ def solve_system(resolution):
 
     a_e_exact = a_i_exact
     b_e_exact = b_i_exact
-    c_e_exact = - 1/z_c * (z_a * a_i_exact + z_b * b_i_exact)
+    c_e_exact = - 1/z_c * (z_a * a_e_exact + z_b * b_e_exact)
 
     # Exact membrane potential
     phi_M_exact = phi_i_exact - phi_e_exact
@@ -413,7 +416,7 @@ def solve_system(resolution):
     ion_list[2]['c_init'] = {0:c_e_func.x.array, 1:c_i_func.x.array}
 
     # Set initial conditions in solver
-    set_initial_conditions(ion_list, c_prev)
+    set_initial_conditions(ion_list, subdomain_list, c_prev)
 
     # Create dummy membrane models for MMS case
     mm_mms = MMSMembraneModel()
@@ -428,7 +431,7 @@ def solve_system(resolution):
     num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
 
     # Create variational form emi problem
-    a_emi, L_emi, dx  = emi_system(
+    a_emi, L_emi, dx, bc  = emi_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list, mem_models,
             phi, phi_M_prev, c_prev, dt, mms=mms,
     )
@@ -466,7 +469,9 @@ def solve_system(resolution):
     #problem_emi = create_solver_emi(a_emi, L_emi, phi, entity_maps, comm)
     #problem_emi = create_solver_emi(a_emi, L_emi, phi, entity_maps, comm, bcs=[bc])
     # Create solver knp problem
-    problem_knp = create_solver_knp(a_knp, L_knp, c, entity_maps)
+    problem_knp = create_solver_knp(
+            a_knp, L_knp, c, entity_maps, subdomain_list
+    )
 
     xdmf_e = dolfinx.io.XDMFFile(mesh.comm, "results/results_e.xdmf", "w")
     xdmf_i = dolfinx.io.XDMFFile(mesh.comm, "results/results_i.xdmf", "w")
