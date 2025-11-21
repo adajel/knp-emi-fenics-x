@@ -93,9 +93,9 @@ def initialize_variables(ion_list, subdomain_list, c_prev):
         for idx, ion in enumerate(ion_list):
             # Determine the function source based on the index
             is_last = (idx == len(ion_list) - 1)
-            c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
+            c_tag = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
             # Update alpha sum
-            alpha_sum_sub += ion['D'][tag] * ion['z'] * ion['z'] * c
+            alpha_sum_sub += ion['D'][tag] * ion['z'] * ion['z'] * c_tag
 
         # Set alpha sum in dictionary
         alpha_sum[tag] = alpha_sum_sub

@@ -10,6 +10,7 @@ from knpemi.utils import interpolate_to_membrane
 import mm_hh as mm_hh
 
 import dolfinx
+import adios4dolfinx
 import scifem
 from mpi4py import MPI
 import numpy as np
@@ -109,33 +110,29 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
 
     return
 
-
-def write_to_file(xdmf_e, xdmf_i, phi, c, phi_M, ion_list, t):
-
-    # Write results to file
-    #xdmf_e.write_function(phi[0], t=float(t))
-    #xdmf_i.write_function(phi[1], t=float(t))
-    #xdmf.write_function(phi_M, t=float(t))
-
-    c_e = c[0][0]
-    xdmf_e.write_function(c_e, t=float(t))
-
-    c_i = c[1][0]
-    xdmf_i.write_function(c_i, t=float(t))
+def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
+    # Write potential to file
+    xdmf.write_function(phi[tag], t=float(t))
+    adios4dolfinx.write_function(fname, phi[tag], time=float(t))
 
     for idx in range(len(ion_list)):
         # Determine the function source based on the index
         is_last = (idx == len(ion_list) - 1)
+        c_tag = ion_list[-1][f'c_{tag}'] if is_last else c[tag][idx]
 
-        c_e = ion_list[-1]['c_0'] if is_last else c[0][idx]
-        c_i = ion_list[-1]['c_1'] if is_last else c[1][idx]
-
-        # Write the functions to file
-        #(xdmf.write_function(f, t=float(t)) for f in (c_i, c_e))
-        #xdmf_e.write_function(c_e, t=float(t))
-        #xdmf_i.write_function(c_i, t=float(t))
+        # Write concentration to file
+        xdmf.write_function(c_tag, t=float(t))
+        adios4dolfinx.write_function(fname, c_tag, time=float(t))
 
     return
+
+def write_to_file_mem(xdmf, fname, tag, phi_M, t):
+    # Write potential to file
+    xdmf.write_function(phi_M[tag], t=float(t))
+    adios4dolfinx.write_function(fname, phi_M[tag], time=float(t))
+
+    return
+
 
 def solve_odes(mem_models, c_prev, phi_M_prev, ion_list, stim_params, dt,
         mesh, ct, subdomain_list, k):
@@ -408,13 +405,6 @@ def solve_system():
     phi_e = []
     phi_i = []
 
-    xdmf_e = dolfinx.io.XDMFFile(comm, "results/results_e.xdmf", "w")
-    xdmf_i = dolfinx.io.XDMFFile(comm, "results/results_i.xdmf", "w")
-
-    # write mesh and mesh tags to file
-    xdmf_e.write_mesh(mesh_sub_0)
-    xdmf_i.write_mesh(mesh_sub_1)
-
     # at membrane of axon A (gamma)
     x_M = 25; y_M = 3
     # 0.05 um above axon A (ECS)
@@ -424,6 +414,28 @@ def solve_system():
 
     point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6]])
     point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6]])
+
+    # Create XDMF file for results (one file for each subdomain and one for
+    # each membrane) # TODO, could all this be in one file?
+    xdmf_sub = {}; xdmf_mem = {}
+    # Crate dictionary for storing filenames for checkpoints
+    fname_bp_sub = {}; fname_bp_mem = {}
+ 
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        xdmf = dolfinx.io.XDMFFile(comm, f"results/results_sub_{tag}.xdmf", "w")
+        xdmf.write_mesh(subdomain['mesh_sub'])
+        adios4dolfinx.write_mesh(f"results/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
+        xdmf_sub[tag] = xdmf
+        fname_bp_sub[tag] = f"results/checkpoint_sub_{tag}.bp"
+
+        # For cellular subdomains only (i.e. not ECS)
+        if tag > 0:
+            xdmf = dolfinx.io.XDMFFile(comm, f"results/results_mem_{tag}.xdmf", "w")
+            xdmf.write_mesh(subdomain['mesh_mem'])
+            adios4dolfinx.write_mesh(f"results/checkpoint_mem_{tag}.bp", subdomain['mesh_mem'])
+            xdmf_mem[tag] = xdmf
+            fname_bp_mem[tag] = f"results/checkpoint_mem_{tag}.bp"
 
     for k in range(int(round(Tstop/float(dt)))):
         print(f'solving for t={float(t)}')
@@ -446,8 +458,14 @@ def solve_system():
         # update time
         t.value = float(t + dt)
 
-        # Write results from previous time step to file
-        write_to_file(xdmf_e, xdmf_i, phi, c, phi_M_prev, ion_list, t)
+        for subdomain in subdomain_list:
+            tag = subdomain['tag']
+            # Write concentrations and potentials from previous time step to file
+            write_to_file_sub(xdmf_sub[tag], fname_bp_sub[tag], tag, phi, c, ion_list, t)
+
+            if tag > 0:
+                # Write membrane potential from previous time step to file
+                write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, phi_M_prev, t)
 
         K_e_val = scifem.evaluate_function(c[0][0], point_e)
         K_e.append(K_e_val[0])
@@ -509,8 +527,7 @@ def solve_system():
 
             l_I_sum.append(I_Na.x.array[0] + I_K.x.array[0])
 
-    xdmf_e.close()
-    xdmf_i.close()
+    xdmf.close()
 
     import matplotlib.pyplot as plt
 

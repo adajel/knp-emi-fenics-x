@@ -11,11 +11,11 @@ def set_initial_conditions(ion_list, subdomain_list, c_prev):
         for idx, ion in enumerate(ion_list):
             # Determine the target objects (c_e and c_i) based on the ion's index
             is_last = (idx == len(ion_list) - 1)
-            c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
+            c_tag = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
             # Apply initial conditions and scatter the data
-            c.x.array[:] = ion['c_init'][tag]
-            c.x.scatter_forward()
+            c_tag.x.array[:] = ion['c_init'][tag]
+            c_tag.x.scatter_forward()
 
     return
 

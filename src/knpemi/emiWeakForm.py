@@ -119,17 +119,17 @@ def initialize_variables(ion_list, subdomain_list, c_prev, physical_params):
         for idx, ion in enumerate(ion_list):
             # Determine the function source based on the index
             is_last = (idx == len(ion_list) - 1)
-            c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
+            c_tag = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
             # Add contribution to kappa (tissue conductance)
-            kappa_sub += F * ion['z'] * ion['z'] * ion['D'][tag] * psi * c
+            kappa_sub += F * ion['z'] * ion['z'] * ion['D'][tag] * psi * c_tag
 
             # Calculate and set Nernst potential for cells (all subdomains but ECS)
             if tag > 0:
                 # ECS concentration (ECS is subdomain with tag 0)
                 c_e = ion_list[-1][f'c_0'] if is_last else c_prev[0][idx]
                 # Calculate and set Nernst potential
-                ion[f'E_{tag}'] = 1 / (psi * ion['z']) * ln(c_e(e_res) / c(i_res))
+                ion[f'E_{tag}'] = 1 / (psi * ion['z']) * ln(c_e(e_res) / c_tag(i_res))
 
         # Add to dictionary
         kappa[tag] = kappa_sub
@@ -200,10 +200,10 @@ def get_rhs(c_prev, vs, dx, dS, ion_list, subdomain_list, physical_params,
         for idx, ion in enumerate(ion_list):
             # Determine the function source based on the index
             is_last = (idx == len(ion_list) - 1)
-            c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
+            c_tag = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
             # Add terms rhs (diffusive terms)
-            L += - F * ion['z'] * inner((ion['D'][tag])*grad(c), grad(v)) * dx(tag)
+            L += - F * ion['z'] * inner((ion['D'][tag])*grad(c_tag), grad(v)) * dx(tag)
 
         # Add membrane dynamics for each cell (all subdomain but ECS)
         if tag > 0:
@@ -242,10 +242,10 @@ def get_rhs_mms(vs, dx, dS, ds, c_prev, ion_list, subdomain_list,
         for idx, ion in enumerate(ion_list):
             # Determine the function source based on the index
             is_last = (idx == len(ion_list) - 1)
-            c = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
+            c_tag = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
             # Add terms rhs (diffusive terms)
-            L += - F * ion['z'] * inner((ion['D'][tag])*grad(c), grad(v)) * dx(tag)
+            L += - F * ion['z'] * inner((ion['D'][tag])*grad(c_tag), grad(v)) * dx(tag)
 
             # Add Neumann term (zero in physiological simulation)
             if tag == 0: L += - F * ion['z'] * dot(ion['J_k_e'], n) * v * ds(5)

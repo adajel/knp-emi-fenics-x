@@ -4,15 +4,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import sys
 
-from fenics import * 
-import string
-
-from knpemidg.utils import pcws_constant_project
-from knpemidg.utils import interface_normal, plus, minus
-
-JUMP = lambda f, n: minus(f, n) - plus(f, n)
+import dolfinx
+import adios4dolfinx
+from mpi4py import MPI
+import scifem
 
 # set font & text parameters
 font = {'family' : 'serif',
@@ -25,170 +21,45 @@ mpl.rcParams['image.cmap'] = 'jet'
 
 path = 'results/'
 
-def get_time_series(dt, T, fname, x_e, y_e, x_i, y_i):
+comm = MPI.COMM_WORLD
 
-    # Set ghost mode
-    ghost_mode = dolfinx.mesh.GhostMode.shared_facet
+def get_time_series_tag(checkpoint_fname, xdmf_fname, point, tag, dt, Tstop):
 
-    with dolfinx.io.XDMFFile(comm, mesh_file, 'r') as xdmf:
-
-        # Read mesh and cell tags
-        mesh = xdmf.read_mesh(ghost_mode=ghost_mode)
-        ct = xdmf.read_meshtags(mesh, name='cell_marker')
-
-        # Create facet entities, facet-to-cell connectivity and cell-to-cell connectivity
-        mesh.topology.create_entities(mesh.topology.dim-1)
-        mesh.topology.create_connectivity(mesh.topology.dim-1, mesh.topology.dim)
-        mesh.topology.create_connectivity(mesh.topology.dim, mesh.topology.dim)
-
-        # Read facets
-        ft = xdmf.read_meshtags(mesh, name='facet_marker')
-
-        # Create mixed space for extra and intracellular concentrations
-        V_e = dolfinx.fem.functionspace(mesh_e, ("CG", degree))
-        V_i = dolfinx.fem.functionspace(mesh_i, ("CG", degree))
-
-        u_i = Function(V_i)
-        v_i = Function(V_i)
-        w_i = Function(V_i)
-
-        f_Na_i = Function(V)
-        f_K_i = Function(V)
-        f_Cl_i = Function(V)
-        f_phi_i = Function(V)
-
-        Na_e = []
-        K_e = []
-        Cl_e = []
-        phi_e = []
-
-        Na_i = []
-        K_i = []
-        Cl_i = []
-        phi_i = []
-
-        t = dt
-        while t <= Tstop:
-            print(t)
-
-            # read file
-            f_e.name = f"c_Na_e"
-            xdmf.read_function(u, f_name, t)
-
-            # K concentrations
-            assign(f_K, u.sub(0))
-            K_e.append(f_K(x_e, y_e))
-            K_i.append(f_K(x_i, y_i))
-
-            # Cl concentrations
-            assign(f_Cl, u.sub(1))
-            Cl_e.append(f_Cl(x_e, y_e))
-            Cl_i.append(f_Cl(x_i, y_i))
-
-            # Na concentrations
-            hdf5file.read(v, "/elim_concentration/vector_" + str(n))
-            assign(f_Na, v)
-            Na_e.append(f_Na(x_e, y_e))
-            Na_i.append(f_Na(x_i, y_i))
-
-            # potential
-            hdf5file.read(w, "/potential/vector_" + str(n))
-            assign(f_phi, w)
-            phi_e.append(1.0e3*f_phi(x_e, y_e))
-            phi_i.append(1.0e3*f_phi(x_i, y_i))
-
-            t += dt
-
-    return Na_e, K_e, Cl_e, phi_e, Na_i, K_i, Cl_i, phi_i
-
-def get_time_series_membrane(dt, T, fname, x_, y_):
-    # read data file
-    hdf5file = HDF5File(MPI.comm_world, fname, "r")
-
-    mesh = Mesh()
-    subdomains = MeshFunction("size_t", mesh, 2)
-    surfaces = MeshFunction("size_t", mesh, 1)
-    hdf5file.read(mesh, '/mesh', False)
-    mesh.coordinates()[:] *= 1e6
-    hdf5file.read(subdomains, '/subdomains')
-    hdf5file.read(surfaces, '/surfaces')
-
-    x_min = x_ - 0.5
-    x_max = x_ + 0.5
-    y_min = y_ - 0.5
-    y_max = y_ + 0.5
-
-    # define one facet to 10 for getting membrane potential
-    for facet in facets(mesh):
-        x = [facet.midpoint().x(), facet.midpoint().y(), facet.midpoint().z()]
-        point_1 = (y_min <= x[1] <= y_max and x_min <= x[0] <= x_max)
-
-        if point_1 and surfaces[facet] == 1:
-            print(x[0], x[1])
-            surfaces[facet] = 10
-            break
-
-    # define function space of piecewise constants on interface gamma for solution to ODEs
-    Q = FunctionSpace(mesh, 'Discontinuous Lagrange Trace', 0)
-    phi_M = Function(Q)
-    E_Na = Function(Q)
-    E_K = Function(Q)
-    # interface normal
-    n_g = interface_normal(subdomains, mesh)
-
-    dS = Measure('dS', domain=mesh, subdomain_data=surfaces)
-    iface_size = assemble(Constant(1)*dS(10))
-
-    P1 = FiniteElement('DG', mesh.ufl_cell(), 1)
-    W = FunctionSpace(mesh, MixedElement(2*[P1]))
-    V = FunctionSpace(mesh, P1)
-
-    v = Function(W)
-    w_Na = Function(V)
-    w_phi = Function(V)
-
-    f_phi = Function(V)
-    f_Na = Function(V)
-    f_K = Function(V)
-
-    phi_M_s = []
-    E_Na_s = []
-    E_K_s = []
-
-    z_Na = 1; z_K = 1; temperature = 300; F = 96485; R = 8.314
-
-    for n in range(1, int(T/dt)):
-            print(n)
-
-            # potential
-            hdf5file.read(w_phi, "/potential/vector_" + str(n))
-            assign(f_phi, w_phi)
-
-            # K concentrations
-            hdf5file.read(v, "/concentrations/vector_" + str(n))
-            assign(f_K, v.sub(0))
-            E = R * temperature / (F * z_K) * ln(plus(f_K, n_g) / minus(f_K, n_g))
-            assign(E_K, pcws_constant_project(E, Q))
-            E_K_ = 1.0e3*assemble(1.0/iface_size*avg(E_K)*dS(10))
-            E_K_s.append(E_K_)
-
-            # Na concentrations
-            hdf5file.read(w_Na, "/elim_concentration/vector_" + str(n))
-            assign(f_Na, w_Na)
-            E = R * temperature / (F * z_Na) * ln(plus(f_Na, n_g) / minus(f_Na, n_g))
-            assign(E_Na, pcws_constant_project(E, Q))
-            E_Na_ = 1.0e3*assemble(1.0/iface_size*avg(E_Na)*dS(10))
-            E_Na_s.append(E_Na_)
-
-            # update membrane potential
-            phi_M_step = JUMP(f_phi, n_g)
-            assign(phi_M, pcws_constant_project(phi_M_step, Q))
-            phi_M_s.append(1.0e3*assemble(1.0/iface_size*avg(phi_M)*dS(10)))
-
-    return phi_M_s, E_Na_s, E_K_s
+    # Read mesh
+    mesh_sub = adios4dolfinx.read_mesh(checkpoint_fname, MPI.COMM_WORLD)
 
 
-def plot_2D_concentration(dt, T):
+    # Create function space and functions for storing data
+    V = dolfinx.fem.functionspace(mesh_sub, ("CG", 1))
+    K = dolfinx.fem.Function(V)
+    Cl = dolfinx.fem.Function(V)
+    Na = dolfinx.fem.Function(V)
+    phi = dolfinx.fem.Function(V)
+
+    # Create list for point evaluation of functions over time
+    Nas = []
+    Ks = []
+    Cls = []
+    phis = []
+
+    t = dt
+    while t <= Tstop:
+        adios4dolfinx.read_function(checkpoint_fname, K, time=t, name=f"c_K_{tag}")
+        adios4dolfinx.read_function(checkpoint_fname, Cl, time=t, name=f"c_Cl_{tag}")
+        adios4dolfinx.read_function(checkpoint_fname, Na, time=t, name=f"c_Na_{tag}")
+        adios4dolfinx.read_function(checkpoint_fname, phi, time=t, name=f"phi_{tag}")
+
+        # K concentrations
+        Ks.append(scifem.evaluate_function(K, point)[0])
+        Cls.append(scifem.evaluate_function(Cl, point)[0])
+        Nas.append(scifem.evaluate_function(Na, point)[0])
+        phis.append(scifem.evaluate_function(phi, point)[0])
+
+        t += dt
+
+    return Nas, Ks, Cls, phis
+
+def plot_2D_concentration(dt, Tstop):
 
     temperature = 300 # temperature (K)
     F = 96485         # Faraday's constant (C/mol)
@@ -197,22 +68,28 @@ def plot_2D_concentration(dt, T):
     time = 1.0e3*np.arange(0, T-dt, dt)
 
     # at membrane of axon A (gamma)
-    x_M_A = 25; y_M_A = 3
+    x_M = 25; y_M = 3
     # 0.05 um above axon A (ECS)
-    x_e_A = 25; y_e_A = 3.5
+    x_e = 25; y_e = 3.5
     # mid point inside axon A (ICS)
-    x_i_A = 25; y_i_A = 2
+    x_i = 25; y_i = 2
+
+    point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6]])
+    point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6]])
 
     #################################################################
     # get data axon A is stimulated
-    fname = 'results/results.h5'
-
-    # trace concentrations
-    phi_M, E_Na, E_K = get_time_series_membrane(dt, T, fname, x_M_A, y_M_A)
+    xdmf_fname_e = 'results/results_sub_0.xdmf'
+    xdmf_fname_i = 'results/results_sub_1.xdmf'
+    checkpoint_fname_e = 'results/checkpoint_sub_0.bp'
+    checkpoint_fname_i = 'results/checkpoint_sub_1.bp'
 
     # bulk concentrations
-    Na_e, K_e, Cl_e, _, Na_i, K_i, Cl_i, _ = get_time_series(dt, T, fname, \
-            x_e_A, y_e_A, x_i_A, y_i_A)
+    tag_e = 0
+    tag_i = 1
+
+    Na_e, K_e, Cl_e, phi_e = get_time_series_tag(checkpoint_fname_e, xdmf_fname_e, point_e, tag_e, dt, Tstop)
+    Na_i, K_i, Cl_i, phi_i = get_time_series_tag(checkpoint_fname_i, xdmf_fname_i, point_i, tag_i, dt, Tstop)
 
     #################################################################
     # get data axons BC are stimulated
@@ -251,18 +128,18 @@ def plot_2D_concentration(dt, T):
     plt.ylabel(r'[Cl]$_i$ (mM)')
     plt.plot(Cl_i,linewidth=3, color='r')
 
-    ax5 = fig.add_subplot(3,3,7)
-    plt.title(r'Membrane potential')
-    plt.ylabel(r'$\phi_M$ (mV)')
-    plt.xlabel(r'time (ms)')
-    plt.plot(phi_M, linewidth=3)
+    #ax5 = fig.add_subplot(3,3,7)
+    #plt.title(r'Membrane potential')
+    #plt.ylabel(r'$\phi_M$ (mV)')
+    #plt.xlabel(r'time (ms)')
+    #plt.plot(phi_M, linewidth=3)
 
-    ax6 = fig.add_subplot(3,3,8)
-    plt.title(r'Na$^+$ reversal potential')
-    plt.ylabel(r'E$_Na$ (mV)')
-    plt.xlabel(r'time (ms)')
-    plt.plot(E_K, linewidth=3)
-    plt.plot(E_Na, linewidth=3)
+    #ax6 = fig.add_subplot(3,3,8)
+    #plt.title(r'Na$^+$ reversal potential')
+    #plt.ylabel(r'E$_Na$ (mV)')
+    #plt.xlabel(r'time (ms)')
+    #plt.plot(E_K, linewidth=3)
+    #plt.plot(E_Na, linewidth=3)
 
     ax6 = fig.add_subplot(3,3,9)
     plt.legend()
@@ -274,10 +151,12 @@ def plot_2D_concentration(dt, T):
     # save figure to file
     plt.savefig('results/pot_con_2D.svg', format='svg')
 
+    """
     f_phi_M = open('results/phi_M_2D.txt', "w")
     for p in phi_M:
         f_phi_M.write("%.10f \n" % p)
     f_phi_M.close()
+    """
 
     f_K_e = open('results/K_ECS_2D.txt', "w")
     for p in K_e:
@@ -299,6 +178,7 @@ def plot_2D_concentration(dt, T):
         f_Na_i.write("%.10f \n" % p)
     f_Na_i.close()
 
+    """
     f_E_Na = open('results/E_Na_2D.txt', "w")
     for p in E_Na:
         f_E_Na.write("%.10f \n" % p)
@@ -308,6 +188,7 @@ def plot_2D_concentration(dt, T):
     for p in E_K:
         f_E_K.write("%.10f \n" % p)
     f_E_K.close()
+    """
 
     return
 
