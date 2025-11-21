@@ -1,10 +1,10 @@
 from knpemi.emiWeakForm import emi_system, create_functions_emi
 from knpemi.knpWeakForm import knp_system, create_functions_knp
-from knpemi.utils import set_initial_conditions, setup_membrane_model
 
 from knpemi.pdeSolver import create_solver_emi
 from knpemi.pdeSolver import create_solver_knp
 
+from knpemi.utils import set_initial_conditions, setup_membrane_model
 from knpemi.utils import interpolate_to_membrane
 
 import mm_hh as mm_hh
@@ -14,7 +14,6 @@ import adios4dolfinx
 import scifem
 from mpi4py import MPI
 import numpy as np
-import sys
 
 from ufl import (
         ln,
@@ -24,6 +23,7 @@ i_res = "-"
 e_res = "+"
 
 comm = MPI.COMM_WORLD
+
 
 def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list,
         subdomain_list, mesh, ct, tag, k):
@@ -49,6 +49,7 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list,
     if k > 0: ode_model.set_membrane_potential(phi_M_prev)
 
     return
+
 
 def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
         ion_list, subdomain_list, mesh, ct):
@@ -110,6 +111,7 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
 
     return
 
+
 def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
     # Write potential to file
     xdmf.write_function(phi[tag], t=float(t))
@@ -125,6 +127,7 @@ def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
         adios4dolfinx.write_function(fname, c_tag, time=float(t))
 
     return
+
 
 def write_to_file_mem(xdmf, fname, tag, phi_M, t):
     # Write potential to file
@@ -167,6 +170,7 @@ def solve_odes(mem_models, c_prev, phi_M_prev, ion_list, stim_params, dt,
 
     return
 
+
 def read_mesh(mesh_file):
 
     # Set ghost mode
@@ -188,6 +192,7 @@ def read_mesh(mesh_file):
     xdmf.close()
 
     return mesh, ct, ft
+
 
 def solve_system():
     """ Solve system (PDEs and ODEs) """
