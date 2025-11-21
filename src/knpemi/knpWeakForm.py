@@ -320,6 +320,9 @@ def knp_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
     a = create_lhs(
             u, v, phi, dx, ion_list, subdomain_list, physical_params, dt)
 
+    # We take the preconditioner to be the system itself (P=A).
+    p = a
+
     # Create right hand side knp system
     L = create_rhs(v, phi, phi_M_prev, c_prev, dx, dS, physical_params,
             ion_list, subdomain_list, I_ch, alpha_sum, dt, splitting_scheme,
@@ -331,6 +334,6 @@ def knp_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
             v, ion_list, subdomain_list, mms, dt, c_prev, phi, dx, dS, ds, n,
         )
 
-        return a, L, dx
+        return a, p, L, dx
 
-    return a, L
+    return a, p, L

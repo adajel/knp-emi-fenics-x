@@ -150,14 +150,14 @@ def solve_system(resolution):
     y_U = 0.75
 
     # Define intracellular exact solutions
-    a_i_exact = sin(2 * pi * y) * sin(2 * pi * x)
-    b_i_exact = sin(2 * pi * y) * sin(2 * pi * x)
+    a_i_exact = 1.0 + 1.0e-9 * x #sin(2 * pi * y) * sin(2 * pi * x)
+    b_i_exact = 1.0 + 1.0e-9 * x ##sin(2 * pi * y) * sin(2 * pi * x)
 
     phi_i_exact = sin(2 * pi * x) * cos(2 * pi * y)
     phi_e_exact = sin(2 * pi * x) * cos(2 * pi * y)
 
-    a_e_exact = sin(2 * pi * y) * sin(2 * pi * x)
-    b_e_exact = sin(2 * pi * y) * sin(2 * pi * x)
+    a_e_exact = 1.0 + 1.0e-9 * x #sin(2 * pi * y) * sin(2 * pi * x)
+    b_e_exact = 1.0 + 1.0e-9 * x #sin(2 * pi * y) * sin(2 * pi * x)
 
     c_i_exact = - 1/z_c * (z_a * a_i_exact + z_b * b_i_exact)
     c_e_exact = - 1/z_c * (z_a * a_e_exact + z_b * b_e_exact)
@@ -288,7 +288,7 @@ def solve_system(resolution):
     num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
 
     # Create variational form emi problem
-    a_emi, L_emi, dx, bc = emi_system(
+    a_emi, p_emi, L_emi, dx, bc = emi_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
             mem_models, phi, phi_M_prev, c_prev, dt, mms=mms,
     )

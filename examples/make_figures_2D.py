@@ -19,7 +19,6 @@ plt.rc('font', **font)
 plt.rc('text', usetex=True)
 mpl.rcParams['image.cmap'] = 'jet'
 
-path = 'results/'
 comm = MPI.COMM_WORLD
 
 def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop):
@@ -98,9 +97,9 @@ def plot_2D_concentration(dt, Tstop):
 
     #################################################################
     # get data axon A is stimulated
-    checkpoint_fname_e = 'results/checkpoint_sub_0.bp'
-    checkpoint_fname_i = 'results/checkpoint_sub_1.bp'
-    checkpoint_fname_M = 'results/checkpoint_mem_1.bp'
+    checkpoint_fname_e = 'results/2D/checkpoint_sub_0.bp'
+    checkpoint_fname_i = 'results/2D/checkpoint_sub_1.bp'
+    checkpoint_fname_M = 'results/2D/checkpoint_mem_1.bp'
 
     # bulk concentrations
     tag_e = 0
@@ -158,29 +157,29 @@ def plot_2D_concentration(dt, Tstop):
     plt.tight_layout()
 
     # save figure to file
-    plt.savefig('results/pot_con_2D.svg', format='svg')
+    plt.savefig('results/2D/pot_con_2D.svg', format='svg')
 
-    f_phi_M = open('results/phi_M_2D.txt', "w")
+    f_phi_M = open('results/2D/phi_M_2D.txt', "w")
     for p in phi_M:
         f_phi_M.write("%.10f \n" % p)
     f_phi_M.close()
 
-    f_K_e = open('results/K_ECS_2D.txt', "w")
+    f_K_e = open('results/2D/K_ECS_2D.txt', "w")
     for p in K_e:
         f_K_e.write("%.10f \n" % p)
     f_K_e.close()
 
-    f_K_i = open('results/K_ICS_2D.txt', "w")
+    f_K_i = open('results/2D/K_ICS_2D.txt', "w")
     for p in K_i:
         f_K_i.write("%.10f \n" % p)
     f_K_i.close()
 
-    f_Na_e = open('results/Na_ECS_2D.txt', "w")
+    f_Na_e = open('results/2D/Na_ECS_2D.txt', "w")
     for p in Na_e:
         f_Na_e.write("%.10f \n" % p)
     f_Na_e.close()
 
-    f_Na_i = open('results/Na_ICS_2D.txt', "w")
+    f_Na_i = open('results/2D/Na_ICS_2D.txt', "w")
     for p in Na_i:
         f_Na_i.write("%.10f \n" % p)
     f_Na_i.close()
@@ -188,8 +187,8 @@ def plot_2D_concentration(dt, Tstop):
     return
 
 # create directory for figures
-if not os.path.isdir('results'):
-    os.mkdir('results')
+if not os.path.isdir('results/2D'):
+    os.mkdir('results/2D')
 
 # create figures
 dt = 1.0e-4

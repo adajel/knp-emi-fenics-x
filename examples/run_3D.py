@@ -360,13 +360,13 @@ def solve_system():
     subdomain_list[1]['mem_models'] = mem_models_neuron
 
     # Create variational form emi problem
-    a_emi, L_emi = emi_system(
+    a_emi, p_emi, L_emi = emi_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
             mem_models_neuron, phi, phi_M_prev, c_prev, dt,
     )
 
     # Create variational form knp problem
-    a_knp, L_knp = knp_system(
+    a_knp, p_knp, L_knp = knp_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
             mem_models_neuron, phi, phi_M_prev, c, c_prev, dt,
     )
@@ -391,19 +391,19 @@ def solve_system():
     # Create files (XDMF and checkpoint) for saving results
     for subdomain in subdomain_list:
         tag = subdomain['tag']
-        xdmf = dolfinx.io.XDMFFile(comm, f"results/results_sub_{tag}.xdmf", "w")
+        xdmf = dolfinx.io.XDMFFile(comm, f"results/3D/results_sub_{tag}.xdmf", "w")
         xdmf.write_mesh(subdomain['mesh_sub'])
-        adios4dolfinx.write_mesh(f"results/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
+        adios4dolfinx.write_mesh(f"results/3D/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
         xdmf_sub[tag] = xdmf
-        fname_bp_sub[tag] = f"results/checkpoint_sub_{tag}.bp"
+        fname_bp_sub[tag] = f"results/3D/checkpoint_sub_{tag}.bp"
 
         # Write membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
         if tag > 0:
-            xdmf = dolfinx.io.XDMFFile(comm, f"results/results_mem_{tag}.xdmf", "w")
+            xdmf = dolfinx.io.XDMFFile(comm, f"results/3D/results_mem_{tag}.xdmf", "w")
             xdmf.write_mesh(subdomain['mesh_mem'])
-            adios4dolfinx.write_mesh(f"results/checkpoint_mem_{tag}.bp", subdomain['mesh_mem'])
+            adios4dolfinx.write_mesh(f"results/3D/checkpoint_mem_{tag}.bp", subdomain['mesh_mem'])
             xdmf_mem[tag] = xdmf
-            fname_bp_mem[tag] = f"results/checkpoint_mem_{tag}.bp"
+            fname_bp_mem[tag] = f"results/3D/checkpoint_mem_{tag}.bp"
 
     for k in range(int(round(Tstop/float(dt)))):
         print(f'solving for t={float(t)}')

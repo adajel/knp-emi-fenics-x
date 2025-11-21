@@ -1,6 +1,8 @@
 import numpy as np
 import dolfinx
 import scifem
+from mpi4py import MPI
+from petsc4py import PETSc
 
 from ufl import (
     inner,
@@ -22,32 +24,6 @@ from ufl import (
 
 i_res = "-"
 e_res = "+"
-
-x_L = 0.25
-x_U = 0.75
-y_L = 0.25
-y_U = 0.75
-
-
-from mpi4py import MPI
-from petsc4py import PETSc
-
-def lower_bound(x, i, bound, tol=1e-12):
-    return x[i] >= bound - tol
-
-
-def upper_bound(x, i, bound, tol=1e-12):
-    return x[i] <= bound + tol
-
-
-def omega_interior_marker(x, tol=1e-12):
-    return (
-        lower_bound(x, 0, x_L, tol=tol)
-        & lower_bound(x, 1, y_L, tol=tol)
-        & upper_bound(x, 0, x_U, tol=tol)
-        & upper_bound(x, 1, y_U, tol=tol)
-    )
-
 
 def create_measures(mesh, ct, ft):
     """ Create measures, all measure defined on parent mesh """
@@ -159,7 +135,7 @@ def initialize_variables(ion_list, subdomain_list, c_prev, physical_params):
     return kappa, I_ch
 
 
-def get_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting_scheme):
+def create_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting_scheme):
     """ Setup left hand side of the variational form for the emi system """
     C_phi = physical_params['C_phi']
     a = 0
@@ -190,8 +166,22 @@ def get_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting_sc
 
     return a
 
+def create_prec(us, vs, dx, subdomain_list, kappa):
+    """ Get preconditioner """
+    p = 0
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        # Get test and trial functions
+        u = us[tag]; v = vs[tag]
+        p += kappa[tag] *  inner(grad(u), grad(v)) * dx(tag)
+        # Add mass matrix for each cellular subdomain (i.e. all subdomain but ECS)
+        if tag > 0:
+            p += inner(u, v) * dx(tag)
 
-def get_rhs(c_prev, vs, dx, dS, ion_list, subdomain_list, physical_params, 
+    return p
+
+
+def create_rhs(c_prev, vs, dx, dS, ion_list, subdomain_list, physical_params, 
         phi_M_prev, I_ch, splitting_scheme):
     """ Setup right hand side of variational form for the EMI system """
 
@@ -234,7 +224,7 @@ def get_rhs(c_prev, vs, dx, dS, ion_list, subdomain_list, physical_params,
     return L
 
 
-def get_rhs_mms(vs, dx, dS, ds, c_prev, ion_list, subdomain_list,
+def create_rhs_mms(vs, dx, dS, ds, c_prev, ion_list, subdomain_list,
         physical_params, dt, n, mms):
 
     C_phi = physical_params['C_phi']
@@ -309,24 +299,29 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
     dx, dS, ds = create_measures(mesh, ct, ft)
     n = FacetNormal(mesh)
 
-    # Get tissue conductance and set Nernst potentials
+    # Create tissue conductance and set Nernst potentials
     kappa, I_ch = initialize_variables(
             ion_list, subdomain_list, c_prev, physical_params
     )
 
-    # get standard variational formulation
-    a = get_lhs(
+    # Create standard variational formulation
+    a = create_lhs(
             u, v, dx, dS, subdomain_list, physical_params, kappa, splitting_scheme
     )
 
-    L = get_rhs(
+    # Create preconditioner
+    p = create_prec(
+            u, v, dx, subdomain_list, kappa
+    )
+
+    L = create_rhs(
             c_prev, v, dx, dS, ion_list, subdomain_list, physical_params,
             phi_M_prev, I_ch, splitting_scheme
     )
 
     # add terms specific to mms test
     if MMS_FLAG:
-        L = get_rhs_mms(
+        L = create_rhs_mms(
                 v, dx, dS, ds, c_prev, ion_list, subdomain_list, 
                 physical_params, dt, n, mms
         )
@@ -349,9 +344,9 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
         u_bc.interpolate(lambda x: np.sin(2 * np.pi * x[0]) * np.cos(2 * np.pi * x[1]))
         bc = dolfinx.fem.dirichletbc(u_bc, bc_dofs)
 
-        return a, L, dx, bc
+        return a, p, L, dx, bc
 
-    return a, L
+    return a, p, L
 
     """
 
@@ -419,7 +414,7 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
     f_i = -div(kappa[1] * grad(ui_exact))
 
     # get standard variational formulation
-    a = get_lhs(
+    a = create_lhs(
             u, v, dx, dS, subdomain_list, physical_params, kappa, splitting_scheme
     )
 

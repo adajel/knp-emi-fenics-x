@@ -431,7 +431,7 @@ def solve_system(resolution):
     num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
 
     # Create variational form emi problem
-    a_emi, L_emi, dx, bc  = emi_system(
+    a_emi, p_emi, L_emi, dx, bc  = emi_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list, mem_models,
             phi, phi_M_prev, c_prev, dt, mms=mms,
     )
@@ -457,7 +457,7 @@ def solve_system(resolution):
     # ---------------------------------------
 
     # Create variational form knp problem
-    a_knp, L_knp, dx = knp_system(
+    a_knp, p_knp, L_knp, dx = knp_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list, mem_models,
             phi, phi_M_prev, c, c_prev, dt, mms=mms,
     )
