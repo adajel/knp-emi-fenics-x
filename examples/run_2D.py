@@ -82,8 +82,8 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
         # Update eliminated ion concentration
         ion_list[-1][f'c_{tag}'].x.array[:] = c_elim.x.array
 
-        # Update Nernst potentials for all cells (i.e. all subdomain but ECS)
-        if tag != 0:
+        # Update Nernst potentials for all cellular subdomains (i.e. all subdomain but ECS)
+        if tag > 0:
             # Update Nernst potentials for each ion we solve for
             for idx, ion in enumerate(ion_list[:-1]):
                 # Get previous extra and intracellular concentrations
@@ -379,48 +379,11 @@ def solve_system():
             a_knp, L_knp, c, entity_maps, subdomain_list, comm
     )
 
-    l_I_Na = []
-    l_I_K = []
-    l_I_Cl = []
-    l_phi_M = []
-    l_I_sum = []
-    l_psi = []
-
-    l_m = []
-    l_n = []
-    l_h = []
-
-    l_K_i = []
-    l_K_e = []
-
-    K_e = []
-    K_i = []
-
-    Na_e = []
-    Na_i = []
-
-    Cl_e = []
-    Cl_i = []
-
-    phi_e = []
-    phi_i = []
-
-    # at membrane of axon A (gamma)
-    x_M = 25; y_M = 3
-    # 0.05 um above axon A (ECS)
-    x_e = 25; y_e = 3.5
-    # mid point inside axon A (ICS)
-    x_i = 25; y_i = 2
-
-    point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6]])
-    point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6]])
-
-    # Create XDMF file for results (one file for each subdomain and one for
-    # each membrane) # TODO, could all this be in one file?
+    # Crate dictionary for storing XDMF files and checkpoint filenames
     xdmf_sub = {}; xdmf_mem = {}
-    # Crate dictionary for storing filenames for checkpoints
     fname_bp_sub = {}; fname_bp_mem = {}
- 
+
+    # Create files (XDMF and checkpoint) for saving results
     for subdomain in subdomain_list:
         tag = subdomain['tag']
         xdmf = dolfinx.io.XDMFFile(comm, f"results/results_sub_{tag}.xdmf", "w")
@@ -429,7 +392,7 @@ def solve_system():
         xdmf_sub[tag] = xdmf
         fname_bp_sub[tag] = f"results/checkpoint_sub_{tag}.bp"
 
-        # For cellular subdomains only (i.e. not ECS)
+        # Write membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
         if tag > 0:
             xdmf = dolfinx.io.XDMFFile(comm, f"results/results_mem_{tag}.xdmf", "w")
             xdmf.write_mesh(subdomain['mesh_mem'])
@@ -458,164 +421,21 @@ def solve_system():
         # update time
         t.value = float(t + dt)
 
+        # Write results to file
         for subdomain in subdomain_list:
             tag = subdomain['tag']
-            # Write concentrations and potentials from previous time step to file
+            # concentrations and potentials from previous time step to file
             write_to_file_sub(xdmf_sub[tag], fname_bp_sub[tag], tag, phi, c, ion_list, t)
-
+            # membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
             if tag > 0:
-                # Write membrane potential from previous time step to file
                 write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, phi_M_prev, t)
 
-        K_e_val = scifem.evaluate_function(c[0][0], point_e)
-        K_e.append(K_e_val[0])
-        K_i_val = scifem.evaluate_function(c[1][0], point_i)
-        K_i.append(K_i_val[0])
-
-        Cl_e_val = scifem.evaluate_function(c[0][1], point_e)
-        Cl_e.append(Cl_e_val[0])
-        Cl_i_val = scifem.evaluate_function(c[1][1], point_i)
-        Cl_i.append(Cl_i_val[0])
-
-        Na_e_val = scifem.evaluate_function(ion_list[-1]['c_0'], point_e)
-        Na_e.append(Na_e_val[0])
-        Na_i_val = scifem.evaluate_function(ion_list[-1]['c_1'], point_i)
-        Na_i.append(Na_i_val[0])
-
-        for mem_model in mem_models_neuron:
-
-            Q = phi_M_prev[1].function_space
-            ode_model = mem_model['ode']
-
-            I_Na = dolfinx.fem.Function(Q)
-            I_K = dolfinx.fem.Function(Q)
-            I_Cl = dolfinx.fem.Function(Q)
-            phi_M = dolfinx.fem.Function(Q)
-            m = dolfinx.fem.Function(Q)
-            n = dolfinx.fem.Function(Q)
-            h = dolfinx.fem.Function(Q)
-
-            K_i_ODE = dolfinx.fem.Function(Q)
-            K_e_ODE = dolfinx.fem.Function(Q)
-            psi_ODE = dolfinx.fem.Function(Q)
-
-            ode_model.get_membrane_potential(phi_M)
-            ode_model.get_parameter("I_ch_Na", I_Na)
-            ode_model.get_parameter("I_ch_K", I_K)
-            ode_model.get_parameter("I_ch_Cl", I_Cl)
-
-            ode_model.get_state("m", m)
-            ode_model.get_state("n", n)
-            ode_model.get_state("h", h)
-
-            ode_model.get_parameter("K_i", K_i_ODE)
-            ode_model.get_parameter("K_e", K_e_ODE)
-            ode_model.get_parameter("psi", psi_ODE)
-
-            l_I_Na.append(I_Na.x.array[0]*1.0e3)
-            l_I_K.append(I_K.x.array[0]*1.0e3)
-            l_I_Cl.append(I_Cl.x.array[0]*1.0e3)
-            l_phi_M.append(phi_M.x.array[0]*1.0e3)
-
-            l_m.append(m.x.array[0])
-            l_n.append(n.x.array[0])
-            l_h.append(h.x.array[0])
-
-            l_K_i.append(K_i_ODE.x.array[0])
-            l_K_e.append(K_e_ODE.x.array[0])
-            l_psi.append(psi_ODE.x.array[0])
-
-            l_I_sum.append(I_Na.x.array[0] + I_K.x.array[0])
-
-    xdmf.close()
-
-    import matplotlib.pyplot as plt
-
-    # Concentration plots
-    fig = plt.figure(figsize=(12*0.9,12*0.9))
-    ax = plt.gca()
-
-    ax1 = fig.add_subplot(3,3,1)
-    plt.title(r'Na$^+$ concentration (ECS)')
-    plt.plot(Na_e, linewidth=3, color='b')
-
-    ax3 = fig.add_subplot(3,3,2)
-    plt.title(r'K$^+$ concentration (ECS)')
-    plt.plot(K_e, linewidth=3, color='b')
-
-    ax3 = fig.add_subplot(3,3,3)
-    plt.title(r'Cl$^-$ concentration (ECS)')
-    plt.plot(Cl_e, linewidth=3, color='b')
-
-    ax2 = fig.add_subplot(3,3,4)
-    plt.title(r'Na$^+$ concentration (ICS)')
-    plt.plot(Na_i,linewidth=3, color='r')
-
-    ax2 = fig.add_subplot(3,3,5)
-    plt.title(r'K$^+$ concentration (ICS)')
-    plt.plot(K_i,linewidth=3, color='r')
-
-    ax2 = fig.add_subplot(3,3,6)
-    plt.title(r'Cl$^-$ concentration (ICS)')
-    plt.plot(Cl_i,linewidth=3, color='r')
-
-    ax5 = fig.add_subplot(3,3,7)
-    plt.title(r'Membrane potential')
-    plt.plot(l_phi_M, linewidth=3)
-
-    ax6 = fig.add_subplot(3,3,8)
-    plt.ylabel(r'K e (mM)')
-    plt.plot(l_K_e, linewidth=3)
-
-    ax6 = fig.add_subplot(3,3,9)
-    plt.ylabel(r'K i (mM)')
-    plt.plot(l_K_i, linewidth=3)
-
-    #plt.plot(E_K, linewidth=3)
-    #plt.plot(E_Na, linewidth=3)
-
-    # make pretty
-    ax.axis('off')
-    plt.tight_layout()
-    plt.savefig('pot_con_2D.svg', format='svg')
-    plt.close()
-
-    plt.figure()
-    plt.plot(l_I_Na, label="Na")
-    plt.plot(l_I_K, label="K")
-    plt.plot(l_I_Cl, label="Cl")
-    plt.legend()
-    plt.savefig("currents.png")
-    plt.close()
-
-    plt.figure()
-    plt.plot(l_I_sum)
-    plt.savefig("currents_sum.png")
-    plt.close()
-
-    plt.figure()
-    plt.plot(l_phi_M)
-    plt.savefig("pot.png")
-    plt.close()
-
-    plt.figure()
-    plt.plot(l_psi)
-    plt.savefig("psi.png")
-    plt.close()
-
-    plt.figure()
-    plt.plot(l_K_i)
-    plt.plot(l_K_e)
-    plt.savefig("con.png")
-    plt.close()
-
-    plt.figure()
-    plt.plot(l_m, label="m")
-    plt.plot(l_n, label="n")
-    plt.plot(l_h, label="h")
-    plt.legend()
-    plt.savefig("gats.png")
-    plt.close()
+    # Close XDMF files
+    for subdomain in subdomain_list:
+        tag = subdomain['tag']
+        xdmf_sub[tag].close()
+        if tag > 0:
+            xdmf_mem[tag].close()
 
 if __name__ == "__main__":
     solve_system()

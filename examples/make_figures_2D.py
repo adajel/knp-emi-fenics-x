@@ -10,7 +10,7 @@ import adios4dolfinx
 from mpi4py import MPI
 import scifem
 
-# set font & text parameters
+# Set font & text parameters
 font = {'family' : 'serif',
         'weight' : 'bold',
         'size'   : 13}
@@ -20,14 +20,12 @@ plt.rc('text', usetex=True)
 mpl.rcParams['image.cmap'] = 'jet'
 
 path = 'results/'
-
 comm = MPI.COMM_WORLD
 
-def get_time_series_tag(checkpoint_fname, xdmf_fname, point, tag, dt, Tstop):
+def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop):
 
     # Read mesh
     mesh_sub = adios4dolfinx.read_mesh(checkpoint_fname, MPI.COMM_WORLD)
-
 
     # Create function space and functions for storing data
     V = dolfinx.fem.functionspace(mesh_sub, ("CG", 1))
@@ -59,6 +57,26 @@ def get_time_series_tag(checkpoint_fname, xdmf_fname, point, tag, dt, Tstop):
 
     return Nas, Ks, Cls, phis
 
+def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop):
+
+    # Read mesh
+    mesh_mem = adios4dolfinx.read_mesh(checkpoint_fname, MPI.COMM_WORLD)
+
+    # Create function space and function for storing data
+    V = dolfinx.fem.functionspace(mesh_mem, ("CG", 1))
+    phi_M = dolfinx.fem.Function(V)
+
+    # Create list for point evaluation of functions over time
+    phi_Ms = []
+
+    t = dt
+    while t <= Tstop:
+        adios4dolfinx.read_function(checkpoint_fname, phi_M, time=t,name=f"phi_M_{tag}")
+        phi_Ms.append(scifem.evaluate_function(phi_M, point)[0])
+        t += dt
+
+    return phi_Ms
+
 def plot_2D_concentration(dt, Tstop):
 
     temperature = 300 # temperature (K)
@@ -76,20 +94,21 @@ def plot_2D_concentration(dt, Tstop):
 
     point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6]])
     point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6]])
+    point_M = np.array([[x_M * 1.0e-6, y_M * 1.0e-6]])
 
     #################################################################
     # get data axon A is stimulated
-    xdmf_fname_e = 'results/results_sub_0.xdmf'
-    xdmf_fname_i = 'results/results_sub_1.xdmf'
     checkpoint_fname_e = 'results/checkpoint_sub_0.bp'
     checkpoint_fname_i = 'results/checkpoint_sub_1.bp'
+    checkpoint_fname_M = 'results/checkpoint_mem_1.bp'
 
     # bulk concentrations
     tag_e = 0
     tag_i = 1
 
-    Na_e, K_e, Cl_e, phi_e = get_time_series_tag(checkpoint_fname_e, xdmf_fname_e, point_e, tag_e, dt, Tstop)
-    Na_i, K_i, Cl_i, phi_i = get_time_series_tag(checkpoint_fname_i, xdmf_fname_i, point_i, tag_i, dt, Tstop)
+    Na_e, K_e, Cl_e, phi_e = get_time_series_sub(checkpoint_fname_e, point_e, tag_e, dt, Tstop)
+    Na_i, K_i, Cl_i, phi_i = get_time_series_sub(checkpoint_fname_i, point_i, tag_i, dt, Tstop)
+    phi_M = get_time_series_mem(checkpoint_fname_M, point_M, tag_i, dt, Tstop)
 
     #################################################################
     # get data axons BC are stimulated
@@ -128,21 +147,11 @@ def plot_2D_concentration(dt, Tstop):
     plt.ylabel(r'[Cl]$_i$ (mM)')
     plt.plot(Cl_i,linewidth=3, color='r')
 
-    #ax5 = fig.add_subplot(3,3,7)
-    #plt.title(r'Membrane potential')
-    #plt.ylabel(r'$\phi_M$ (mV)')
-    #plt.xlabel(r'time (ms)')
-    #plt.plot(phi_M, linewidth=3)
-
-    #ax6 = fig.add_subplot(3,3,8)
-    #plt.title(r'Na$^+$ reversal potential')
-    #plt.ylabel(r'E$_Na$ (mV)')
-    #plt.xlabel(r'time (ms)')
-    #plt.plot(E_K, linewidth=3)
-    #plt.plot(E_Na, linewidth=3)
-
-    ax6 = fig.add_subplot(3,3,9)
-    plt.legend()
+    ax5 = fig.add_subplot(3,3,7)
+    plt.title(r'Membrane potential')
+    plt.ylabel(r'$\phi_M$ (mV)')
+    plt.xlabel(r'time (ms)')
+    plt.plot(phi_M, linewidth=3)
 
     # make pretty
     ax.axis('off')
@@ -151,12 +160,10 @@ def plot_2D_concentration(dt, Tstop):
     # save figure to file
     plt.savefig('results/pot_con_2D.svg', format='svg')
 
-    """
     f_phi_M = open('results/phi_M_2D.txt', "w")
     for p in phi_M:
         f_phi_M.write("%.10f \n" % p)
     f_phi_M.close()
-    """
 
     f_K_e = open('results/K_ECS_2D.txt', "w")
     for p in K_e:
@@ -177,18 +184,6 @@ def plot_2D_concentration(dt, Tstop):
     for p in Na_i:
         f_Na_i.write("%.10f \n" % p)
     f_Na_i.close()
-
-    """
-    f_E_Na = open('results/E_Na_2D.txt', "w")
-    for p in E_Na:
-        f_E_Na.write("%.10f \n" % p)
-    f_E_Na.close()
-
-    f_E_K = open('results/E_K_2D.txt', "w")
-    for p in E_K:
-        f_E_K.write("%.10f \n" % p)
-    f_E_K.close()
-    """
 
     return
 

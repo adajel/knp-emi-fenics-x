@@ -162,11 +162,11 @@ def create_rhs(vs, phi, phi_M_prev, c_prev, dx, dS, physical_params, ion_list,
             # Approximating time derivative
             L += 1.0/dt * c * v * dx(tag)
 
-            # Add src terms for ion injection in extracellular space
+            # Add src terms for ion injection in ECS subdomain
             if tag == 0:
                 L += ion['f_source'] * v * dx(tag)
 
-            # Add membrane dynamics for each cell (all subdomain but ECS)
+            # Add membrane dynamics for each cellular subdomain (i.e. all subdomain but ECS)
             if tag > 0:
                 # ECS and ICS (i.e. current subdomain) shorthands
                 c_e = c_prev[0][idx]; c_i = c          # concentrations
@@ -237,7 +237,7 @@ def get_rhs_mms(vs, ion_list, subdomain_list, mms, dt, c_prev, phi, dx, dS, ds, 
             if tag == 0: L += inner(ion['f_k_e'], v) * dx(tag)
             if tag == 1: L += inner(ion['f_k_i'], v) * dx(tag)
 
-            # Add membrane dynamics for each cell (all subdomain but ECS)
+            # Add membrane dynamics for each cellular subdomain (i.e. all subdomain but ECS)
             if tag > 0:
                 # ECS and ICS (i.e. current subdomain) shorthands
                 C_e = ion['C'][0]; C_i = C             # coupling coefficients

@@ -80,25 +80,29 @@ def create_functions_emi(subdomain_list, degree=1):
         local potentials for each subdomain and function for previous membrane
         potential phi_M_prev. E.g. in the case with subdomains 0 and 1 we have
         phi = {0:phi_e, 1:phi_i} """
+
     phi = {}
+    phi_M_prev = {}
+
     for subdomain in subdomain_list:
         tag = subdomain["tag"]
         mesh_sub = subdomain["mesh_sub"]
+
         # Create local functionspace for local potential ..
         V = dolfinx.fem.functionspace(mesh_sub, ("CG", degree))
         # ... and create and name function for local potential.
-        phi_sub = dolfinx.fem.Function(V)
-        phi_sub.name = f"phi_{tag}"
+        phi[tag] = dolfinx.fem.Function(V)
+        phi[tag].name = f"phi_{tag}"
 
-        # Add local function to dictionary
-        phi[tag] = phi_sub
+        # Create membrane potential for all cellular subdomains (i.e. all subdomain but ECS)
+        if tag > 0:
+            mesh_mem = subdomain["mesh_mem"]
 
-    neuron = subdomain_list[1]
-    mesh_g = neuron["mesh_mem"]
-    # create function space over gamma for membrane potential (phi_M)
-    Q = dolfinx.fem.functionspace(mesh_g, ("CG", degree))
-    # previous membrane potential
-    phi_M_prev = {1:dolfinx.fem.Function(Q)}
+            # Create function space over gamma for membrane potential (phi_M)
+            Q = dolfinx.fem.functionspace(mesh_mem, ("CG", degree))
+            # Previous membrane potential
+            phi_M_prev[tag] = dolfinx.fem.Function(Q)
+            phi_M_prev[tag].name = f"phi_M_{tag}"
 
     return phi, phi_M_prev
 
@@ -124,7 +128,7 @@ def initialize_variables(ion_list, subdomain_list, c_prev, physical_params):
             # Add contribution to kappa (tissue conductance)
             kappa_sub += F * ion['z'] * ion['z'] * ion['D'][tag] * psi * c_tag
 
-            # Calculate and set Nernst potential for cells (all subdomains but ECS)
+            # Calculate and set Nernst potential for all cellular subdomains (i.e. all subdomain but ECS)
             if tag > 0:
                 # ECS concentration (ECS is subdomain with tag 0)
                 c_e = ion_list[-1][f'c_0'] if is_last else c_prev[0][idx]
@@ -167,7 +171,7 @@ def get_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting_sc
         # Add contribution of subdomain to equation for potential (drift terms)
         a += inner(kappa[tag] * grad(u), grad(v)) * dx(tag)
 
-        # Add membrane dynamics for each cell (all subdomain but ECS)
+        # Add membrane dynamics for each cellular subdomain (i.e. all subdomain but ECS)
         if tag > 0:
             # ECS and ICS (i.e. current subdomain) shorthands
             u_e = us[0]; u_i = u # trial functions
@@ -205,7 +209,7 @@ def get_rhs(c_prev, vs, dx, dS, ion_list, subdomain_list, physical_params,
             # Add terms rhs (diffusive terms)
             L += - F * ion['z'] * inner((ion['D'][tag])*grad(c_tag), grad(v)) * dx(tag)
 
-        # Add membrane dynamics for each cell (all subdomain but ECS)
+        # Add membrane dynamics for each cellular subdomain (i.e. all subdomain but ECS)
         if tag > 0:
             # ECS and ICS (i.e. current subdomain) shorthands
             v_e = vs[0]; v_i = v # test functions
@@ -247,14 +251,14 @@ def get_rhs_mms(vs, dx, dS, ds, c_prev, ion_list, subdomain_list,
             # Add terms rhs (diffusive terms)
             L += - F * ion['z'] * inner((ion['D'][tag])*grad(c_tag), grad(v)) * dx(tag)
 
-            # Add Neumann term (zero in physiological simulation)
+            # Add Neumann term to ECS subdomain (zero in physiological simulation)
             if tag == 0: L += - F * ion['z'] * dot(ion['J_k_e'], n) * v * ds(5)
 
         # EMI source terms for potentials
         if tag == 0: L += inner(mms['f_phi_e'], v) * dx(tag)
         if tag == 1: L += inner(mms['f_phi_i'], v) * dx(tag)
 
-        # Add membrane dynamics for each cell (all subdomain but ECS)
+        # Add membrane dynamics for each cellular subdomain (i.e. all subdomain but ECS)
         if tag > 0:
             # ECS and ICS (i.e. current subdomain) shorthands
             v_e = vs[0]; v_i = v # test functions
