@@ -330,9 +330,10 @@ def solve_system():
     num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
 
     # Transfer mesh tags from ct to tags for gamma mesh on interface
-    ct_g, _ = scifem.transfer_meshtags_to_submesh(
+    ct_g_1, _ = scifem.transfer_meshtags_to_submesh(
             ft, mesh_mem_1, mem_vertex_to_parent_1, mem_to_parent_1
     )
+
 
     #ct_g = dolfinx.mesh.meshtags(
         #mesh_mem_1, mesh_mem_1.topology.dim, np.arange(num_cells_local, dtype=np.int32), cell_marker
@@ -340,6 +341,8 @@ def solve_system():
 
     # Dictionary with membrane models (key is facet tag, value is ode model)
     ode_models_neuron = {1: mm_hh}
+    ct_g = {1: ct_g_1}
+    Q = {1: phi_M_prev[neuron_tag].function_space}
 
     # Membrane parameters
     g_syn_bar = 10                     # synaptic conductivity (S/m**2)
@@ -351,9 +354,10 @@ def solve_system():
     stim_params = {'g_syn_bar':g_syn_bar, 'stimulus':stimulus,
                    'stimulus_locator':stimulus_locator}
 
+
     mem_models_neuron = setup_membrane_model(
             stim_params, physical_parameters, ode_models_neuron, ct_g,
-            phi_M_prev[neuron_tag].function_space, ion_list
+            Q, ion_list
     )
 
     # Add membrane model to neuron in subdomain list

@@ -163,8 +163,8 @@ def create_rhs(vs, phi, phi_M_prev, c_prev, dx, dS, physical_params, ion_list,
             L += 1.0/dt * c * v * dx(tag)
 
             # Add src terms for ion injection in ECS subdomain
-            if tag == 0:
-                L += ion['f_source'] * v * dx(tag)
+            #if tag == 0:
+                #L += ion['f_source'] * v * dx(tag)
 
             # Add membrane dynamics for each cellular subdomain (i.e. all subdomain but ECS)
             if tag > 0:

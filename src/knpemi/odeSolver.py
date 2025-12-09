@@ -12,6 +12,7 @@ class MembraneModel():
         '''
         assert isinstance(tag, int)
 
+        """
         # get indices for given tag
         indices = ft.find(tag)
         self.indices = indices.flatten()
@@ -23,6 +24,16 @@ class MembraneModel():
         self.dof_locations = Q.tabulate_dof_coordinates()[self.indices]
 
         # number of points where ODEs is to be solved
+        nodes = len(self.indices)
+        self.nodes = nodes
+        """
+
+        # Get location of all degrees of freedom in membrane functionspace
+        self.dof_locations = Q.tabulate_dof_coordinates()
+        # ... and indices for the dofs
+        self.indices = np.arange(len(self.dof_locations))
+
+        # Number of points where ODEs is to be solved (i.e. dofs on membrane)
         nodes = len(self.indices)
         self.nodes = nodes
 

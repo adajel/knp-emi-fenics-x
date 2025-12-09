@@ -90,10 +90,10 @@ if __name__ == "__main__":
     )
     ft.name = "facet_marker"
 
-    # Scale mesh coordinates
+    # Convert mesh from nm to cm
     mesh.geometry.x[:] *= 1e-7
 
-    output_path = "meshes/new_mesh/"
+    output_path = "meshes/remarked_mesh/"
     # Define the output filename
     xdmf_filename = f"{output_path}mesh.xdmf"
 
@@ -105,3 +105,29 @@ if __name__ == "__main__":
         xdmf.write_meshtags(ft, mesh.geometry)
 
     xdmf.close()
+
+
+    # Get the indices of facets with tag value 1
+    tagged_facet_indices = ft.find(1)
+    vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ft.dim, tagged_facet_indices)
+    coordinates = mesh.geometry.x[vertex_indices]
+    print("Coordinates of tagged entities membrane:")
+    print("x_M = ", coordinates[1][1][0])
+    print("y_M = ", coordinates[1][1][1])
+    print("z_M = ", coordinates[1][1][2])
+    print("-----------------------------------")
+    print("M = ", coordinates)
+
+    tagged_facet_indices = ct.find(1)
+    vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ct.dim, tagged_facet_indices)
+    coordinates = mesh.geometry.x[vertex_indices]
+    print("Coordinates of tagged entities ICS:")
+    print(coordinates)
+    print("-----------------------------------")
+
+    tagged_facet_indices = ct.find(0)
+    vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ct.dim, tagged_facet_indices)
+    coordinates = mesh.geometry.x[vertex_indices]
+    print("Coordinates of tagged entities ECS:")
+    print(coordinates)
+    print("-----------------------------------")

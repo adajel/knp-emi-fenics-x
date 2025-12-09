@@ -9,10 +9,10 @@ def init_state_values(**values):
     Initialize state values
     """
     # Init values
-    n_init = 0.17041625484928405
-    m_init = 0.01365600905697864
-    h_init = 0.8804834256821714
-    phi_M_init = -75.93151471235473
+    n_init = 0.1882020248041632         # gating variable n
+    m_init = 0.016648440745822956       # gating variable m
+    h_init = 0.8542015627820805         # gating variable h
+    phi_M_init = -74.38609374462003   # membrane potential (V)
 
     init_values = np.array([m_init, h_init, n_init, phi_M_init], dtype=np.float64)
 
@@ -35,14 +35,16 @@ def init_parameter_values(**values):
     """
 
     # Membrane parameters
+
+    # Membrane parameters
     g_Na_bar = 120          # Na max conductivity (mS/cm**2)
     g_K_bar = 36            # K max conductivity (mS/cm**2)
     g_leak_Na = 0.1         # Na leak conductivity (mS/cm**2)
     g_leak_K  = 0.4         # K leak conductivity (mS/cm**2)
 
-    m_K = 1.5               # threshold ECS K (mol/cm**3)
-    m_Na = 10               # threshold ICS Na (mol/cm**3)
-    I_max = 58.0            # max pump strength (A/cm**2)
+    m_K = 2                 # threshold ECS K (mol/cm**3)
+    m_Na = 7.7              # threshold ICS Na (mol/cm**3)
+    I_max = 44.9            # max pump strength (A/cm**2)
 
     # Set initial parameter values
     init_values = np.array([g_Na_bar, g_K_bar,
@@ -153,36 +155,26 @@ def rhs_numba(t, states, values, parameters):
     z_Cl = parameters[20]
     psi = parameters[21]
 
-    K_e = 3.092970607490389
-    K_i = 124.13988964240784
-    Na_e = 144.60625137617149
-    Na_i = 12.850454639128186
-    Cl_e = 133.62525154406637
-    Cl_i = 5.0
-
     E_Na = 1/psi * 1/z_K * math.log(Na_e/Na_i)
     E_K = 1/psi * 1/z_K * math.log(K_e/K_i)
 
-    alpha_m = 0.1 * (states[3] + 40.0)/(1.0 - math.exp(-(states[3] + 40.0) / 10.0))
-    beta_m = 4.0 * math.exp(-(states[3] + 65.0) / 18.0)
-
-    alpha_h = 0.07 * math.exp(-(states[3] + 65.0) / 20.0)
-    beta_h = 1.0 / (1.0 + math.exp(-(states[3] + 35.0) / 10.0))
-
-    alpha_n = 0.01 * (states[3] + 55.0)/(1.0 - math.exp(-(states[3] + 55.0) / 10.0))
-    beta_n = 0.125 * math.exp(-(states[3] + 65) / 80.0)
-
     # Expressions for the m gate component
+    alpha_m = 0.1 * (25. - (states[3] + 65.0))/(math.exp((25. - 1.0*(states[3] + 65.0))/10.) - 1)
+    beta_m = 4.0 * math.exp(- (states[3] + 65.0)/18.)
     values[0] = (1 - states[0])*alpha_m - states[0]*beta_m
 
     # Expressions for the h gate component
+    alpha_h = 0.07 * math.exp(- (states[3] + 65.0) / 20.)
+    beta_h = 1.0 / (math.exp((30.0 - (states[3] + 65.0)) / 10.) + 1)
     values[1] = (1 - states[1])*alpha_h - states[1]*beta_h
 
     # Expressions for the n gate component
+    alpha_n = 0.01 * (10.0 - (states[3] + 65.0))/(math.exp((10.0 - (states[3] + 65.0))/10.) - 1.)
+    beta_n = 0.125 * math.exp(- (states[3] + 65.0) / 80.0)
     values[2] = (1 - states[2])*alpha_n - states[2]*beta_n
 
     # Expressions for the Membrane component
-    i_Stim = stim_amplitude * np.exp(-np.mod(t, 0.03)/0.002)*(t < 125e-3)
+    i_Stim = stim_amplitude * np.exp(-np.mod(t, 30.0)/2.0)*(t < 125)
 
     i_pump = I_max / ((1 + m_K / K_e) ** 2 * (1 + m_Na / Na_i) ** 3)
 
