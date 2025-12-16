@@ -19,11 +19,20 @@ from ufl import (
         ln,
 )
 
+from memory_profiler import profile
+
 i_res = "-"
 e_res = "+"
 
 comm = MPI.COMM_WORLD
 
+@profile
+def solve_emi(problem_emi):
+    problem_emi.solve()
+
+@profile
+def solve_knp(problem_knp):
+    problem_knp.solve()
 
 def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list,
         subdomain_list, mesh, ct, tag, k):
@@ -194,6 +203,7 @@ def read_mesh(mesh_file):
     return mesh, ct, ft
 
 
+@profile
 def solve_system():
     """ Solve system (PDEs and ODEs) """
     # Read mesh and create sub-meshes for extra and intracellular domains and
@@ -231,7 +241,7 @@ def solve_system():
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
 
     dt = 0.1                            # global time step (ms)
-    Tstop = 5                           # global end time (ms)
+    Tstop = 10                          # global end time (ms)
     n_steps_ODE = 25                    # number of ODE steps
 
     # Physical parameters
@@ -417,8 +427,10 @@ def solve_system():
             )
 
         # Solve PDEs
-        problem_emi.solve()
-        problem_knp.solve()
+        #problem_emi.solve()
+        #problem_knp.solve()
+        solve_emi(problem_emi)
+        solve_knp(problem_knp)
 
         update_pde_variables(
                 c, c_prev, phi, phi_M_prev, physical_parameters,

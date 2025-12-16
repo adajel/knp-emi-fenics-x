@@ -18,8 +18,9 @@ def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm, bcs=None):
 
     # Extract extra and intracellular concentrations
     u = []
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    #for subdomain in subdomain_list:
+    for tag, subdomain in subdomain_list.items():
+        #tag = subdomain['tag']
         u.append(phi[tag])
 
     # Extract extra and intracellular potentials
@@ -61,8 +62,8 @@ def create_solver_knp(a, L, c, entity_maps, subdomain_list, bcs=None):
 
     # Extract extra and intracellular concentrations
     u = []
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
+        #tag = subdomain['tag']
         u += c[tag]
 
     # Extract extra and intracellular potentials

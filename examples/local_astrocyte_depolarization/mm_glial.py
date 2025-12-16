@@ -10,7 +10,7 @@ def init_state_values(**values):
     # Init values
     phi_M_init = -85.85765274084892
 
-    init_values = np.array([phi_M_init], dtype=np.float_)
+    init_values = np.array([phi_M_init], dtype=np.float64)
 
     # State indices and limit checker
     state_ind = dict([("V", 0)])
@@ -43,18 +43,30 @@ def init_parameter_values(**values):
     K_i_init = 99.3100014897692
 
     # Set initial parameter values
-    init_values = np.array([g_leak_Cl, g_leak_Na, g_leak_K, \
-                            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                            m_K, m_Na, I_max, K_e_init, K_i_init], dtype=np.float_)
+    init_values = np.array([g_leak_Cl, g_leak_Na, g_leak_K,
+                            0, 0, 0,
+                            0, 0,
+                            0, 0, 0,
+                            0, 0,
+                            m_K, m_Na, I_max,
+                            K_e_init, K_i_init,
+                            0, 0, 0, 0, 0, 0,
+                            0, 0, 0,
+                            0],
+                            dtype=np.float64)
 
     # Parameter indices and limit checker
-    param_ind = dict([("g_leak_Cl", 0), ("g_leak_Na", 1), ("g_leak_K", 2), \
-                      ("E_Cl", 3), ("E_Na", 4), ("E_K", 5), \
-                      ("Cm", 6), ("stim_amplitude", 7), \
-                      ("I_ch_Na", 8), ("I_ch_K", 9), ("I_ch_Cl", 10), \
-                      ("K_e", 11), ("Na_i", 12), \
-                      ("m_K", 13), ("m_Na", 14), ("I_max", 15), \
-                      ("K_e_init", 16), ("K_i_init", 17)])
+    param_ind = dict([("g_leak_Cl", 0), ("g_leak_Na", 1), ("g_leak_K", 2),
+                      ("E_Cl", 3), ("E_Na", 4), ("E_K", 5),
+                      ("Cm", 6), ("stim_amplitude", 7),
+                      ("I_ch_Na", 8), ("I_ch_K", 9), ("I_ch_Cl", 10),
+                      ("m_K", 11), ("m_Na", 12), ("I_max", 13),
+                      ("K_e_init", 14), ("K_i_init", 15),
+                      ("K_e", 16), ("K_i", 17),
+                      ("Na_e", 18), ("Na_i", 19),
+                      ("Cl_e", 20), ("Cl_i", 21),
+                      ("z_Na", 22), ("z_K", 23), ("z_Cl", 24),
+                      ("psi", 25)])
 
     for param_name, value in values.items():
         if param_name not in param_ind:
@@ -86,13 +98,17 @@ def parameter_indices(*params):
     """
     Parameter indices
     """
-    param_inds = dict([("g_leak_Cl", 0), ("g_leak_Na", 1), ("g_leak_K", 2), \
-                       ("E_Cl", 3), ("E_Na", 4), ("E_K", 5), \
-                       ("Cm", 6), ("stim_amplitude", 7), \
-                       ("I_ch_Na", 8), ("I_ch_K", 9), ("I_ch_Cl", 10), \
-                       ("K_e", 11), ("Na_i", 12), \
-                       ("m_K", 13), ("m_Na", 14), ("I_max", 15), \
-                       ("K_e_init", 16), ("K_i_init", 17)])
+    param_inds = dict([("g_leak_Cl", 0), ("g_leak_Na", 1), ("g_leak_K", 2),
+                       ("E_Cl", 3), ("E_Na", 4), ("E_K", 5),
+                       ("Cm", 6), ("stim_amplitude", 7),
+                       ("I_ch_Na", 8), ("I_ch_K", 9), ("I_ch_Cl", 10),
+                       ("m_K", 11), ("m_Na", 12), ("I_max", 13),
+                       ("K_e_init", 14), ("K_i_init", 15),
+                       ("K_e", 16), ("K_i", 17),
+                       ("Na_e", 18), ("Na_i", 19),
+                       ("Cl_e", 20), ("Cl_i", 21),
+                       ("z_Na", 22), ("z_K", 23), ("z_Cl", 24),
+                       ("psi", 25)])
 
     indices = []
     for param in params:
@@ -125,7 +141,7 @@ def rhs_numba(t, states, values, parameters):
 
     # # Init return args
     # if values is None:
-    #     values = np.zeros((4,), dtype=np.float_)
+    #     values = np.zeros((4,), dtype=np.float64)
     # else:
     #     assert isinstance(values, np.ndarray) and values.shape == (4,)
     #
@@ -141,13 +157,21 @@ def rhs_numba(t, states, values, parameters):
     I_ch_Na = parameters[8]
     I_ch_K = parameters[9]
     I_ch_Cl = parameters[10]
-    K_e = parameters[11]
-    Na_i = parameters [12]
-    m_K = parameters[13]
-    m_Na = parameters[14]
-    I_max = parameters[15]
-    K_e_init = parameters[16]
-    K_i_init = parameters[17]
+    m_K = parameters[11]
+    m_Na = parameters[12]
+    I_max = parameters[13]
+    K_e_init = parameters[14]
+    K_i_init = parameters[15]
+    K_e = parameters[16]
+    K_i = parameters[17]
+    Na_e = parameters[18]
+    Na_i = parameters[19]
+    Cl_e = parameters[20]
+    Cl_i = parameters[21]
+    z_Na = parameters[22]
+    z_K = parameters[23]
+    z_Cl = parameters[24]
+    psi = parameters[25]
 
     # Physical parameters (PDEs)
     temperature = 307e3            # temperature (m K)

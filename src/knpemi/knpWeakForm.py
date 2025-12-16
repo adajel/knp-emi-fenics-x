@@ -25,9 +25,9 @@ def create_measures(mesh, ct, ft):
 
     # Get interface/membrane tags
     gamma_tags = np.unique(ft.values)
-    dS = {}
 
     # Define measures on membrane interface gamma
+    dS = {}
     for tag in gamma_tags:
         ordered_integration_data = scifem.compute_interface_data(ct, ft.find(tag))
         # Define measure for tag
@@ -54,10 +54,9 @@ def create_functions_knp(subdomain_list, ion_list, degree=1):
     c = {}
     c_prev = {}
 
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
         mesh = subdomain['mesh_sub']
-        # List of functionspaces for each concentration in the subdomain
+        # List of functionspaces for each ion in the current subdomain
         V = dolfinx.fem.functionspace(mesh, ("CG", degree))
         V_list = [V.clone() for _ in range(N_ions)]
 
@@ -85,38 +84,37 @@ def initialize_variables(ion_list, subdomain_list, c_prev):
         I_ch for each cell (all subdomains but ECS) and each membrane model """
     # Calculate sum of alpha for each subdomain
     alpha_sum = {}
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
         # Initialize sum for current tag
-        alpha_sum_sub = 0
+        alpha_sum_tag = 0
 
         for idx, ion in enumerate(ion_list):
             # Determine the function source based on the index
             is_last = (idx == len(ion_list) - 1)
             c_tag = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
             # Update alpha sum
-            alpha_sum_sub += ion['D'][tag] * ion['z'] * ion['z'] * c_tag
+            alpha_sum_tag += ion['D'][tag] * ion['z'] * ion['z'] * c_tag
 
         # Set alpha sum in dictionary
-        alpha_sum[tag] = alpha_sum_sub
+        alpha_sum[tag] = alpha_sum_tag
 
     # Calculate sum of ion specific channel currents for each cell (all
     # subdomain but the ECS) and each membrane model
     I_ch = {}
-    for subdomain in subdomain_list[1:]:
-        tag = subdomain['tag']
-        mem_models = subdomain['mem_models']
-        I_ch_tag = [0]*len(mem_models)
+    for tag, subdomain in subdomain_list.items():
+        if tag > 0:
+            # Get list of membrane models for the current subdomain
+            mem_models = subdomain['mem_models']
 
-        # Loop though membrane models to set total ionic current
-        for jdx, mm in enumerate(mem_models):
-            # loop through ion species
-            for key, value in mm['I_ch_k'].items():
-                # update total channel current for each tag
-                I_ch_tag[jdx] += mm['I_ch_k'][key]
+            # Calculate the total ionic channel current (I_ch_tag) for each membrane model
+            # I_ch_tag[jdx] = sum of all 'I_ch_k' values (ion species currents)
+            I_ch_tag = [
+                sum(mm['I_ch_k'].values())
+                for mm in mem_models
+            ]
 
-        # Set I_ch sum in dictionary
-        I_ch[tag] = I_ch_tag
+            # Set I_ch sum in dictionary
+            I_ch[tag] = I_ch_tag
 
     return alpha_sum, I_ch
 
@@ -127,8 +125,8 @@ def create_lhs(us, vs, phi, dx, ion_list, subdomain_list, physical_params, dt):
     psi = physical_params['psi']
     # Initialize form
     a = 0
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    # Add contribution from each subdomain and each ion species
+    for tag, subdomain in subdomain_list.items():
         for idx, ion in enumerate(ion_list[:-1]):
             # Get trial and test functions
             u = us[tag][idx]; v = vs[tag][idx]
@@ -152,8 +150,7 @@ def create_rhs(vs, phi, phi_M_prev, c_prev, dx, dS, physical_params, ion_list,
 
     # Initialize form
     L = 0
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
         for idx, ion in enumerate(ion_list[:-1]):
             # Shorthands
             v = vs[tag][idx]     # test function
@@ -220,8 +217,7 @@ def get_rhs_mms(vs, ion_list, subdomain_list, mms, dt, c_prev, phi, dx, dS, ds, 
     """ Get right hand side of variational form for KNP system for MMS test """
     # Initialize form
     L = 0
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
         for idx, ion in enumerate(ion_list[:-1]):
             # get test functions
             v = vs[tag][idx]
@@ -271,7 +267,7 @@ def get_rhs_mms(vs, ion_list, subdomain_list, mms, dt, c_prev, phi, dx, dS, ds, 
 
     return L
 
-def knp_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_models,
+def knp_system(mesh, ct, ft, physical_params, ion_list, subdomain_list,
         phi, phi_M_prev, c, c_prev, dt, degree=1, splitting_scheme=True,
         mms=None):
     """ Create and return EMI weak formulation """
@@ -284,30 +280,26 @@ def knp_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
     # Number of ions to solve for
     N_ions = len(ion_list[:-1])
 
-    # Create function-space for each subdomain
-    V_list_total = []
-
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
-        # List with function spaces of all ions in subdomain tagged with tag
-        V_list = [c[tag][i].function_space for i in range(N_ions)]
-        V_list_total += V_list
+    # Create list with one function space for each ion in each subdomain
+    V_list = []
+    for tag, subdomain in subdomain_list.items():
+        V_list += [c[tag][i].function_space for i in range(N_ions)]
 
     # Create mixed space (for each ion in each subspace)
-    W = MixedFunctionSpace(*V_list_total)
+    W = MixedFunctionSpace(*V_list)
 
     # Create trial and test functions
-    us = TrialFunctions(W)
-    vs = TestFunctions(W)
+    us_ = TrialFunctions(W)
+    vs_ = TestFunctions(W)
 
     # Reorganize test and trial functions: get one list of (trial or test)
-    # functions for ions for each subdomain (ECS and cells) and insert into 
-    # dictionary with cell tag as key
-    u = {}; v = {}
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
-        u[tag] = us[tag * N_ions:(tag + 1) * N_ions]
-        v[tag] = vs[tag * N_ions:(tag + 1) * N_ions]
+    # functions for each ion for each subdomain (ECS and cells) and insert 
+    # into dictionary with cell tag as key
+    us = {}
+    vs = {}
+    for idx, (tag, subdomain) in enumerate(subdomain_list.items()):
+        us[tag] = us_[idx * N_ions:(idx + 1) * N_ions]
+        vs[tag] = vs_[idx * N_ions:(idx + 1) * N_ions]
 
     # Create measures and facet normal
     dx, dS, ds = create_measures(mesh, ct, ft)
@@ -318,20 +310,22 @@ def knp_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
 
     # Create left hand side knp system
     a = create_lhs(
-            u, v, phi, dx, ion_list, subdomain_list, physical_params, dt)
+            us, vs, phi, dx, ion_list, subdomain_list, physical_params, dt
+    )
 
     # We take the preconditioner to be the system itself (P=A).
     p = a
 
     # Create right hand side knp system
-    L = create_rhs(v, phi, phi_M_prev, c_prev, dx, dS, physical_params,
-            ion_list, subdomain_list, I_ch, alpha_sum, dt, splitting_scheme,
+    L = create_rhs(
+            vs, phi, phi_M_prev, c_prev, dx, dS, physical_params, ion_list,
+            subdomain_list, I_ch, alpha_sum, dt, splitting_scheme
     )
 
     # Add terms specific to mms test
     if MMS_FLAG:
         L = get_rhs_mms(
-            v, ion_list, subdomain_list, mms, dt, c_prev, phi, dx, dS, ds, n,
+            vs, ion_list, subdomain_list, mms, dt, c_prev, phi, dx, dS, ds, n
         )
 
         return a, p, L, dx

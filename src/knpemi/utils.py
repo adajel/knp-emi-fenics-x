@@ -6,8 +6,8 @@ from knpemi.odeSolver import MembraneModel
 
 def set_initial_conditions(ion_list, subdomain_list, c_prev):
     """ Set initial conditions given by constants """
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
+        #tag = subdomain['tag']
         for idx, ion in enumerate(ion_list):
             # Determine the target objects (c_e and c_i) based on the ion's index
             is_last = (idx == len(ion_list) - 1)
@@ -25,8 +25,6 @@ def setup_membrane_model(stim_params, physical_params, ode_models, ct, Q,
     """ Initiate membrane model(s) containing membrane mechanisms (passive
         dynamics / ODEs) and src terms for PDE system """
 
-    assert set(ct.keys()) == set(Q.keys()) == set(ode_models.keys())
-
     # Set membrane (ODE) stimuli parameters
     stimulus = stim_params["stimulus"]
     stimulus_locator = stim_params["stimulus_locator"]
@@ -36,9 +34,6 @@ def setup_membrane_model(stim_params, physical_params, ode_models, ct, Q,
 
     # initialize and append ode models to list
     for tag_sub, ode in ode_models.items():
-
-        ct = ct[tag_sub]
-        Q = Q[tag_sub]
 
         # Initialize ODE model
         ode_model = MembraneModel(ode, ct, tag_sub, Q)

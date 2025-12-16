@@ -60,10 +60,8 @@ def create_functions_emi(subdomain_list, degree=1):
     phi = {}
     phi_M_prev = {}
 
-    for subdomain in subdomain_list:
-        tag = subdomain["tag"]
+    for tag, subdomain in subdomain_list.items():
         mesh_sub = subdomain["mesh_sub"]
-
         # Create local functionspace for local potential ..
         V = dolfinx.fem.functionspace(mesh_sub, ("CG", degree))
         # ... and create and name function for local potential.
@@ -91,8 +89,8 @@ def initialize_variables(ion_list, subdomain_list, c_prev, physical_params):
 
     # Initialize dictionary
     kappa = {}
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
+        #tag = subdomain['tag']
         # Initialize kappa for each subdomain
         kappa_sub = 0
         # For each ion ...
@@ -117,20 +115,22 @@ def initialize_variables(ion_list, subdomain_list, c_prev, physical_params):
     # Calculate sum of ion specific channel currents for each cell (all
     # subdomain but the ECS) and each membrane model
     I_ch = {}
-    for subdomain in subdomain_list[1:]:
-        tag = subdomain['tag']
-        mem_models = subdomain['mem_models']
-        I_ch_tag = [0]*len(mem_models)
+    for tag, subdomain in subdomain_list.items():
+        if tag > 0:
+            #tag = subdomain['tag']
 
-        # Loop though membrane models to set total ionic current
-        for jdx, mm in enumerate(mem_models):
-            # loop through ion species
-            for key, value in mm['I_ch_k'].items():
-                # update total channel current for each tag
-                I_ch_tag[jdx] += mm['I_ch_k'][key]
+            mem_models = subdomain['mem_models']
+            I_ch_tag = [0]*len(mem_models)
 
-        # Set I_ch sum in dictionary
-        I_ch[tag] = I_ch_tag
+            # Loop though membrane models to set total ionic current
+            for jdx, mm in enumerate(mem_models):
+                # loop through ion species
+                for key, value in mm['I_ch_k'].items():
+                    # update total channel current for each tag
+                    I_ch_tag[jdx] += mm['I_ch_k'][key]
+
+            # Set I_ch sum in dictionary
+            I_ch[tag] = I_ch_tag
 
     return kappa, I_ch
 
@@ -139,8 +139,8 @@ def create_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting
     """ Setup left hand side of the variational form for the emi system """
     C_phi = physical_params['C_phi']
     a = 0
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
+        #tag = subdomain['tag']
         # Get test and trial functions
         u = us[tag]; v = vs[tag]
 
@@ -169,8 +169,8 @@ def create_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting
 def create_prec(us, vs, dx, subdomain_list, kappa):
     """ Get preconditioner """
     p = 0
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
+        #tag = subdomain['tag']
         # Get test and trial functions
         u = us[tag]; v = vs[tag]
         p += kappa[tag] *  inner(grad(u), grad(v)) * dx(tag)
@@ -188,8 +188,8 @@ def create_rhs(c_prev, vs, dx, dS, ion_list, subdomain_list, physical_params,
     C_phi = physical_params['C_phi']
     F = physical_params['F']
     L = 0
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
+        #tag = subdomain['tag']
         v = vs[tag]
         for idx, ion in enumerate(ion_list):
             # Determine the function source based on the index
@@ -230,8 +230,8 @@ def create_rhs_mms(vs, dx, dS, ds, c_prev, ion_list, subdomain_list,
     C_phi = physical_params['C_phi']
     F = physical_params['F']
     L = 0
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
+        #tag = subdomain['tag']
         v = vs[tag]
         for idx, ion in enumerate(ion_list):
             # Determine the function source based on the index
@@ -267,7 +267,7 @@ def create_rhs_mms(vs, dx, dS, ds, c_prev, ion_list, subdomain_list,
 
     return L
 
-def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_models,
+def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list,
         phi, phi_M_prev, c_prev, dt, degree=1, splitting_scheme=True, mms=None):
     """ Create and return EMI weak formulation """
 
@@ -278,22 +278,29 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
 
     # Create function-space for each subdomain
     Vs = []
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
+        #tag = subdomain['tag']
         V = phi[tag].function_space
         Vs.append(V)
 
     # Create mixed function space for potentials (phi)
     W = MixedFunctionSpace(*Vs)
     # Create trial and test functions
-    us = TrialFunctions(W)
-    vs = TestFunctions(W)
-
-    u = {}; v = {}
+    us_ = TrialFunctions(W)
+    vs_ = TestFunctions(W)
 
     # Add test and trial function to dictionary with subdomain tags as keys
-    for tag, u_ in enumerate(us): u[tag] = u_
-    for tag, v_ in enumerate(vs): v[tag] = v_
+    us = {}; vs = {}
+    idx = 0
+    for tag, subdomain in subdomain_list.items():
+        #tag = subdomain['tag']
+        us[tag] = us_[idx]
+        vs[tag] = vs_[idx]
+        idx += 1
+
+    # Add test and trial function to dictionary with subdomain tags as keys
+    #for tag, u_ in enumerate(us): u[tag] = u_
+    #for tag, v_ in enumerate(vs): v[tag] = v_
 
     # Create measures and facet normal
     dx, dS, ds = create_measures(mesh, ct, ft)
@@ -306,23 +313,23 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list, mem_mode
 
     # Create standard variational formulation
     a = create_lhs(
-            u, v, dx, dS, subdomain_list, physical_params, kappa, splitting_scheme
+            us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting_scheme
     )
 
     # Create preconditioner
     p = create_prec(
-            u, v, dx, subdomain_list, kappa
+            us, vs, dx, subdomain_list, kappa
     )
 
     L = create_rhs(
-            c_prev, v, dx, dS, ion_list, subdomain_list, physical_params,
+            c_prev, vs, dx, dS, ion_list, subdomain_list, physical_params,
             phi_M_prev, I_ch, splitting_scheme
     )
 
     # add terms specific to mms test
     if MMS_FLAG:
         L = create_rhs_mms(
-                v, dx, dS, ds, c_prev, ion_list, subdomain_list, 
+                vs, dx, dS, ds, c_prev, ion_list, subdomain_list, 
                 physical_params, dt, n, mms
         )
 

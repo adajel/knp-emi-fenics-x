@@ -182,7 +182,7 @@ def rhs_numba(t, states, values, parameters):
     values[2] = (1 - states[2])*alpha_n - states[2]*beta_n
 
     # Expressions for the Membrane component
-    i_Stim = stim_amplitude * np.exp(-np.mod(t, 0.03)/0.002)*(t < 125e-3)
+    i_Stim = stim_amplitude * np.exp(-np.mod(t, 30.0)/2.0)*(t < 125)
 
     i_pump = I_max / ((1 + m_K / K_e) ** 2 * (1 + m_Na / Na_i) ** 3)
 

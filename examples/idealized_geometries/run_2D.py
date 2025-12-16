@@ -60,8 +60,7 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
     psi = physical_parameters['psi']
     rho = physical_parameters['rho']
 
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
         # Add contribution from immobile ions to eliminated ion
         c_elim_sum = - (1.0 / ion_list[-1]['z']) * rho[tag]
 
@@ -142,31 +141,31 @@ def solve_odes(mem_models, c_prev, phi_M_prev, ion_list, stim_params, dt,
     """ Solve ODEs (membrane models) for each membrane tag in each subdomain """
 
     # Solve ODEs for all cells (i.e. all subdomains but the ECS)
-    for subdomain in subdomain_list[1:]:
-        # Get tag and membrane potential
-        tag = subdomain['tag']
-        phi_M_prev_sub = phi_M_prev[tag]
-        for mem_model in subdomain['mem_models']:
-            # Update ODE variables based on PDE output
-            ode_model = mem_model['ode']
-            update_ode_variables(
-                ode_model, c_prev, phi_M_prev_sub, ion_list, subdomain_list,
-                mesh, ct, tag, k
-            )
+    for tag, subdomain in subdomain_list.items():
+        if tag > 0:
+            # Get membrane potential
+            phi_M_prev_sub = phi_M_prev[tag]
+            for mem_model in subdomain['mem_models']:
+                # Update ODE variables based on PDE output
+                ode_model = mem_model['ode']
+                update_ode_variables(
+                    ode_model, c_prev, phi_M_prev_sub, ion_list, subdomain_list,
+                    mesh, ct, tag, k
+                )
 
-            # Solve ODEs
-            ode_model.step_lsoda(
-                    dt=dt,
-                    stimulus=stim_params['stimulus'],
-                    stimulus_locator=stim_params['stimulus_locator']
-            )
+                # Solve ODEs
+                ode_model.step_lsoda(
+                        dt=dt,
+                        stimulus=stim_params['stimulus'],
+                        stimulus_locator=stim_params['stimulus_locator']
+                )
 
-            # Update PDE variables based on ODE output
-            ode_model.get_membrane_potential(phi_M_prev_sub)
+                # Update PDE variables based on ODE output
+                ode_model.get_membrane_potential(phi_M_prev_sub)
 
-            # Update src terms for next PDE step based on ODE output
-            for ion, I_ch_k in mem_model['I_ch_k'].items():
-                ode_model.get_parameter("I_ch_" + ion, I_ch_k)
+                # Update src terms for next PDE step based on ODE output
+                for ion, I_ch_k in mem_model['I_ch_k'].items():
+                    ode_model.get_parameter("I_ch_" + ion, I_ch_k)
 
     return
 
@@ -211,21 +210,19 @@ def solve_system():
     mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, neuron_tag)
 
     # Create subdomains (extracellular space and cells)
-    ECS = {"tag":ECS_tag,
-           "name":"ECS",
+    ECS = {"name":"ECS",
            "mesh_sub":mesh_sub_0,
            "sub_to_parent":sub_to_parent_0,
            "sub_vertex_to_parent":sub_vertex_to_parent_0}
 
-    neuron = {"tag":neuron_tag,
-              "name":"neuron",
+    neuron = {"name":"neuron",
               "mesh_sub":mesh_sub_1,
               "sub_to_parent":sub_to_parent_1,
               "sub_vertex_to_parent":sub_vertex_to_parent_1,
               "mesh_mem":mesh_mem_1,
               "mem_to_parent":mem_to_parent_1}
 
-    subdomain_list = [ECS, neuron]
+    subdomain_list = {ECS_tag:ECS, neuron_tag:neuron}
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -354,10 +351,9 @@ def solve_system():
     stim_params = {'g_syn_bar':g_syn_bar, 'stimulus':stimulus,
                    'stimulus_locator':stimulus_locator}
 
-
     mem_models_neuron = setup_membrane_model(
-            stim_params, physical_parameters, ode_models_neuron, ct_g,
-            Q, ion_list
+            stim_params, physical_parameters, ode_models_neuron,
+            ct_g[neuron_tag], Q[neuron_tag], ion_list
     )
 
     # Add membrane model to neuron in subdomain list
@@ -366,13 +362,13 @@ def solve_system():
     # Create variational form emi problem
     a_emi, p_emi, L_emi = emi_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
-            mem_models_neuron, phi, phi_M_prev, c_prev, dt,
+            phi, phi_M_prev, c_prev, dt,
     )
 
     # Create variational form knp problem
     a_knp, p_knp, L_knp = knp_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
-            mem_models_neuron, phi, phi_M_prev, c, c_prev, dt,
+            phi, phi_M_prev, c, c_prev, dt,
     )
 
     # Specify entity maps for each sub-mesh to ensure correct assembly
@@ -393,8 +389,7 @@ def solve_system():
     fname_bp_sub = {}; fname_bp_mem = {}
 
     # Create files (XDMF and checkpoint) for saving results
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
         xdmf = dolfinx.io.XDMFFile(comm, f"results/2D/results_sub_{tag}.xdmf", "w")
         xdmf.write_mesh(subdomain['mesh_sub'])
         adios4dolfinx.write_mesh(f"results/2D/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
@@ -431,8 +426,7 @@ def solve_system():
         t.value = float(t + dt)
 
         # Write results to file
-        for subdomain in subdomain_list:
-            tag = subdomain['tag']
+        for tag, subdomain in subdomain_list.items():
             # concentrations and potentials from previous time step to file
             write_to_file_sub(xdmf_sub[tag], fname_bp_sub[tag], tag, phi, c, ion_list, t)
             # membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
@@ -440,8 +434,7 @@ def solve_system():
                 write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, phi_M_prev, t)
 
     # Close XDMF files
-    for subdomain in subdomain_list:
-        tag = subdomain['tag']
+    for tag, subdomain in subdomain_list.items():
         xdmf_sub[tag].close()
         if tag > 0:
             xdmf_mem[tag].close()

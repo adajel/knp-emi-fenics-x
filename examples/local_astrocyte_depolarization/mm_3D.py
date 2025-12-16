@@ -159,13 +159,13 @@ def rhs_numba(t, states, values, parameters):
     E_K = 1/psi * 1/z_K * math.log(K_e/K_i)
 
     # Expressions for the m gate component
-    alpha_m = 0.1 * (25. - (states[3] + 65.0))/(math.exp((25. - 1.0*(states[3] + 65.0))/10.) - 1)
-    beta_m = 4.0 * math.exp(- (states[3] + 65.0)/18.)
+    alpha_m = 0.1 * (25.0 - (states[3] + 65.0))/(math.exp((25.0 - 1.0*(states[3] + 65.0))/10.0) - 1)
+    beta_m = 4.0 * math.exp(- (states[3] + 65.0)/18.0)
     values[0] = (1 - states[0])*alpha_m - states[0]*beta_m
 
     # Expressions for the h gate component
-    alpha_h = 0.07 * math.exp(- (states[3] + 65.0) / 20.)
-    beta_h = 1.0 / (math.exp((30.0 - (states[3] + 65.0)) / 10.) + 1)
+    alpha_h = 0.07 * math.exp(- (states[3] + 65.0) / 20.0)
+    beta_h = 1.0 / (math.exp((30.0 - (states[3] + 65.0)) / 10.0) + 1)
     values[1] = (1 - states[1])*alpha_h - states[1]*beta_h
 
     # Expressions for the n gate component
