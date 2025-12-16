@@ -398,7 +398,7 @@ def solve_system():
     stimulus_locator = lambda x: (x[0] < 20e-4)
 
     # Set membrane parameters
-    stim_params = {'g_syn_bar':g_syn_bar, 'stimulus':stimulus,
+    stim_params = {'stimulus':stimulus,
                    'stimulus_locator':stimulus_locator}
 
     # TODO: make clearer, better design?

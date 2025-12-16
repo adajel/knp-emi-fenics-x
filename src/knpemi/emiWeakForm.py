@@ -277,30 +277,21 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list,
     if MMS_FLAG: splitting_scheme = False
 
     # Create function-space for each subdomain
-    Vs = []
+    V_list = []
     for tag, subdomain in subdomain_list.items():
-        #tag = subdomain['tag']
-        V = phi[tag].function_space
-        Vs.append(V)
+        V_list.append(phi[tag].function_space)
 
     # Create mixed function space for potentials (phi)
-    W = MixedFunctionSpace(*Vs)
+    W = MixedFunctionSpace(*V_list)
     # Create trial and test functions
     us_ = TrialFunctions(W)
     vs_ = TestFunctions(W)
 
     # Add test and trial function to dictionary with subdomain tags as keys
     us = {}; vs = {}
-    idx = 0
-    for tag, subdomain in subdomain_list.items():
-        #tag = subdomain['tag']
+    for idx, (tag, subdomain) in enumerate(subdomain_list.items()):
         us[tag] = us_[idx]
         vs[tag] = vs_[idx]
-        idx += 1
-
-    # Add test and trial function to dictionary with subdomain tags as keys
-    #for tag, u_ in enumerate(us): u[tag] = u_
-    #for tag, v_ in enumerate(vs): v[tag] = v_
 
     # Create measures and facet normal
     dx, dS, ds = create_measures(mesh, ct, ft)

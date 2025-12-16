@@ -62,7 +62,7 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
 
     for tag, subdomain in subdomain_list.items():
         # Add contribution from immobile ions to eliminated ion
-        c_elim_sum = - (1.0 / ion_list[-1]['z']) * rho[tag]
+        c_elim_sum = - (1.0 / ion_list[-1]['z']) * rho['z'] * rho[tag]
 
         for idx, ion in enumerate(ion_list[:-1]):
             # Update previous concentration and scatter forward
@@ -251,7 +251,9 @@ def solve_system():
     Cl_i_init = Na_i_init + K_i_init    # intracellular CL concentration
 
     # set background charge (no background charge in this scenario)
-    rho = {0:dolfinx.fem.Constant(mesh_sub_0, 0.0),
+    rho_z = -1
+    rho = {'z': rho_z,
+           0:dolfinx.fem.Constant(mesh_sub_0, 0.0),
            1:dolfinx.fem.Constant(mesh_sub_1, 0.0)}
 
     # Set parameters
@@ -348,7 +350,7 @@ def solve_system():
     stimulus_locator = lambda x: (x[0] < 20e-6)
 
     # Set membrane parameters
-    stim_params = {'g_syn_bar':g_syn_bar, 'stimulus':stimulus,
+    stim_params = {'stimulus':stimulus,
                    'stimulus_locator':stimulus_locator}
 
     mem_models_neuron = setup_membrane_model(

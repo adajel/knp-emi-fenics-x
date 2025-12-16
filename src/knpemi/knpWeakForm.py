@@ -295,8 +295,7 @@ def knp_system(mesh, ct, ft, physical_params, ion_list, subdomain_list,
     # Reorganize test and trial functions: get one list of (trial or test)
     # functions for each ion for each subdomain (ECS and cells) and insert 
     # into dictionary with cell tag as key
-    us = {}
-    vs = {}
+    us = {}; vs = {}
     for idx, (tag, subdomain) in enumerate(subdomain_list.items()):
         us[tag] = us_[idx * N_ions:(idx + 1) * N_ions]
         vs[tag] = vs_[idx * N_ions:(idx + 1) * N_ions]
