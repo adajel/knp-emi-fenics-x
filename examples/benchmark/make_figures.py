@@ -199,6 +199,6 @@ if not os.path.isdir('results/3D'):
 
 # create figures
 dt = 0.1
-T = 10
+T = 5
 
 plot_3D_concentration(dt, T)

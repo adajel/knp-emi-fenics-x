@@ -261,7 +261,7 @@ def solve_system():
     t = dolfinx.fem.Constant(mesh, 0.0)
 
     dt = 0.1                         # global time step (ms)
-    Tstop = 1                        # ms
+    Tstop = 5                        # ms
     n_steps_ODE = 25                 # number of ODE steps
 
     # Physical parameters
@@ -334,8 +334,7 @@ def solve_system():
     fname = "results/data/EMIx-synapse_100_stim_T10/"
 
     # Strength of source term (ECS ion injection)
-    f_value = 150#*\
-    #((0.2 <= t)*(t <= 1.2) \
+    f_value = 500#*(0.2 <= t)*(t <= 1.2)
 
     # Find cells of injection site
     injection_cells  = dolfinx.mesh.locate_entities(mesh_sub_0,
@@ -351,15 +350,15 @@ def solve_system():
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
           'z': 1.0,
           'name': 'Na',
-          'D': D_Na_sub}
-          #'f_source': f_source_Na}
+          'D': D_Na_sub,
+          'f_source': f_source_Na}
 
     K = {'c_init':K_init,
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
          'z': 1.0,
          'name':'K',
-         'D': D_K_sub}
-         #'f_source': f_source_K}
+         'D': D_K_sub,
+         'f_source': f_source_K}
 
     Cl = {'c_init': Cl_init,
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
