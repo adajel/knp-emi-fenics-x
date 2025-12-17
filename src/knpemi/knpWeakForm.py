@@ -159,9 +159,21 @@ def create_rhs(vs, phi, phi_M_prev, c_prev, dx, dS, physical_params, ion_list,
             # Approximating time derivative
             L += 1.0/dt * c * v * dx(tag)
 
-            # Add src terms for ion injection in ECS subdomain
-            #if tag == 0:
-                #L += ion['f_source'] * v * dx(tag)
+            # Add src terms (ECS ion injection/removal)
+            if tag == 0 and 'f_source' in ion:
+                # Get value and cells where source terms will be applied
+                value = ion['f_source']['value']
+                injection_cells = ion['f_source']['injection_cells']
+
+                # Create source term function
+                mesh_sub = subdomain['mesh_sub']
+                V = c.function_space
+                injection_dofs = dolfinx.fem.locate_dofs_topological(V, mesh_sub.topology.dim, injection_cells)
+                f = dolfinx.fem.Function(V)
+                f.x.array[injection_dofs] = value
+
+                # Set source term
+                L += f * v * dx(tag)
 
             # Add membrane dynamics for each cellular subdomain (i.e. all subdomain but ECS)
             if tag > 0:

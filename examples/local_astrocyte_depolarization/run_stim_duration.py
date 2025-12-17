@@ -242,7 +242,7 @@ def solve_system():
     t = dolfinx.fem.Constant(mesh, 0.0)
 
     dt = 0.1                         # global time step (ms)
-    Tstop = 1                        # ms
+    Tstop = 2                        # ms
     n_steps_ODE = 25                 # number of ODE steps
 
     # Physical parameters
@@ -346,15 +346,13 @@ def solve_system():
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
           'z':1.0,
           'name':'Na',
-          'D':D_Na_sub,
-          'f_source':{'value':f_value_Na, 'cells':f_cells}}
+          'D':D_Na_sub}
 
     K = {'c_init':K_init,
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
          'z':1.0,
          'name':'K',
-         'D':D_K_sub,
-         'f_source':{'value':f_value_K, 'cells':f_cells}}
+         'D':D_K_sub}
 
     Cl = {'c_init':Cl_init,
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),

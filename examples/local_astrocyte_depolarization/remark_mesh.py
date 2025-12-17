@@ -80,7 +80,7 @@ if __name__ == "__main__":
     is_exterior = np.isin(tags, exterior_ft) & (tags != 0)
 
     # Re-mark facets
-    facet_marker[tags == 100] = 2            # Glial facets (old tag 100, new tag 2)
+    facet_marker[tags == 100] = 2              # Glial facets (old tag 100, new tag 2)
     facet_marker[tags == 0] = 0              # ECS facets (old tag 0, new tag 0)
     facet_marker[is_exterior] = exterior_tag # Exterior facets
 
