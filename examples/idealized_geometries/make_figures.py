@@ -235,26 +235,24 @@ def plot_concentration(fname, dt, Tstop, points):
 
     return
 
+# Time variables
+dt = 1.0e-4
+T = 1.0e-1
+
 # Make 2D plot
 fname = "2D"
 # create directory for figures
 if not os.path.isdir('results/{fname}'):
     os.mkdir('results/{fname}')
 
-# create figures
-dt = 1.0e-4
-T = 1.0e-2
-
-# Membrane point to evaluate solution
+# Point to evaluate solution in 2D geometry
 x_M = 25; y_M = 3
 x_e = 25; y_e = 3.5
 x_i = 25; y_i = 2
-
 point_M = np.array([[x_M * 1.0e-6, y_M * 1.0e-6]])
 point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6]])
 point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6]])
 points = {'ECS':point_e, 'ICS': point_i, 'mem':point_M}
-
 plot_concentration(fname, dt, T, points)
 
 # Make 3D plot
@@ -263,17 +261,12 @@ fname = "3D"
 if not os.path.isdir(f'results/{fname}'):
     os.mkdir(f'results/{fname}')
 
-# create figures
-dt = 1.0e-4
-T = 1.0e-3
-
+# Point to evaluate solution in 3D geometry
 x_M = 25.6; y_M = 0.34; z_M = 0.4
 x_e = 25; y_e = 0.45; z_e = 0.65
 x_i = 25; y_i = 0.3; z_i = 0.3
-
 point_M = np.array([[x_M * 1.0e-6, y_M * 1.0e-6, z_M * 1.0e-6]])
 point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6, z_e * 1.0e-6]])
 point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6, z_i * 1.0e-6]])
 points = {'ECS':point_e, 'ICS': point_i, 'mem':point_M}
-
 plot_concentration(fname, dt, T, points)

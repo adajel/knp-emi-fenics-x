@@ -335,10 +335,10 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list,
 
         omega_e.topology.create_connectivity(omega_e.topology.dim - 1, omega_e.topology.dim)
         bc_dofs = dolfinx.fem.locate_dofs_topological(
-            Vs[0], omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
+            V_list[0], omega_e.topology.dim - 1, sub_tag.find(boundary_marker)
         )
 
-        u_bc = dolfinx.fem.Function(Vs[0])
+        u_bc = dolfinx.fem.Function(V_list[0])
         u_bc.interpolate(lambda x: np.sin(2 * np.pi * x[0]) * np.cos(2 * np.pi * x[1]))
         bc = dolfinx.fem.dirichletbc(u_bc, bc_dofs)
 

@@ -196,7 +196,7 @@ def solve_system(resolution):
             "sub_vertex_to_parent":sub_vertex_to_parent_1,
             "mem_to_parent":g_to_parent}
 
-    subdomain_list = [ECS, cell]
+    subdomain_list = {0:ECS, 1:cell}
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -432,7 +432,7 @@ def solve_system(resolution):
 
     # Create variational form emi problem
     a_emi, p_emi, L_emi, dx, bc  = emi_system(
-            mesh, ct, ft, physical_parameters, ion_list, subdomain_list, mem_models,
+            mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
             phi, phi_M_prev, c_prev, dt, mms=mms,
     )
 
@@ -458,7 +458,7 @@ def solve_system(resolution):
 
     # Create variational form knp problem
     a_knp, p_knp, L_knp, dx = knp_system(
-            mesh, ct, ft, physical_parameters, ion_list, subdomain_list, mem_models,
+            mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
             phi, phi_M_prev, c, c_prev, dt, mms=mms,
     )
 

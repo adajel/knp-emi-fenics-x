@@ -120,4 +120,5 @@ def main(output_path, resolution_factor):
     xdmf.close()
 
 if __name__=="__main__":
-    main("meshes/2D/", 2)
+    fname = "2D"
+    main(f"meshes/{fname}/", 2)

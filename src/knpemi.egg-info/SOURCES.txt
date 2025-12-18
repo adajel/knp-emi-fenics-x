@@ -6,6 +6,7 @@ src/knpemi/knpWeakForm.py
 src/knpemi/odeSolver.py
 src/knpemi/pdeSolver.py
 src/knpemi/utils.py
+src/knpemi/utils_new.py
 src/knpemi.egg-info/PKG-INFO
 src/knpemi.egg-info/SOURCES.txt
 src/knpemi.egg-info/dependency_links.txt

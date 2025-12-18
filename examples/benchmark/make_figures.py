@@ -258,6 +258,6 @@ if not os.path.isdir(f'results/{fname}'):
 
 # create figures
 dt = 0.1
-T = 2
+T = 5
 
 plot_3D_concentration(fname, dt, T)
