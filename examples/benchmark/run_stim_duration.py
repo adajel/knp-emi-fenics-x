@@ -20,6 +20,10 @@ import numpy as np
 from ufl import (
         ln,
         SpatialCoordinate,
+        conditional,
+        And,
+        lt,
+        gt,
 )
 
 # Define colors for printing
@@ -39,23 +43,6 @@ e_res = "+"
 
 comm = MPI.COMM_WORLD
 
-def injection_site_marker(x, tol=1e-14):
-    """ Mark area where source term is applied, i.e. ROI """
-    x_L = 2100e-7; x_U = 2900e-7
-    y_L = 2100e-7; y_U = 2900e-7
-    z_L = 2100e-7; z_U = 2500e-7
-
-    lower_bound = lambda x, i, bound: x[i] >= bound - tol
-    upper_bound = lambda x, i, bound: x[i] <= bound + tol
-
-    return (
-          lower_bound(x, 0, x_L)
-        & lower_bound(x, 1, y_L)
-        & lower_bound(x, 2, z_L)
-        & upper_bound(x, 0, x_U)
-        & upper_bound(x, 1, y_U)
-        & upper_bound(x, 2, z_U)
-    )
 
 def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list,
         subdomain_list, mesh, ct, tag, k):
@@ -144,10 +131,11 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
 
 
 def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
-    # Write potential to file
+    # Write potentials to file
     xdmf.write_function(phi[tag], t=float(t))
     adios4dolfinx.write_function(fname, phi[tag], time=float(t))
 
+    # Write bulk concentrations to file
     for idx in range(len(ion_list)):
         # Determine the function source based on the index
         is_last = (idx == len(ion_list) - 1)
@@ -160,10 +148,25 @@ def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
     return
 
 
-def write_to_file_mem(xdmf, fname, tag, phi_M, t):
-    # Write potential to file
+def write_to_file_mem(xdmf, fname, tag, mesh, ct, ion_list, subdomain_list, phi_M, c, t):
+    # Write membrane potential to file
     xdmf.write_function(phi_M[tag], t=float(t))
     adios4dolfinx.write_function(fname, phi_M[tag], time=float(t))
+
+    # Write traces of concentrations on membrane to file
+    for idx, ion in enumerate(ion_list):
+        # Determine the function source based on the index
+        is_last = (idx == len(ion_list) - 1)
+        c_e = ion_list[-1]['c_0'] if is_last else c[0][idx]
+        c_i = ion_list[-1][f'c_{tag}'] if is_last else c[tag][idx]
+        # Get extra and intracellular traces
+        Q = phi_M[tag].function_space
+        k_e, k_i = interpolate_to_membrane(c_e, c_i, Q, mesh, ct, subdomain_list, tag)
+        # Write to file
+        xdmf.write_function(k_e, t=float(t))
+        xdmf.write_function(k_i, t=float(t))
+        adios4dolfinx.write_function(fname, k_e, time=float(t))
+        adios4dolfinx.write_function(fname, k_i, time=float(t))
 
     return
 
@@ -259,10 +262,12 @@ def solve_system():
 
     # Time variables (PDEs)
     t = dolfinx.fem.Constant(mesh, 0.0)
-
     dt = 0.1                         # global time step (ms)
-    Tstop = 5                        # ms
+    Tstop = 2                        # ms
     n_steps_ODE = 25                 # number of ODE steps
+
+    # Spatial coordinates
+    x, y, z = SpatialCoordinate(mesh)
 
     # Physical parameters
     C_M = 1.0                        # capacitance
@@ -330,41 +335,47 @@ def solve_system():
     Cl_init = {0:dolfinx.fem.Constant(mesh_sub_0, Cl_e_init), \
                1:dolfinx.fem.Constant(mesh_sub_1, Cl_g_init)}
 
-    # long stimuli regime 25 ms (stimuli every 10th ms)
-    fname = "results/data/EMIx-synapse_100_stim_T10/"
+    # Region in which to apply the source term
+    x_L = 2100e-7; x_U = 2900e-7
+    y_L = 2100e-7; y_U = 2900e-7
+    z_L = 2100e-7; z_U = 2500e-7
 
-    # Strength of source term (ECS ion injection)
-    f_value = 500#*(0.2 <= t)*(t <= 1.2)
+    # Strength of stimuli
+    f_value = 500
 
-    # Find cells of injection site
-    injection_cells  = dolfinx.mesh.locate_entities(mesh_sub_0,
-                                                    mesh_sub_0.topology.dim,
-                                                    injection_site_marker)
+    # Define when (t) and where (x, y, z) source term is applied
+    f_condition = And(gt(t, 0.2),
+                  And(lt(t, 1.2),
+                  And(gt(x, x_L),
+                  And(lt(x, x_U),
+                  And(lt(y, y_U),
+                  And(gt(y, y_L),
+                  And(gt(z, z_L), lt(z, z_U))))))))
 
-    # Define source terms for potassium and sodium
-    f_source_K = {'value': f_value, 'injection_cells': injection_cells}
-    f_source_Na = {'value': - f_value, 'injection_cells': injection_cells}
+    # Define source terms
+    f_source_K = conditional(f_condition, f_value, 0)
+    f_source_Na = conditional(f_condition, - f_value, 0)
 
     # Create ions (channel conductivity is set below in the membrane model)
-    Na = {'c_init': Na_init,
-          'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
+    Na = {'c_init':Na_init,
+          'bdry':dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
           'z': 1.0,
-          'name': 'Na',
-          'D': D_Na_sub,
-          'f_source': f_source_Na}
+          'name':'Na',
+          'D':D_Na_sub,
+          'f_source':f_source_Na}
 
     K = {'c_init':K_init,
-          'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
-         'z': 1.0,
+          'bdry':dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
+         'z':1.0,
          'name':'K',
-         'D': D_K_sub,
-         'f_source': f_source_K}
+         'D':D_K_sub,
+         'f_source':f_source_K}
 
-    Cl = {'c_init': Cl_init,
-          'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
+    Cl = {'c_init':Cl_init,
+          'bdry':dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
           'z': - 1.0,
-          'name': 'Cl',
-          'D': D_Cl_sub}
+          'name':'Cl',
+          'D':D_Cl_sub}
 
     # Create ion list. NB! The last ion in list will be eliminated
     ion_list = [K, Cl, Na]
@@ -433,10 +444,18 @@ def solve_system():
     # Specify entity maps for each sub-mesh to ensure correct assembly
     entity_maps = [mem_to_parent_1, sub_to_parent_0, sub_to_parent_1]
 
-    # Create solver emi problem
+    # Create direct solver emi problem
     problem_emi = create_solver_emi(
             a_emi, L_emi, phi, entity_maps, subdomain_list, comm
     )
+
+    """
+    # Create iterative solver emi problem
+    problem_emi = create_solver_emi(
+            a_emi, L_emi, phi, entity_maps, subdomain_list, comm, direct=False,
+            p=p_emi
+    )
+    """
 
     # Create solver knp problem
     problem_knp = create_solver_knp(
@@ -447,21 +466,23 @@ def solve_system():
     xdmf_sub = {}; xdmf_mem = {}
     fname_bp_sub = {}; fname_bp_mem = {}
 
+    fname = "benchmark"
+
     # Create files (XDMF and checkpoint) for saving results
     for tag, subdomain in subdomain_list.items():
-        xdmf = dolfinx.io.XDMFFile(comm, f"results/3D/results_sub_{tag}.xdmf", "w")
+        xdmf = dolfinx.io.XDMFFile(comm, f"results/{fname}/results_sub_{tag}.xdmf", "w")
         xdmf.write_mesh(subdomain['mesh_sub'])
-        adios4dolfinx.write_mesh(f"results/3D/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
+        adios4dolfinx.write_mesh(f"results/{fname}/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
         xdmf_sub[tag] = xdmf
-        fname_bp_sub[tag] = f"results/3D/checkpoint_sub_{tag}.bp"
+        fname_bp_sub[tag] = f"results/{fname}/checkpoint_sub_{tag}.bp"
 
         # Write membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
         if tag > 0:
-            xdmf = dolfinx.io.XDMFFile(comm, f"results/3D/results_mem_{tag}.xdmf", "w")
+            xdmf = dolfinx.io.XDMFFile(comm, f"results/{fname}/results_mem_{tag}.xdmf", "w")
             xdmf.write_mesh(subdomain['mesh_mem'])
-            adios4dolfinx.write_mesh(f"results/3D/checkpoint_mem_{tag}.bp", subdomain['mesh_mem'])
+            adios4dolfinx.write_mesh(f"results/{fname}/checkpoint_mem_{tag}.bp", subdomain['mesh_mem'])
             xdmf_mem[tag] = xdmf
-            fname_bp_mem[tag] = f"results/3D/checkpoint_mem_{tag}.bp"
+            fname_bp_mem[tag] = f"results/{fname}/checkpoint_mem_{tag}.bp"
 
     for k in range(int(round(Tstop/float(dt)))):
         print(f'solving for t={float(t)}')
@@ -490,7 +511,7 @@ def solve_system():
             write_to_file_sub(xdmf_sub[tag], fname_bp_sub[tag], tag, phi, c, ion_list, t)
             # membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
             if tag > 0:
-                write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, phi_M_prev, t)
+                write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, mesh, ct, ion_list, subdomain_list, phi_M_prev, c, t)
 
     # Close XDMF files
     for tag, subdomain in subdomain_list.items():

@@ -41,13 +41,12 @@ def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop):
 
     t = dt
     while t <= Tstop:
-        # Read results from file
         adios4dolfinx.read_function(checkpoint_fname, K, time=t, name=f"c_K_{tag}")
         adios4dolfinx.read_function(checkpoint_fname, Cl, time=t, name=f"c_Cl_{tag}")
         adios4dolfinx.read_function(checkpoint_fname, Na, time=t, name=f"c_Na_{tag}")
         adios4dolfinx.read_function(checkpoint_fname, phi, time=t, name=f"phi_{tag}")
 
-        # Append (results) function evaluated in point to list
+        # K concentrations
         Ks.append(scifem.evaluate_function(K, point)[0][0])
         Cls.append(scifem.evaluate_function(Cl, point)[0][0])
         Nas.append(scifem.evaluate_function(Na, point)[0][0])
@@ -58,13 +57,14 @@ def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop):
     return Nas, Ks, Cls, phis
 
 def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop):
+
     # Read mesh
     mesh_mem = adios4dolfinx.read_mesh(checkpoint_fname, MPI.COMM_WORLD)
 
     # Create function space and function for storing data
     V = dolfinx.fem.functionspace(mesh_mem, ("CG", 1))
-
     phi_M = dolfinx.fem.Function(V)
+
     tr_Ki = dolfinx.fem.Function(V)
     tr_Ke = dolfinx.fem.Function(V)
     tr_Nai = dolfinx.fem.Function(V)
@@ -84,7 +84,7 @@ def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop):
     t = dt
     while t <= Tstop:
         # Membrane potential
-        adios4dolfinx.read_function(checkpoint_fname, phi_M, time=t, name=f"phi_M_{tag}")
+        adios4dolfinx.read_function(checkpoint_fname, phi_M, time=t,name=f"phi_M_{tag}")
         phi_Ms.append(scifem.evaluate_function(phi_M, point)[0][0])
 
         # Trace of K from ICS
@@ -115,39 +115,23 @@ def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop):
 
     return phi_Ms, tr_K_es, tr_K_is, tr_Na_es, tr_Na_is, tr_Cl_es, tr_Cl_is
 
+def plot_concentration(fname, dt, Tstop, points):
 
-def plot_3D_concentration(fname, dt, Tstop):
+    temperature = 300 # temperature (K)
+    F = 96485         # Faraday's constant (C/mol)
+    R = 8.314         # Gas constant (J/(K*mol))
 
-    temperature = 300e3 # temperature (K)
-    F = 96485e3         # Faraday's constant (C/mol)
-    R = 8.314e3         # Gas constant (J/(K*mol))
+    time = 1.0e3*np.arange(0, T-dt, dt)
 
-    time = np.arange(0, T-dt, dt)
-
-    # Membrane point to evaluate solution
-    x_M = 0.0002491287275961443
-    y_M = 0.00024278379996648452
-    z_M = 0.00023517415844465526
-
-    # ECS point to evaluate solution
-    x_e = 0.0002479871894748248
-    y_e = 0.0002424216086463334
-    z_e = 0.00023859662336311367
-
-    # ICS point to evaluate solution
-    x_i = 0.00024270178661651962
-    y_i = 0.0002496048874198617
-    z_i = 0.00022946383703513403
-
-    point_e = np.array([[x_e, y_e, z_e]])
-    point_i = np.array([[x_i, y_i, z_i]])
-    point_M = np.array([[x_M, y_M, z_M]])
+    point_i = points['ICS']
+    point_e = points['ECS']
+    point_m = points['mem']
 
     #################################################################
     # get data axon A is stimulated
-    checkpoint_fname_e = f"results/{fname}/checkpoint_sub_0.bp"
-    checkpoint_fname_i = f"results/{fname}/checkpoint_sub_1.bp"
-    checkpoint_fname_M = f"results/{fname}/checkpoint_mem_1.bp"
+    checkpoint_fname_e = f'results/{fname}/checkpoint_sub_0.bp'
+    checkpoint_fname_i = f'results/{fname}/checkpoint_sub_1.bp'
+    checkpoint_fname_M = f'results/{fname}/checkpoint_mem_1.bp'
 
     # bulk concentrations
     tag_e = 0
@@ -169,49 +153,49 @@ def plot_3D_concentration(fname, dt, Tstop):
     fig = plt.figure(figsize=(11, 11))
     ax = plt.gca()
 
-    ax1 = fig.add_subplot(3, 3, 1)
+    ax1 = fig.add_subplot(3,3,1)
     plt.title(r'Na$^+$ concentration (ECS)')
     plt.ylabel(r'[Na]$_e$ (mM)')
     plt.plot(Na_e, linewidth=3, color='b')
 
-    ax2 = fig.add_subplot(3, 3, 2)
+    ax2 = fig.add_subplot(3,3,2)
     plt.title(r'K$^+$ concentration (ECS)')
     plt.ylabel(r'[K]$_e$ (mM)')
     plt.plot(K_e, linewidth=3, color='b')
 
-    ax3 = fig.add_subplot(3, 3, 3)
+    ax3 = fig.add_subplot(3,3,3)
     plt.title(r'Cl$^-$ concentration (ECS)')
     plt.ylabel(r'[Cl]$_e$ (mM)')
     plt.plot(Cl_e, linewidth=3, color='b')
 
-    ax4 = fig.add_subplot(3, 3,4)
+    ax4 = fig.add_subplot(3,3,4)
     plt.title(r'Na$^+$ concentration (ICS)')
     plt.ylabel(r'[Na]$_i$ (mM)')
     plt.plot(Na_i,linewidth=3, color='r')
 
-    ax5 = fig.add_subplot(3, 3, 5)
+    ax5 = fig.add_subplot(3,3,5)
     plt.title(r'K$^+$ concentration (ICS)')
     plt.ylabel(r'[K]$_i$ (mM)')
     plt.plot(K_i,linewidth=3, color='r')
 
-    ax6 = fig.add_subplot(3, 3, 6)
+    ax6 = fig.add_subplot(3,3,6)
     plt.title(r'Cl$^-$ concentration (ICS)')
     plt.ylabel(r'[Cl]$_i$ (mM)')
     plt.plot(Cl_i,linewidth=3, color='r')
 
-    ax7 = fig.add_subplot(3, 3, 7)
+    ax7 = fig.add_subplot(3,3,7)
     plt.title(r'Membrane potential')
     plt.ylabel(r'$\phi_M$ (mV)')
     plt.xlabel(r'time (ms)')
     plt.plot(phi_M, linewidth=3)
 
-    ax8 = fig.add_subplot(3, 3, 8)
+    ax8 = fig.add_subplot(3,3,8)
     plt.title(r'Nernst potential K$^+$')
     plt.ylabel(r'$\rm E_{K^+}$ (mV)')
     plt.xlabel(r'time (ms)')
     plt.plot(E_K, linewidth=3)
 
-    ax9 = fig.add_subplot(3, 3, 9)
+    ax9 = fig.add_subplot(3,3,9)
     plt.title(r'Nernst potential Na$^+$')
     plt.ylabel(r'$\rm E_{Na^+}$ (mV)')
     plt.xlabel(r'time (ms)')
@@ -251,13 +235,45 @@ def plot_3D_concentration(fname, dt, Tstop):
 
     return
 
-fname = "benchmark"
+# Make 2D plot
+fname = "2D"
+# create directory for figures
+if not os.path.isdir('results/{fname}'):
+    os.mkdir('results/{fname}')
+
+# create figures
+dt = 1.0e-4
+T = 1.0e-2
+
+# Membrane point to evaluate solution
+x_M = 25; y_M = 3
+x_e = 25; y_e = 3.5
+x_i = 25; y_i = 2
+
+point_M = np.array([[x_M * 1.0e-6, y_M * 1.0e-6]])
+point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6]])
+point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6]])
+points = {'ECS':point_e, 'ICS': point_i, 'mem':point_M}
+
+plot_concentration(fname, dt, T, points)
+
+# Make 3D plot
+fname = "3D"
 # create directory for figures
 if not os.path.isdir(f'results/{fname}'):
     os.mkdir(f'results/{fname}')
 
 # create figures
-dt = 0.1
-T = 2
+dt = 1.0e-4
+T = 1.0e-3
 
-plot_3D_concentration(fname, dt, T)
+x_M = 25.6; y_M = 0.34; z_M = 0.4
+x_e = 25; y_e = 0.45; z_e = 0.65
+x_i = 25; y_i = 0.3; z_i = 0.3
+
+point_M = np.array([[x_M * 1.0e-6, y_M * 1.0e-6, z_M * 1.0e-6]])
+point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6, z_e * 1.0e-6]])
+point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6, z_i * 1.0e-6]])
+points = {'ECS':point_e, 'ICS': point_i, 'mem':point_M}
+
+plot_concentration(fname, dt, T, points)

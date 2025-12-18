@@ -5,7 +5,8 @@ from ufl import (
     extract_blocks,
 )
 
-def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm, direct=True, bcs=None):
+def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm,
+        direct=True, p=None, bcs=None):
     """ Solve emi system using either a direct or iterative solver """
 
     if direct:
@@ -18,10 +19,13 @@ def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm, direct=True,
             }
     else:
         petsc_options = {
-                "ksp_type": "preonly",
+                "ksp_type": "cg",
                 "pc_type": "lu",
                 "pc_factor_mat_solver_type": "mumps",
+                "ksp_rtol": 1e-12,
+                "ksp_atol": 1e-12,
                 "ksp_monitor": None,
+                "ksp_norm_type": "preconditioned",
                 "ksp_error_if_not_converged": True,
             }
 
@@ -46,13 +50,13 @@ def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm, direct=True,
         problem = dolfinx.fem.petsc.LinearProblem(
                   extract_blocks(a),
                   extract_blocks(L),
-                  u=u,
-                  bcs=bcs,
+                  P=extract_blocks(P),
+                  u=[ui, ue],
+                  bcs=[bcs],
                   petsc_options=petsc_options,
-                  petsc_options_prefix="emi_direct_",
+                  petsc_options_prefix="emi_iterative_",
                   entity_maps=entity_maps,
         )
-
 
     # TODO, make copy to asses if nullspace
     #A.assemble()

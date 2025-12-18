@@ -105,8 +105,8 @@ def interpolate_to_membrane(ue, ui, Q, mesh, ct, subdomain_list, tag):
     assert np.all(mapped_entities[:, 2] >= 0)
 
     # Create two functions on the interface submesh
-    qe = dolfinx.fem.Function(Q, name="qe")
-    qi = dolfinx.fem.Function(Q, name="qi")
+    qe = dolfinx.fem.Function(Q, name=ue.name)
+    qi = dolfinx.fem.Function(Q, name=ui.name)
 
     # Interpolate volume functions (on submesh) onto all cells of the interface submesh
     scifem.interpolation.interpolate_to_surface_submesh(

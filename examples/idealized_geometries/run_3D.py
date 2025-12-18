@@ -128,10 +128,25 @@ def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
     return
 
 
-def write_to_file_mem(xdmf, fname, tag, phi_M, t):
-    # Write potential to file
+def write_to_file_mem(xdmf, fname, tag, mesh, ct, ion_list, subdomain_list, phi_M, c, t):
+    # Write membrane potential to file
     xdmf.write_function(phi_M[tag], t=float(t))
     adios4dolfinx.write_function(fname, phi_M[tag], time=float(t))
+
+    # Write traces of concentrations on membrane to file
+    for idx, ion in enumerate(ion_list):
+        # Determine the function source based on the index
+        is_last = (idx == len(ion_list) - 1)
+        c_e = ion_list[-1]['c_0'] if is_last else c[0][idx]
+        c_i = ion_list[-1][f'c_{tag}'] if is_last else c[tag][idx]
+        # Get extra and intracellular traces
+        Q = phi_M[tag].function_space
+        k_e, k_i = interpolate_to_membrane(c_e, c_i, Q, mesh, ct, subdomain_list, tag)
+        # Write to file
+        xdmf.write_function(k_e, t=float(t))
+        xdmf.write_function(k_i, t=float(t))
+        adios4dolfinx.write_function(fname, k_e, time=float(t))
+        adios4dolfinx.write_function(fname, k_i, time=float(t))
 
     return
 
@@ -230,7 +245,7 @@ def solve_system():
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
 
     dt = 1.0e-4                         # global time step (ms)
-    Tstop = 1.0e-2                      # global end time (ms)
+    Tstop = 1.0e-3                      # global end time (ms)
     n_steps_ODE = 25                    # number of ODE steps
 
     # Physical parameters
@@ -289,32 +304,24 @@ def solve_system():
     Cl_init = {0:dolfinx.fem.Constant(mesh_sub_0, Cl_e_init),
                1:dolfinx.fem.Constant(mesh_sub_1, Cl_i_init)}
 
-    # set source terms to be zero for all ion species
-    f_source_Na = dolfinx.fem.Constant(mesh_sub_0, 0.0)
-    f_source_K = dolfinx.fem.Constant(mesh_sub_0, 0.0)
-    f_source_Cl = dolfinx.fem.Constant(mesh_sub_0, 0.0)
-
     # Create ions (channel conductivity is set below for each model)
     Na = {'c_init':Na_init,
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
           'z': 1.0,
           'name':'Na',
-          'D':D_Na,
-          'f_source':f_source_Na}
+          'D':D_Na}
 
     K = {'c_init':K_init,
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
          'z': 1.0,
          'name':'K',
-         'D':D_K,
-         'f_source':f_source_K}
+         'D':D_K}
 
     Cl = {'c_init':Cl_init,
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
           'z': -1.0,
           'name':'Cl',
-          'D':D_Cl,
-          'f_source':f_source_Cl}
+          'D':D_Cl}
 
     # Create ion list. NB! The last ion in list will be eliminated
     ion_list = [K, Cl, Na]
@@ -390,21 +397,23 @@ def solve_system():
     xdmf_sub = {}; xdmf_mem = {}
     fname_bp_sub = {}; fname_bp_mem = {}
 
+    fname = "3D"
+
     # Create files (XDMF and checkpoint) for saving results
     for tag, subdomain in subdomain_list.items():
-        xdmf = dolfinx.io.XDMFFile(comm, f"results/3D/results_sub_{tag}.xdmf", "w")
+        xdmf = dolfinx.io.XDMFFile(comm, f"results/{fname}/results_sub_{tag}.xdmf", "w")
         xdmf.write_mesh(subdomain['mesh_sub'])
-        adios4dolfinx.write_mesh(f"results/3D/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
+        adios4dolfinx.write_mesh(f"results/{fname}/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
         xdmf_sub[tag] = xdmf
-        fname_bp_sub[tag] = f"results/3D/checkpoint_sub_{tag}.bp"
+        fname_bp_sub[tag] = f"results/{fname}/checkpoint_sub_{tag}.bp"
 
         # Write membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
         if tag > 0:
-            xdmf = dolfinx.io.XDMFFile(comm, f"results/3D/results_mem_{tag}.xdmf", "w")
+            xdmf = dolfinx.io.XDMFFile(comm, f"results/{fname}/results_mem_{tag}.xdmf", "w")
             xdmf.write_mesh(subdomain['mesh_mem'])
-            adios4dolfinx.write_mesh(f"results/3D/checkpoint_mem_{tag}.bp", subdomain['mesh_mem'])
+            adios4dolfinx.write_mesh(f"results/{fname}/checkpoint_mem_{tag}.bp", subdomain['mesh_mem'])
             xdmf_mem[tag] = xdmf
-            fname_bp_mem[tag] = f"results/3D/checkpoint_mem_{tag}.bp"
+            fname_bp_mem[tag] = f"results/{fname}/checkpoint_mem_{tag}.bp"
 
     for k in range(int(round(Tstop/float(dt)))):
         print(f'solving for t={float(t)}')
@@ -433,7 +442,7 @@ def solve_system():
             write_to_file_sub(xdmf_sub[tag], fname_bp_sub[tag], tag, phi, c, ion_list, t)
             # membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
             if tag > 0:
-                write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, phi_M_prev, t)
+                write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, mesh, ct, ion_list, subdomain_list, phi_M_prev, c, t)
 
     # Close XDMF files
     for tag, subdomain in subdomain_list.items():

@@ -194,11 +194,11 @@ def rhs_numba(t, states, values, parameters):
     i_Cl = g_leak_Cl * (states[0] - E_Cl)
 
     # set I_ch_Na
-    parameters[9] = i_Na
+    parameters[9] = 0#i_Na
     # set I_ch_K
-    parameters[10] = i_K
+    parameters[10] = 0#i_K
     # set I_ch_Cl
-    parameters[11] = i_Cl
+    parameters[11] = 0#i_Cl
 
     # update membrane potential
-    values[0] = (- i_K - i_Na - i_Cl)/Cm
+    values[0] = 0#(- i_K - i_Na - i_Cl)/Cm
