@@ -181,22 +181,20 @@ def solve_system(resolution):
     )
 
     # Create subdomains (ECS and cells)
-    ECS = {"tag":ECS_tag,
-           "name":"ECS",
+    ECS = {"name":"ECS",
            "mesh_sub":mesh_sub_0,
            "sub_to_parent":e_to_parent,
            "sub_vertex_to_parent":sub_vertex_to_parent_0,
            }
 
-    cell = {"tag":cell_tag,
-            "name":"neuron",
+    cell = {"name":"neuron",
             "mesh_sub":mesh_sub_1,
             "sub_to_parent":i_to_parent,
             "mesh_mem":mesh_g,
             "sub_vertex_to_parent":sub_vertex_to_parent_1,
             "mem_to_parent":g_to_parent}
 
-    subdomain_list = {0:ECS, 1:cell}
+    subdomain_list = {ECS_tag:ECS, cell_tag:cell}
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant

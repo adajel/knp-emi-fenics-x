@@ -83,21 +83,19 @@ def solve_system(resolution):
     )
 
     # Create subdomains (ECS and cells)
-    ECS = {"tag":0,
-           "name":"ECS",
+    ECS = {"name":"ECS",
            "mesh_sub":mesh_sub_0,
            "sub_to_parent":e_to_parent,
            "sub_vertex_to_parent":e_vertex_to_parent}
 
-    neuron = {"tag":1,
-              "name":"neuron",
+    neuron = {"name":"neuron",
               "mesh_sub":mesh_sub_1,
               "sub_to_parent":i_to_parent,
               "sub_vertex_to_parent":i_vertex_to_parent,
               "mesh_mem":mesh_g,
               "mem_to_parent":g_to_parent}
 
-    subdomain_list = [ECS, neuron]
+    subdomain_list = {0:ECS, 1:neuron}
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -149,6 +147,7 @@ def solve_system(resolution):
     y_L = 0.25
     y_U = 0.75
 
+    """
     # Define intracellular exact solutions
     a_i_exact = 1.0 + 1.0e-9 * x #sin(2 * pi * y) * sin(2 * pi * x)
     b_i_exact = 1.0 + 1.0e-9 * x ##sin(2 * pi * y) * sin(2 * pi * x)
@@ -160,6 +159,20 @@ def solve_system(resolution):
     b_e_exact = 1.0 + 1.0e-9 * x #sin(2 * pi * y) * sin(2 * pi * x)
 
     c_i_exact = - 1/z_c * (z_a * a_i_exact + z_b * b_i_exact)
+    c_e_exact = - 1/z_c * (z_a * a_e_exact + z_b * b_e_exact)
+    """
+
+    # Define intracellular exact solutions
+    a_i_exact = sin(2 * pi * y) * cos(2 * pi * x)
+    b_i_exact = cos(2 * pi * y) * sin(2 * pi * x)
+    c_i_exact = - 1/z_c * (z_a * a_i_exact + z_b * b_i_exact)
+
+    phi_i_exact = cos(2 * pi * x) * cos(2 * pi * y)
+    # Define extracellular exact solutions
+    phi_e_exact = sin(2 * pi * x) * sin(2 * pi * y)
+
+    a_e_exact = a_i_exact
+    b_e_exact = b_i_exact
     c_e_exact = - 1/z_c * (z_a * a_e_exact + z_b * b_e_exact)
 
     # Exact membrane potential
@@ -290,7 +303,7 @@ def solve_system(resolution):
     # Create variational form emi problem
     a_emi, p_emi, L_emi, dx, bc = emi_system(
             mesh, ct, ft, physical_parameters, ion_list, subdomain_list,
-            mem_models, phi, phi_M_prev, c_prev, dt, mms=mms,
+            phi, phi_M_prev, c_prev, dt, mms=mms,
     )
 
     # Specify entity maps for each sub-mesh to ensure correct assembly

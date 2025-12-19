@@ -161,7 +161,7 @@ def solve_system():
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
 
     dt = 1.0e-4                         # global time step (ms)
-    Tstop = 1.0e-2                      # global end time (ms)
+    Tstop = 1.0e-1                      # global end time (ms)
     n_steps_ODE = 25                    # number of ODE steps
 
     # Physical parameters

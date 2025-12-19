@@ -53,6 +53,7 @@ def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop):
         phis.append(scifem.evaluate_function(phi, point)[0][0])
 
         t += dt
+        print("t=", t)
 
     return Nas, Ks, Cls, phis
 
@@ -112,6 +113,7 @@ def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop):
         tr_Na_es.append(scifem.evaluate_function(tr_Nae, point)[0][0])
 
         t += dt
+        print("t=", t)
 
     return phi_Ms, tr_K_es, tr_K_is, tr_Na_es, tr_Na_is, tr_Cl_es, tr_Cl_is
 
@@ -239,11 +241,12 @@ def plot_concentration(fname, dt, Tstop, points):
 dt = 1.0e-4
 T = 1.0e-1
 
+"""
 # Make 2D plot
 fname = "2D"
 # create directory for figures
-if not os.path.isdir('results/{fname}'):
-    os.mkdir('results/{fname}')
+if not os.path.isdir(f'results/{fname}'):
+    os.mkdir(f'results/{fname}')
 
 # Point to evaluate solution in 2D geometry
 x_M = 25; y_M = 3
@@ -254,6 +257,7 @@ point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6]])
 point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6]])
 points = {'ECS':point_e, 'ICS': point_i, 'mem':point_M}
 plot_concentration(fname, dt, T, points)
+"""
 
 # Make 3D plot
 fname = "3D"
