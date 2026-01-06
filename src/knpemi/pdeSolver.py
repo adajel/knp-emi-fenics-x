@@ -19,15 +19,18 @@ def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm,
             }
     else:
         petsc_options = {
-                "ksp_type": "cg",
-                "pc_type": "lu",
-                "pc_factor_mat_solver_type": "mumps",
-                "ksp_rtol": 1e-12,
-                "ksp_atol": 1e-12,
-                "ksp_monitor": None,
-                "ksp_norm_type": "preconditioned",
-                "ksp_error_if_not_converged": True,
-            }
+                'ksp_type':'cg',
+                'ksp_monitor_true_residual':None,
+                'ksp_error_if_not_converged':1,
+                'ksp_max_it':1000,
+                'ksp_converged_reason':None,
+                'ksp_initial_guess_nonzero':1,
+                'ksp_view':None,
+                'pc_type':'hypre',
+                'ksp_rtol':self.rtol_emi,
+                'ksp_atol':self.atol_emi,
+                'pc_hypre_boomeramg_strong_threshold':threshold_emi,
+                }
 
     # Extract extra and intracellular concentrations
     u = []
@@ -50,9 +53,9 @@ def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm,
         problem = dolfinx.fem.petsc.LinearProblem(
                   extract_blocks(a),
                   extract_blocks(L),
-                  P=extract_blocks(P),
-                  u=[ui, ue],
-                  bcs=[bcs],
+                  P=extract_blocks(p),
+                  u=u,
+                  bcs=bcs,
                   petsc_options=petsc_options,
                   petsc_options_prefix="emi_iterative_",
                   entity_maps=entity_maps,

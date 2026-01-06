@@ -26,20 +26,20 @@ def create_measures(mesh, ct, ft):
 
     # Get interface/membrane tags
     gamma_tags = np.unique(ft.values)
+    subdomain_data = []
 
     # Define measures on membrane interface gamma
-    dS = {}
     for tag in gamma_tags:
         ordered_integration_data = scifem.compute_interface_data(ct, ft.find(tag))
         # Define measure for tag
-        dS_tag = Measure(
-                "dS",
-                domain=mesh,
-                subdomain_data=[(tag, ordered_integration_data.flatten())],
-                subdomain_id=tag,
+        subdomain_data.append((tag, ordered_integration_data.flatten()))
+
+    # Define measures on facet
+    dS = Measure(
+            "dS",
+            domain=mesh,
+            subdomain_data=subdomain_data,
         )
-        # Add measure to dictionary with all gamma measures
-        dS[tag] = dS_tag
 
     return dx, dS, ds
 
@@ -205,12 +205,12 @@ def create_rhs(vs, phi, phi_M_prev, c_prev, dx, dS, physical_params, ion_list,
                                   - dt / (C_M * alpha_i(i_res)) * mm['I_ch_k'][ion['name']]
 
                     # Add robin coupling condition at interface
-                    L += - C_e * g_robin_e * v_e(e_res) * dS[tag_mm] \
-                         + C_i * g_robin_i * v_i(i_res) * dS[tag_mm]
+                    L += - C_e * g_robin_e * v_e(e_res) * dS(tag_mm) \
+                         + C_i * g_robin_i * v_i(i_res) * dS(tag_mm)
 
                     # Add coupling terms on interface
-                    L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag_mm] \
-                       - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag_mm]
+                    L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS(tag_mm) \
+                       - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS(tag_mm)
 
     return L
 
@@ -257,12 +257,12 @@ def get_rhs_mms(vs, ion_list, subdomain_list, mms, dt, c_prev, phi, dx, dS, ds, 
                     f_I_M = mms['f_I_M']
 
                     # add robin coupling condition at interface
-                    L += C_i * g_robin_i * v_i(i_res) * dS[tag_mm] \
-                       - C_e * g_robin_e * v_e(e_res) * dS[tag_mm]
+                    L += C_i * g_robin_i * v_i(i_res) * dS(tag_mm) \
+                       - C_e * g_robin_e * v_e(e_res) * dS(tag_mm)
 
                     # add coupling terms on interface
-                    L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS[tag_mm] \
-                       - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS[tag_mm]
+                    L += C_e * inner(phi_i(i_res) - phi_e(e_res), v_e(e_res)) * dS(tag_mm) \
+                       - C_i * inner(phi_i(i_res) - phi_e(e_res), v_i(i_res)) * dS(tag_mm)
 
                     # MMS specific: add neumann contribution
                     L += - dot(ion['J_k_e'], n) * v_e * ds

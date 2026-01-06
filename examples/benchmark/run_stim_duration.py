@@ -152,38 +152,43 @@ def solve_system():
 
     mesh, ct, ft = read_mesh(mesh_path)
 
-    # Subdomain tags (same as is mesh). NB! ECS tag must always be zero.
-    ECS_tag = 0
-    glial_tag = 1
-
-    # Extract sub-meshes
-    mesh_sub_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS_tag)
-    mesh_sub_1, sub_to_parent_1, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ct, glial_tag)
-    mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, glial_tag)
-
-    # Create subdomains (extracellular space and cells)
+    # Create subdomains (extracellular space and cells) with:
+    # - tag (subdomain tag)
+    # - membrane tags (all tags marking the membrane of the cell)
+    # - ode_models : dictionary with membrane models (value) and corresponding facet tag (key)
+    # Note that the tags set here must match the cell tags and facet tags from the mesh
     ECS = {"name":"ECS",
-           "mesh_sub":mesh_sub_0,
-           "sub_to_parent":sub_to_parent_0,
-           "sub_vertex_to_parent":sub_vertex_to_parent_0}
+           "tag":0} # NB! ECS tag must always be zero.
 
     glial = {"name":"glial",
-             "mesh_sub":mesh_sub_1,
-             "sub_to_parent":sub_to_parent_1,
-             "sub_vertex_to_parent":sub_vertex_to_parent_1,
-             "mesh_mem":mesh_mem_1,
-             "mem_to_parent":mem_to_parent_1}
+             "tag":1,
+             "membrane_tags":[1],
+             "ode_models":{1:mm_glial}}
 
-    subdomain_list = {ECS_tag:ECS, glial_tag:glial}
+    # Extract sub-meshes
+    mesh_sub_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
+    mesh_sub_1, sub_to_parent_1, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ct, glial['tag'])
+    mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, glial['membrane_tags'])
+
+    # Set sub meshes ECS domain
+    ECS["mesh_sub"] = mesh_sub_0
+    ECS["sub_to_parent"] = sub_to_parent_0
+    ECS["sub_vertex_to_parent"] = sub_vertex_to_parent_0
+
+    # Set sub meshes glial domain
+    glial["mesh_sub"] = mesh_sub_1
+    glial["sub_to_parent"] = sub_to_parent_1
+    glial["sub_vertex_to_parent"] = sub_vertex_to_parent_1
+    glial["mesh_mem"] = mesh_mem_1
+    glial["mem_to_parent"] = mem_to_parent_1
+
+    subdomain_list = {ECS['tag']:ECS, glial['tag']:glial}
 
     # Time variables (PDEs)
     t = dolfinx.fem.Constant(mesh, 0.0)
     dt = 0.1                         # global time step (ms)
     Tstop = 5                        # ms
     n_steps_ODE = 25                 # number of ODE steps
-
-    # Spatial coordinates
-    x, y, z = SpatialCoordinate(mesh)
 
     # Physical parameters
     C_M = 1.0                        # capacitance
@@ -251,6 +256,9 @@ def solve_system():
     Cl_init = {0:dolfinx.fem.Constant(mesh_sub_0, Cl_e_init), \
                1:dolfinx.fem.Constant(mesh_sub_1, Cl_g_init)}
 
+    # Spatial coordinates
+    x, y, z = SpatialCoordinate(mesh)
+
     # Region in which to apply the source term
     x_L = 2100e-7; x_U = 2900e-7
     y_L = 2100e-7; y_U = 2900e-7
@@ -302,26 +310,6 @@ def solve_system():
     # Set initial conditions for PDE system
     set_initial_conditions(ion_list, subdomain_list, c_prev)
 
-    # Create new cell marker on gamma mesh
-    #cell_marker = 1
-    #cell_map_g = mesh_mem_1.topology.index_map(mesh_mem_1.topology.dim)
-    #num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
-
-    # Transfer mesh tags from ct to tags for gamma mesh on interface
-    #ct_g = dolfinx.mesh.meshtags(
-        #mesh_mem_1, mesh_mem_1.topology.dim, np.arange(num_cells_local, dtype=np.int31), cell_marker
-    #)
-
-    ct_g_1, _ = scifem.transfer_meshtags_to_submesh(
-            ft, mesh_mem_1, mem_vertex_to_parent_1, mem_to_parent_1
-    )
-
-    # Dictionary with mesh tags (key is facet tag)
-    ct_g = {1: ct_g_1}
-
-    # Dictionary with membrane function spaces (key is facet tag)
-    Q = {1: phi_M_prev[glial_tag].function_space}
-
     # Synaptic conductivity (S/m**2)
     g_syn_bar = 0.0
     # Set stimulus ODE
@@ -332,16 +320,11 @@ def solve_system():
     stim_params = {'stimulus':stimulus,
                    'stimulus_locator':stimulus_locator}
 
-    # TODO: make clearer, better design?
-    # Dictionary with membrane / ode models (key is facet tag) NB! New tags,
-    # now for membranes (not cells)!!! Should we change to 3, 4, i.e. 1->3 and
-    # 2->4 to be clear on diff?
-    ode_models_glial = {1: mm_glial}
+    # setup membrane models for each cell
     mem_models_glial = setup_membrane_model(
-            stim_params, physical_parameters, ode_models_glial,
-            ct_g[glial_tag], Q[glial_tag], ion_list
+            stim_params, physical_parameters, glial['ode_models'],
+            ft, phi_M_prev[glial['tag']].function_space, ion_list
     )
-
     # Add membrane model to neuron in subdomain list
     subdomain_list[1]['mem_models'] = mem_models_glial
 
@@ -382,7 +365,7 @@ def solve_system():
     xdmf_sub = {}; xdmf_mem = {}
     fname_bp_sub = {}; fname_bp_mem = {}
 
-    fname = "benchmark"
+    fname = "benchmark_one_tag"
 
     # Create files (XDMF and checkpoint) for saving results
     for tag, subdomain in subdomain_list.items():

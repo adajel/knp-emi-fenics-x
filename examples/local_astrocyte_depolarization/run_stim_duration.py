@@ -9,6 +9,7 @@ from knpemi.pdeSolver import create_solver_knp
 from knpemi.utils import set_initial_conditions, setup_membrane_model
 from knpemi.utils import interpolate_to_membrane
 
+import mm_glial as mm_glial
 import mm_hh as mm_hh
 
 import dolfinx
@@ -19,6 +20,11 @@ import numpy as np
 
 from ufl import (
         ln,
+        SpatialCoordinate,
+        conditional,
+        And,
+        lt,
+        gt,
 )
 
 # Define colors for printing
@@ -87,7 +93,7 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
             c_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_prev_sub
 
         # Interpolate ufl sum onto V
-        V = c[tag][tag].function_space
+        V = c[tag][idx].function_space
         c_elim = dolfinx.fem.Function(V)
         expr = dolfinx.fem.Expression(c_elim_sum, V.element.interpolation_points)
         c_elim.interpolate(expr)
@@ -159,6 +165,7 @@ def solve_odes(mem_models, c_prev, phi_M_prev, ion_list, stim_params, dt,
             # Get tag and membrane potential
             phi_M_prev_sub = phi_M_prev[tag]
             for mem_model in subdomain['mem_models']:
+
                 # Update ODE variables based on PDE output
                 ode_model = mem_model['ode']
                 update_ode_variables(
@@ -214,35 +221,57 @@ def solve_system():
 
     mesh, ct, ft = read_mesh(mesh_path)
 
-    # Subdomain tags (same as is mesh). NB! ECS tag must always be zero.
-    ECS_tag = 0
-    neuron_tag = 1
-
-    # Extract sub-meshes
-    mesh_sub_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS_tag)
-    mesh_sub_1, sub_to_parent_1, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ct, neuron_tag)
-    mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, neuron_tag)
-
-    # Create subdomains (extracellular space and cells)
+    # Create subdomains (extracellular space and cells) with:
+    # - tag (subdomain tag)
+    # - membrane tags (all tags marking the membrane of the cell)
+    # - ode_models : dictionary with membrane models (value) and corresponding facet tag (key)
+    # Note that the tags set here must match the cell tags and facet tags from the mesh
     ECS = {"name":"ECS",
-           "mesh_sub":mesh_sub_0,
-           "sub_to_parent":sub_to_parent_0,
-           "sub_vertex_to_parent":sub_vertex_to_parent_0}
+           "tag":0} # NB! ECS tag must always be zero.
 
     neuron = {"name":"neuron",
-              "mesh_sub":mesh_sub_1,
-              "sub_to_parent":sub_to_parent_1,
-              "sub_vertex_to_parent":sub_vertex_to_parent_1,
-              "mesh_mem":mesh_mem_1,
-              "mem_to_parent":mem_to_parent_1}
+              "tag":1,
+              "membrane_tags":[1],
+              "ode_models":{1:mm_hh}}
 
-    subdomain_list = {ECS_tag:ECS, neuron_tag:neuron}
+    glial = {"name":"glial",
+             "tag":2,
+             "membrane_tags":[2],
+             "ode_models":{2:mm_glial}}
+
+    # Extract sub-meshes
+    mesh_sub_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
+    mesh_sub_1, sub_to_parent_1, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ct, neuron['tag'])
+    mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, neuron['membrane_tags'])
+    mesh_sub_2, sub_to_parent_2, sub_vertex_to_parent_2, _, _ = scifem.extract_submesh(mesh, ct, glial['tag'])
+    mesh_mem_2, mem_to_parent_2, mem_vertex_to_parent_2, _, _ = scifem.extract_submesh(mesh, ft, glial['membrane_tags'])
+
+    # Set sub meshes ECS domain
+    ECS["mesh_sub"] = mesh_sub_0
+    ECS["sub_to_parent"] = sub_to_parent_0
+    ECS["sub_vertex_to_parent"] = sub_vertex_to_parent_0
+
+    # Set sub meshes neuron domain
+    neuron["mesh_sub"] = mesh_sub_1
+    neuron["sub_to_parent"] = sub_to_parent_1
+    neuron["sub_vertex_to_parent"] = sub_vertex_to_parent_1
+    neuron["mesh_mem"] = mesh_mem_1
+    neuron["mem_to_parent"] = mem_to_parent_1
+
+    # Set sub meshes glial domain
+    glial["mesh_sub"] = mesh_sub_2
+    glial["sub_to_parent"] = sub_to_parent_2
+    glial["sub_vertex_to_parent"] = sub_vertex_to_parent_2
+    glial["mesh_mem"] = mesh_mem_2
+    glial["mem_to_parent"] = mem_to_parent_2
+
+    subdomain_list = {ECS['tag']:ECS, neuron['tag']:neuron, glial['tag']:glial}
 
     # Time variables (PDEs)
     t = dolfinx.fem.Constant(mesh, 0.0)
 
     dt = 0.1                         # global time step (ms)
-    Tstop = 2                        # ms
+    Tstop = 1                        # ms
     n_steps_ODE = 25                 # number of ODE steps
 
     # Physical parameters
@@ -282,7 +311,8 @@ def solve_system():
 
     rho = {'z':rho_z,
            0:dolfinx.fem.Constant(mesh_sub_0, rho_e),
-           1:dolfinx.fem.Constant(mesh_sub_1, rho_n)}
+           1:dolfinx.fem.Constant(mesh_sub_1, rho_n),
+           2:dolfinx.fem.Constant(mesh_sub_2, rho_g)}
 
     # Set parameters
     physical_parameters = {'dt':dolfinx.fem.Constant(mesh, dt),
@@ -297,62 +327,64 @@ def solve_system():
 
     # diffusion coefficients for each sub-domain
     D_Na_sub = {0:dolfinx.fem.Constant(mesh_sub_0, D_Na/(lambda_e**2)),
-                1:dolfinx.fem.Constant(mesh_sub_1, D_Na/(lambda_i**2))}
+                1:dolfinx.fem.Constant(mesh_sub_1, D_Na/(lambda_i**2)),
+                2:dolfinx.fem.Constant(mesh_sub_2, D_Na/(lambda_i**2))}
     D_K_sub = {0:dolfinx.fem.Constant(mesh_sub_0, D_K/(lambda_e**2)),
-               1:dolfinx.fem.Constant(mesh_sub_1, D_K/(lambda_i**2))}
+               1:dolfinx.fem.Constant(mesh_sub_1, D_K/(lambda_i**2)),
+               2:dolfinx.fem.Constant(mesh_sub_2, D_K/(lambda_i**2))}
     D_Cl_sub = {0:dolfinx.fem.Constant(mesh_sub_0, D_Cl/(lambda_e**2)),
-                1:dolfinx.fem.Constant(mesh_sub_1, D_Cl/(lambda_i**2))}
+                1:dolfinx.fem.Constant(mesh_sub_1, D_Cl/(lambda_i**2)),
+                2:dolfinx.fem.Constant(mesh_sub_2, D_Cl/(lambda_i**2))}
 
     # initial concentrations for each sub-domain
     Na_init = {0:dolfinx.fem.Constant(mesh_sub_0, Na_e_init), \
-               1:dolfinx.fem.Constant(mesh_sub_1, Na_n_init)}
+               1:dolfinx.fem.Constant(mesh_sub_1, Na_n_init),
+               2:dolfinx.fem.Constant(mesh_sub_2, Na_g_init)}
     K_init = {0:dolfinx.fem.Constant(mesh_sub_0, K_e_init), \
-              1:dolfinx.fem.Constant(mesh_sub_1, K_n_init)}
+              1:dolfinx.fem.Constant(mesh_sub_1, K_n_init),
+              2:dolfinx.fem.Constant(mesh_sub_2, K_g_init)}
     Cl_init = {0:dolfinx.fem.Constant(mesh_sub_0, Cl_e_init), \
-               1:dolfinx.fem.Constant(mesh_sub_1, Cl_n_init)}
+               1:dolfinx.fem.Constant(mesh_sub_1, Cl_n_init),
+               2:dolfinx.fem.Constant(mesh_sub_2, Cl_g_init)}
 
-    # long stimuli regime 25 ms (stimuli every 10th ms)
-    #g_syn = 150
-    g_syn = 0
-    fname = "results/data/EMIx-synapse_100_stim_T10/"
-    time_str = "((0.2 <= t)*(t <= 1.2) \
-              + (10.2 <= t)*(t <= 11.2) \
-              + (20.2 <= t)*(t <= 21.2) \
-              + (30.2 <= t)*(t <= 31.2) \
-              + (40.2 <= t)*(t <= 41.2) \
-              + (50.2 <= t)*(t <= 51.2) \
-              + (60.2 <= t)*(t <= 61.2) \
-              + (70.2 <= t)*(t <= 71.2) \
-              + (80.2 <= t)*(t <= 81.2) \
-              + (90.2 <= t)*(t <= 91.2))"
+    # Spatial coordinates
+    x, y, z = SpatialCoordinate(mesh)
 
-    # ROI MESH X2
-    xmin = 2100e-7; xmax = 2900e-7
-    ymin = 2100e-7; ymax = 2900e-7
-    zmin = 2100e-7; zmax = 2500e-7
+    # Region in which to apply the source term
+    x_L = 2100e-7; x_U = 2900e-7
+    y_L = 2100e-7; y_U = 2900e-7
+    z_L = 2100e-7; z_U = 2500e-7
 
-    # ECS source terms (mesh entities where to apply source terms and values)
-    tdim_0 = mesh.topology.dim
-    f_cells = dolfinx.mesh.locate_entities(
-            mesh, tdim_0, lambda x : (xmin <= x[0])*(x[0] <= xmax)* \
-                                     (ymin <= x[1])*(x[1] <= ymax)* \
-                                     (zmin <= x[2])*(x[2] <= zmax)
-    )
-    f_value_K = g_syn
-    f_value_Na = - g_syn
+    # Strength of stimuli
+    f_value = 500
+
+    # Define when (t) and where (x, y, z) source term is applied
+    f_condition = And(gt(t, 0.2),
+                  And(lt(t, 1.2),
+                  And(gt(x, x_L),
+                  And(lt(x, x_U),
+                  And(lt(y, y_U),
+                  And(gt(y, y_L),
+                  And(gt(z, z_L), lt(z, z_U))))))))
+
+    # Define source terms
+    f_source_K = conditional(f_condition, f_value, 0)
+    f_source_Na = conditional(f_condition, - f_value, 0)
 
     # Create ions (channel conductivity is set below in the membrane model)
     Na = {'c_init':Na_init,
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
           'z':1.0,
           'name':'Na',
-          'D':D_Na_sub}
+          'D':D_Na_sub,
+          'f_source':f_source_Na}
 
     K = {'c_init':K_init,
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
          'z':1.0,
          'name':'K',
-         'D':D_K_sub}
+         'D':D_K_sub,
+         'f_source':f_source_K}
 
     Cl = {'c_init':Cl_init,
           'bdry': dolfinx.fem.Constant(mesh_sub_0, (0.0, 0.0)),
@@ -369,26 +401,6 @@ def solve_system():
     # Set initial conditions for PDE system
     set_initial_conditions(ion_list, subdomain_list, c_prev)
 
-    # Create new cell marker on gamma mesh
-    #cell_marker = 1
-    #cell_map_g = mesh_mem_1.topology.index_map(mesh_mem_1.topology.dim)
-    #num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
-
-    # Transfer mesh tags from ct to tags for gamma mesh on interface
-    #ct_g = dolfinx.mesh.meshtags(
-        #mesh_mem_1, mesh_mem_1.topology.dim, np.arange(num_cells_local, dtype=np.int32), cell_marker
-    #)
-
-    ct_g_1, _ = scifem.transfer_meshtags_to_submesh(
-            ft, mesh_mem_1, mem_vertex_to_parent_1, mem_to_parent_1
-    )
-
-    # Dictionary with mesh tags (key is facet tag)
-    ct_g = {1: ct_g_1}
-
-    # Dictionary with membrane function spaces (key is facet tag)
-    Q = {1: phi_M_prev[neuron_tag].function_space}
-
     # Membrane parameters
     g_syn_bar = 0.5                     # synaptic conductivity (S/m**2)
     # Set stimulus ODE
@@ -399,18 +411,18 @@ def solve_system():
     stim_params = {'stimulus':stimulus,
                    'stimulus_locator':stimulus_locator}
 
-    # TODO: make clearer, better design?
-    # Dictionary with membrane / ode models (key is facet tag) NB! New tags,
-    # now for membranes (not cells)!!! Should we change to 3, 4, i.e. 1->3 and
-    # 2->4 to be clear on diff?
-    ode_models_neuron = {1: mm_hh}
+    # setup membrane models for each cell
     mem_models_neuron = setup_membrane_model(
-            stim_params, physical_parameters, ode_models_neuron,
-            ct_g[neuron_tag], Q[neuron_tag], ion_list
+            stim_params, physical_parameters, neuron['ode_models'],
+            ft, phi_M_prev[neuron['tag']].function_space, ion_list
     )
-
-    # Add membrane model to neuron in subdomain list
-    subdomain_list[1]['mem_models'] = mem_models_neuron
+    mem_models_glial = setup_membrane_model(
+            stim_params, physical_parameters, glial['ode_models'],
+            ft, phi_M_prev[glial['tag']].function_space, ion_list
+    )
+    # Add membrane models to each cell in subdomain list
+    subdomain_list[neuron['tag']]['mem_models'] = mem_models_neuron
+    subdomain_list[glial['tag']]['mem_models'] = mem_models_glial
 
     # Create variational form emi problem
     a_emi, p_emi, L_emi = emi_system(
@@ -425,7 +437,9 @@ def solve_system():
     )
 
     # Specify entity maps for each sub-mesh to ensure correct assembly
-    entity_maps = [mem_to_parent_1, sub_to_parent_0, sub_to_parent_1]
+    entity_maps = [sub_to_parent_0, \
+                   sub_to_parent_1, mem_to_parent_1, \
+                   sub_to_parent_2, mem_to_parent_2]
 
     # Create solver emi problem
     problem_emi = create_solver_emi(
@@ -441,21 +455,23 @@ def solve_system():
     xdmf_sub = {}; xdmf_mem = {}
     fname_bp_sub = {}; fname_bp_mem = {}
 
+    fname = "local_PAP_depolarization"
+
     # Create files (XDMF and checkpoint) for saving results
     for tag, subdomain in subdomain_list.items():
-        xdmf = dolfinx.io.XDMFFile(comm, f"results/3D/results_sub_{tag}.xdmf", "w")
+        xdmf = dolfinx.io.XDMFFile(comm, f"results/{fname}/results_sub_{tag}.xdmf", "w")
         xdmf.write_mesh(subdomain['mesh_sub'])
-        adios4dolfinx.write_mesh(f"results/3D/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
+        adios4dolfinx.write_mesh(f"results/{fname}/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
         xdmf_sub[tag] = xdmf
-        fname_bp_sub[tag] = f"results/3D/checkpoint_sub_{tag}.bp"
+        fname_bp_sub[tag] = f"results/{fname}/checkpoint_sub_{tag}.bp"
 
         # Write membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
         if tag > 0:
-            xdmf = dolfinx.io.XDMFFile(comm, f"results/3D/results_mem_{tag}.xdmf", "w")
+            xdmf = dolfinx.io.XDMFFile(comm, f"results/{fname}/results_mem_{tag}.xdmf", "w")
             xdmf.write_mesh(subdomain['mesh_mem'])
-            adios4dolfinx.write_mesh(f"results/3D/checkpoint_mem_{tag}.bp", subdomain['mesh_mem'])
+            adios4dolfinx.write_mesh(f"results/{fname}/checkpoint_mem_{tag}.bp", subdomain['mesh_mem'])
             xdmf_mem[tag] = xdmf
-            fname_bp_mem[tag] = f"results/3D/checkpoint_mem_{tag}.bp"
+            fname_bp_mem[tag] = f"results/{fname}/checkpoint_mem_{tag}.bp"
 
     for k in range(int(round(Tstop/float(dt)))):
         print(f'solving for t={float(t)}')

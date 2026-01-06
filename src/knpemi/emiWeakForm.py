@@ -33,20 +33,20 @@ def create_measures(mesh, ct, ft):
 
     # Get interface/membrane tags
     gamma_tags = np.unique(ft.values)
-    dS = {}
+    subdomain_data = []
 
     # Define measures on membrane interface gamma
     for tag in gamma_tags:
         ordered_integration_data = scifem.compute_interface_data(ct, ft.find(tag))
         # Define measure for tag
-        dS_tag = Measure(
-                "dS",
-                domain=mesh,
-                subdomain_data=[(tag, ordered_integration_data.flatten())],
-                subdomain_id=tag,
+        subdomain_data.append((tag, ordered_integration_data.flatten()))
+
+    # Define measures on facet
+    dS = Measure(
+            "dS",
+            domain=mesh,
+            subdomain_data=subdomain_data,
         )
-        # Add measure to dictionary with all gamma measures
-        dS[tag] = dS_tag
 
     return dx, dS, ds
 
@@ -161,13 +161,14 @@ def create_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting
                 # Get membrane model tag
                 tag_mm = mm['ode'].tag
                 # add coupling term at interface
-                a += C_phi * (u_i(i_res) - u_e(e_res)) * v_i(i_res) * dS[tag_mm] \
-                   - C_phi * (u_i(i_res) - u_e(e_res)) * v_e(e_res) * dS[tag_mm]
+                a += C_phi * (u_i(i_res) - u_e(e_res)) * v_i(i_res) * dS(tag_mm) \
+                   - C_phi * (u_i(i_res) - u_e(e_res)) * v_e(e_res) * dS(tag_mm)
 
     return a
 
 def create_prec(us, vs, dx, subdomain_list, kappa):
     """ Get preconditioner """
+
     p = 0
     for tag, subdomain in subdomain_list.items():
         #tag = subdomain['tag']
@@ -176,6 +177,25 @@ def create_prec(us, vs, dx, subdomain_list, kappa):
         p += kappa[tag] *  inner(grad(u), grad(v)) * dx(tag)
         # Add mass matrix for each cellular subdomain (i.e. all subdomain but ECS)
         if tag > 0:
+            """
+            # scale mass matrix to get condition number independent from domain length
+            mesh = subdomain['mesh_sub']
+            gdim = mesh.geometry.dim
+
+            for axis in range(gdim):
+                x_min = mesh.geometry.x.min(axis=0)
+                x_max = mesh.geometry.x.max(axis=0)
+
+                x_min = np.array([MPI.min(mesh.mpi_comm(), xi) for xi in x_min])
+                x_max = np.array([MPI.max(mesh.mpi_comm(), xi) for xi in x_max])
+
+            # scaled mess matrix
+            Lp = dolfinx.fem.Constant(max(x_max - x_min))
+            # self.B_emi is singular so we add (scaled) mass matrix
+
+            p += kappa[tag]*(1/Lp**2)*inner(u, v)*dx(tag)
+            """
+
             p += inner(u, v) * dx(tag)
 
     return p
@@ -219,7 +239,7 @@ def create_rhs(c_prev, vs, dx, dS, ion_list, subdomain_list, physical_params,
                     g_robin = phi_M_prev[tag] - (1 / C_phi) * I_ch[tag][jdx]
 
                 # Add robin condition at interface
-                L += C_phi * inner(g_robin, v_i(i_res) - v_e(e_res)) * dS[tag_mm]
+                L += C_phi * inner(g_robin, v_i(i_res) - v_e(e_res)) * dS(tag_mm)
 
     return L
 
@@ -261,9 +281,9 @@ def create_rhs_mms(vs, dx, dS, ds, c_prev, ion_list, subdomain_list,
                 # Get facet tag
                 tag_mm = mm['ode'].tag
                 # Add robin terms (i.e. source term for equation for phi_M)
-                L += C_phi * inner(mms['f_phi_m'], v_i(i_res) - v_e(e_res)) * dS[tag_mm]
+                L += C_phi * inner(mms['f_phi_m'], v_i(i_res) - v_e(e_res)) * dS(tag_mm)
                 # Enforcing correction for I_m
-                L -= inner(mms['f_I_M'], v_e(e_res)) * dS[tag_mm]
+                L -= inner(mms['f_I_M'], v_e(e_res)) * dS(tag_mm)
 
     return L
 

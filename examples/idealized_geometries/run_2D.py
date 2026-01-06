@@ -298,9 +298,16 @@ def solve_system():
     # Specify entity maps for each sub-mesh to ensure correct assembly
     entity_maps = [mem_to_parent_1, sub_to_parent_0, sub_to_parent_1]
 
+    """
     # Create solver emi problem
     problem_emi = create_solver_emi(
             a_emi, L_emi, phi, entity_maps, subdomain_list, comm
+    )
+    """
+
+    # Create solver emi problem
+    problem_emi = create_solver_emi(
+            a_emi, L_emi, phi, entity_maps, subdomain_list, comm, direct=False, p=p_emi
     )
 
     # Create solver knp problem

@@ -241,7 +241,6 @@ def plot_concentration(fname, dt, Tstop, points):
 dt = 1.0e-4
 T = 1.0e-1
 
-"""
 # Make 2D plot
 fname = "2D"
 # create directory for figures
@@ -257,7 +256,6 @@ point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6]])
 point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6]])
 points = {'ECS':point_e, 'ICS': point_i, 'mem':point_M}
 plot_concentration(fname, dt, T, points)
-"""
 
 # Make 3D plot
 fname = "3D"
