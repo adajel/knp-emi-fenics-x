@@ -162,8 +162,8 @@ def solve_system():
 
     glial = {"name":"glial",
              "tag":1,
-             "membrane_tags":[1],
-             "ode_models":{1:mm_glial}}
+             "membrane_tags":[5, 6, 7],
+             "ode_models":{5:mm_glial, 6:mm_glial, 7:mm_glial}}
 
     # Extract sub-meshes
     mesh_sub_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
@@ -365,7 +365,7 @@ def solve_system():
     xdmf_sub = {}; xdmf_mem = {}
     fname_bp_sub = {}; fname_bp_mem = {}
 
-    fname = "benchmark_one_tag"
+    fname = "benchmark"
 
     # Create files (XDMF and checkpoint) for saving results
     for tag, subdomain in subdomain_list.items():

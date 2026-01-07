@@ -7,6 +7,65 @@ import scifem
 
 comm = MPI.COMM_WORLD
 
+x_L_5 = 0
+x_U_5 = 2000
+y_L_5 = 0
+y_U_5 = 5000
+z_L_5 = 0
+z_U_5 = 5000
+
+x_L_6 = 2000
+x_U_6 = 4000
+y_L_6 = 0
+y_U_6 = 5000
+z_L_6 = 0
+z_U_6 = 5000
+
+x_L_7 = 4000
+x_U_7 = 5000
+y_L_7 = 0
+y_U_7 = 5000
+z_L_7 = 0
+z_U_7 = 5000
+
+def lower_bound(x, i, bound, tol=1e-12):
+    return x[i] >= bound - tol
+
+
+def upper_bound(x, i, bound, tol=1e-12):
+    return x[i] <= bound + tol
+
+def omega_interior_marker_5(x, tol=1e-12):
+    return (
+          lower_bound(x, 0, x_L_5, tol=tol)
+        & lower_bound(x, 1, y_L_5, tol=tol)
+        & lower_bound(x, 2, z_L_5, tol=tol)
+        & upper_bound(x, 0, x_U_5, tol=tol)
+        & upper_bound(x, 1, y_U_5, tol=tol)
+        & upper_bound(x, 2, z_U_5, tol=tol)
+    )
+
+
+def omega_interior_marker_6(x, tol=1e-12):
+    return (
+          lower_bound(x, 0, x_L_6, tol=tol)
+        & lower_bound(x, 1, y_L_6, tol=tol)
+        & lower_bound(x, 2, z_L_6, tol=tol)
+        & upper_bound(x, 0, x_U_6, tol=tol)
+        & upper_bound(x, 1, y_U_6, tol=tol)
+        & upper_bound(x, 2, z_U_6, tol=tol)
+    )
+
+def omega_interior_marker_7(x, tol=1e-12):
+    return (
+          lower_bound(x, 0, x_L_7, tol=tol)
+        & lower_bound(x, 1, y_L_7, tol=tol)
+        & lower_bound(x, 2, z_L_7, tol=tol)
+        & upper_bound(x, 0, x_U_7, tol=tol)
+        & upper_bound(x, 1, y_U_7, tol=tol)
+        & upper_bound(x, 2, z_U_7, tol=tol)
+    )
+
 if __name__ == "__main__":
 
     # Get mesh
@@ -81,8 +140,18 @@ if __name__ == "__main__":
 
     # Re-mark facets
     #facet_marker[tags == 4] = 2              # Glial facets (old tag 100, new tag 2)
-    facet_marker[tags == 0] = 0              # ECS facets (old tag 0, new tag 0)
+
+    is_5 = dolfinx.mesh.locate_entities(mesh, mesh.topology.dim - 1, omega_interior_marker_5)
+    is_6 = dolfinx.mesh.locate_entities(mesh, mesh.topology.dim - 1, omega_interior_marker_6)
+    is_7 = dolfinx.mesh.locate_entities(mesh, mesh.topology.dim - 1, omega_interior_marker_7)
+
+    facet_marker[is_5] = 5 # Exterior facets
+    facet_marker[is_6] = 6 # Exterior facets
+    facet_marker[is_7] = 7 # Exterior facets
+
     facet_marker[is_exterior] = exterior_tag # Exterior facets
+
+    facet_marker[tags == 0] = 0              # ECS facets (old tag 0, new tag 0)
 
     # Create new facet markers
     ft = dolfinx.mesh.meshtags(
@@ -105,29 +174,3 @@ if __name__ == "__main__":
         xdmf.write_meshtags(ft, mesh.geometry)
 
     xdmf.close()
-
-
-    # Get the indices of facets with tag value 1
-    tagged_facet_indices = ft.find(1)
-    vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ft.dim, tagged_facet_indices)
-    coordinates = mesh.geometry.x[vertex_indices]
-    print("Coordinates of tagged entities membrane:")
-    print("x_M = ", coordinates[1][1][0])
-    print("y_M = ", coordinates[1][1][1])
-    print("z_M = ", coordinates[1][1][2])
-    print("-----------------------------------")
-    print("M = ", coordinates)
-
-    tagged_facet_indices = ct.find(1)
-    vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ct.dim, tagged_facet_indices)
-    coordinates = mesh.geometry.x[vertex_indices]
-    print("Coordinates of tagged entities ICS:")
-    print(coordinates)
-    print("-----------------------------------")
-
-    tagged_facet_indices = ct.find(0)
-    vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ct.dim, tagged_facet_indices)
-    coordinates = mesh.geometry.x[vertex_indices]
-    print("Coordinates of tagged entities ECS:")
-    print(coordinates)
-    print("-----------------------------------")
