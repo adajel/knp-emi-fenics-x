@@ -132,30 +132,31 @@ def solve_system():
     mesh, ct, ft = read_mesh(mesh_path)
 
     # Subdomain tags (same as is mesh). NB! ECS tag must always be zero.
-    ECS_tag = 0
-    neuron_tag = 1
+    ECS = {"tag":0,
+           "name":"ECS"}
 
-    # Extract sub-meshes
-    mesh_sub_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS_tag)
-    mesh_sub_1, sub_to_parent_1, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ct, neuron_tag)
-    mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, neuron_tag)
+    neuron = {"tag":1,
+              "membrane_tags":[1],
+              "name":"neuron",
+              "ode_models":{1: mm_hh}}
+
+    # Extract sub-meshes 
+    mesh_sub_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS["tag"])
+    mesh_sub_1, sub_to_parent_1, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ct, neuron["tag"])
+    mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, neuron["membrane_tags"])
 
     # Create subdomains (extracellular space and cells)
-    ECS = {"tag":ECS_tag,
-           "name":"ECS",
-           "mesh_sub":mesh_sub_0,
-           "sub_to_parent":sub_to_parent_0,
-           "sub_vertex_to_parent":sub_vertex_to_parent_0}
+    ECS["mesh_sub"] = mesh_sub_0
+    ECS["sub_to_parent"] = sub_to_parent_0
+    ECS["sub_vertex_to_parent"] = sub_vertex_to_parent_0
 
-    neuron = {"tag":neuron_tag,
-              "name":"neuron",
-              "mesh_sub":mesh_sub_1,
-              "sub_to_parent":sub_to_parent_1,
-              "sub_vertex_to_parent":sub_vertex_to_parent_1,
-              "mesh_mem":mesh_mem_1,
-              "mem_to_parent":mem_to_parent_1}
+    neuron["mesh_sub"] = mesh_sub_1
+    neuron["sub_to_parent"] = sub_to_parent_1
+    neuron["sub_vertex_to_parent"] = sub_vertex_to_parent_1
+    neuron["mesh_mem"] = mesh_mem_1
+    neuron["mem_to_parent"] = mem_to_parent_1
 
-    subdomain_list = {ECS_tag: ECS, neuron_tag: neuron}
+    subdomain_list = {ECS["tag"]:ECS, neuron["tag"]:neuron}
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -248,25 +249,6 @@ def solve_system():
     # Set initial conditions for PDE system
     set_initial_conditions(ion_list, subdomain_list, c_prev)
 
-    # Create new cell marker on gamma mesh
-    cell_marker = 1
-    cell_map_g = mesh_mem_1.topology.index_map(mesh_mem_1.topology.dim)
-    num_cells_local = cell_map_g.size_local + cell_map_g.num_ghosts
-
-    # Transfer mesh tags from ct to tags for gamma mesh on interface
-    ct_g_1, _ = scifem.transfer_meshtags_to_submesh(
-            ft, mesh_mem_1, mem_vertex_to_parent_1, mem_to_parent_1
-    )
-
-    #ct_g = dolfinx.mesh.meshtags(
-        #mesh_mem_1, mesh_mem_1.topology.dim, np.arange(num_cells_local, dtype=np.int32), cell_marker
-    #)
-
-    # Dictionary with membrane models (key is facet tag, value is ode model)
-    ode_models_neuron = {1: mm_hh}
-    ct_g = {1: ct_g_1}
-    Q = {1: phi_M_prev[neuron_tag].function_space}
-
     # Set stimulus ODE
     g_syn_bar = 10                     # synaptic conductivity (S/m**2)
     stimulus = {'stim_amplitude': g_syn_bar}
@@ -276,13 +258,12 @@ def solve_system():
     stim_params = {'stimulus':stimulus,
                    'stimulus_locator':stimulus_locator}
 
+    # Setup and add membrane model to neuron in subdomain list
     mem_models_neuron = setup_membrane_model(
-            stim_params, physical_parameters, ode_models_neuron,
-            ct_g[neuron_tag], Q[neuron_tag], ion_list
+            stim_params, physical_parameters, neuron['ode_models'],
+            ft, phi_M_prev[neuron['tag']].function_space, ion_list
     )
-
-    # Add membrane model to neuron in subdomain list
-    subdomain_list[1]['mem_models'] = mem_models_neuron
+    subdomain_list[neuron['tag']]['mem_models'] = mem_models_neuron
 
     # Create variational form emi problem
     a_emi, p_emi, L_emi = emi_system(
@@ -299,14 +280,30 @@ def solve_system():
     # Specify entity maps for each sub-mesh to ensure correct assembly
     entity_maps = [mem_to_parent_1, sub_to_parent_0, sub_to_parent_1]
 
+    # Set solver parameters EMI (True is direct, and False is iterate) 
+    direct_emi = False
+    rtol_emi = 1E-5
+    atol_emi = 1E-40
+    threshold_emi = 0.9
+
+    # Set solver parameters KNP (True is direct, and False is iterate) 
+    direct_knp = False
+    rtol_knp = 1E-7
+    atol_knp = 2E-40
+    threshold_knp = 0.75
+
     # Create solver emi problem
     problem_emi = create_solver_emi(
-            a_emi, L_emi, phi, entity_maps, subdomain_list, comm
+            a_emi, L_emi, phi, entity_maps, subdomain_list, comm,
+            direct=direct_emi, p=p_emi, atol=atol_emi, rtol=rtol_emi,
+            threshold=threshold_emi
     )
 
     # Create solver knp problem
     problem_knp = create_solver_knp(
-            a_knp, L_knp, c, entity_maps, subdomain_list, comm
+            a_knp, L_knp, c, entity_maps, subdomain_list, comm,
+            direct=direct_knp, p=p_knp, atol=atol_knp, rtol=rtol_knp,
+            threshold=threshold_knp
     )
 
     # Crate dictionary for storing XDMF files and checkpoint filenames

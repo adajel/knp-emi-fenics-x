@@ -6,10 +6,12 @@ from ufl import (
 )
 
 def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm,
-        direct=True, p=None, bcs=None):
+        direct=True, p=None, bcs=None, atol = 1E-40, rtol = 1E-5,
+        threshold=None):
     """ Solve emi system using either a direct or iterative solver """
 
     if direct:
+        # Set options direct solver
         petsc_options = {
                 "ksp_type": "preonly",
                 "pc_type": "lu",
@@ -18,6 +20,7 @@ def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm,
                 "ksp_error_if_not_converged": True,
             }
     else:
+        # Set options iterative solver
         petsc_options = {
                 'ksp_type':'cg',
                 'ksp_monitor_true_residual':None,
@@ -27,18 +30,19 @@ def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm,
                 'ksp_initial_guess_nonzero':1,
                 'ksp_view':None,
                 'pc_type':'hypre',
-                'ksp_rtol':self.rtol_emi,
-                'ksp_atol':self.atol_emi,
-                'pc_hypre_boomeramg_strong_threshold':threshold_emi,
-                }
+                'ksp_rtol':rtol,
+                'ksp_atol':atol,
+            }
+        # Set threshold (if specified)
+        if threshold is not None:
+            petsc_options['pc_hypre_boomeramg_strong_threshold'] = threshold
 
-    # Extract extra and intracellular concentrations
-    u = []
-    for tag, subdomain in subdomain_list.items():
-        u.append(phi[tag])
+    # Flatten extra and intracellular potentials into list (order by subdomain,
+    # e.g. [phi_e, phi_i])
+    u = [phi[tag] for tag in subdomain_list]
 
     if direct:
-        # Extract extra and intracellular potentials
+        # Create problem direct solver
         problem = dolfinx.fem.petsc.LinearProblem(
                   extract_blocks(a),
                   extract_blocks(L),
@@ -49,7 +53,7 @@ def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm,
                   entity_maps=entity_maps,
         )
     else:
-        # Extract extra and intracellular potentials
+        # Create problem iterative solver
         problem = dolfinx.fem.petsc.LinearProblem(
                   extract_blocks(a),
                   extract_blocks(L),
@@ -76,10 +80,13 @@ def create_solver_emi(a, L, phi, entity_maps, subdomain_list, comm,
     return problem
 
 
-def create_solver_knp(a, L, c, entity_maps, subdomain_list, direct=True, bcs=None):
+def create_solver_knp(a, L, c, entity_maps, subdomain_list, comm,
+        direct=True, p=None, bcs=None, atol = 1E-40, rtol = 1E-5,
+        threshold=None):
     """ Setup solver for the knp sub-problem """
 
     if direct:
+        # Set options direct solver
         petsc_options = {
                 "ksp_type": "preonly",
                 "pc_type": "lu",
@@ -88,21 +95,29 @@ def create_solver_knp(a, L, c, entity_maps, subdomain_list, direct=True, bcs=Non
                 "ksp_error_if_not_converged": True,
         }
     else:
+        # Set options iterative solver
         petsc_options = {
-                "ksp_type": "preonly",
-                "pc_type": "lu",
-                "pc_factor_mat_solver_type": "mumps",
-                "ksp_monitor": None,
-                "ksp_error_if_not_converged": True,
+                "ksp_type": "gmres",
+                "ksp_min_it": 5,
+                "ksp_max_it": 1000,
+                "pc_type": 'hypre',
+                "ksp_converged_reason": None,
+                "ksp_initial_guess_nonzero": 1,
+                "ksp_view": None,
+                "ksp_monitor_true_residual": None,
+                "ksp_rtol": rtol,
+                "ksp_atol": atol,
         }
+        # Set threshold (if specified)
+        if threshold is not None:
+            petsc_options['pc_hypre_boomeramg_strong_threshold'] = threshold
 
-    # Extract extra and intracellular concentrations
-    u = []
-    for tag, subdomain in subdomain_list.items():
-        u += c[tag]
+    # Flatted extra and intracellular concentrations into list (ordered by
+    # first subdomain, then ion species, e.g. [Na_e, Cl_e, Na_i, Cl_i])
+    u = [val for tag in subdomain_list for val in c[tag]]
 
     if direct:
-        # Extract extra and intracellular potentials
+        # Create problem direct solver
         problem = dolfinx.fem.petsc.LinearProblem(
                 extract_blocks(a),
                 extract_blocks(L),
@@ -112,14 +127,15 @@ def create_solver_knp(a, L, c, entity_maps, subdomain_list, direct=True, bcs=Non
                 entity_maps=entity_maps,
         )
     else:
-        # Extract extra and intracellular potentials
+        # Create problem iterative solver
         problem = dolfinx.fem.petsc.LinearProblem(
-                extract_blocks(a),
-                extract_blocks(L),
-                u=u,
-                petsc_options=petsc_options,
-                petsc_options_prefix="knp_direct_",
-                entity_maps=entity_maps,
+                  extract_blocks(a),
+                  extract_blocks(L),
+                  P=extract_blocks(p),
+                  u=u,
+                  petsc_options=petsc_options,
+                  petsc_options_prefix="knp_iterative_",
+                  entity_maps=entity_maps,
         )
 
     return problem

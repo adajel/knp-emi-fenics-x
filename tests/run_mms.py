@@ -165,36 +165,38 @@ def solve_system(resolution):
     mesh, ct, ft = read_mesh(mesh_path)
 
     # Subdomain tags (NB! ECS tag must always be zero)
-    ECS_tag = 0
-    cell_tag = 1
+    ECS = {"name":"ECS",
+           "tag":0,
+    }
+    cell = {"name":"neuron",
+            "tag":1, 
+            "membrane_tags":[1],
+    }
 
     mesh_sub_1, i_to_parent, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(
-            mesh, ct, cell_tag
+            mesh, ct, cell["tag"]
     )
 
     mesh_sub_0, e_to_parent, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(
-            mesh, ct, ECS_tag
+            mesh, ct, ECS["tag"]
     )
 
     mesh_g, g_to_parent, g_vertex_to_parent, _, _ = scifem.extract_submesh(
-            mesh, ft, cell_tag
+            mesh, ft, cell ["membrane_tags"]
     )
 
     # Create subdomains (ECS and cells)
-    ECS = {"name":"ECS",
-           "mesh_sub":mesh_sub_0,
-           "sub_to_parent":e_to_parent,
-           "sub_vertex_to_parent":sub_vertex_to_parent_0,
-           }
+    ECS["mesh_sub"] = mesh_sub_0
+    ECS["sub_to_parent"] = e_to_parent
+    ECS["sub_vertex_to_parent"] = sub_vertex_to_parent_0
 
-    cell = {"name":"neuron",
-            "mesh_sub":mesh_sub_1,
-            "sub_to_parent":i_to_parent,
-            "mesh_mem":mesh_g,
-            "sub_vertex_to_parent":sub_vertex_to_parent_1,
-            "mem_to_parent":g_to_parent}
+    cell["mesh_sub"] = mesh_sub_1
+    cell["sub_to_parent"] = i_to_parent
+    cell["mesh_mem"] = mesh_g
+    cell["sub_vertex_to_parent"] = sub_vertex_to_parent_1
+    cell["mem_to_parent"] = g_to_parent
 
-    subdomain_list = {ECS_tag:ECS, cell_tag:cell}
+    subdomain_list = {ECS["tag"]:ECS, cell["tag"]:cell}
 
     # Time variables
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
@@ -468,7 +470,7 @@ def solve_system(resolution):
     #problem_emi = create_solver_emi(a_emi, L_emi, phi, entity_maps, comm, bcs=[bc])
     # Create solver knp problem
     problem_knp = create_solver_knp(
-            a_knp, L_knp, c, entity_maps, subdomain_list
+            a_knp, L_knp, c, entity_maps, subdomain_list, comm
     )
 
     xdmf_e = dolfinx.io.XDMFFile(mesh.comm, "results/results_e.xdmf", "w")

@@ -166,15 +166,13 @@ def create_lhs(us, vs, dx, dS, subdomain_list, physical_params, kappa, splitting
 
     return a
 
-def create_prec(us, vs, dx, subdomain_list, kappa):
+def create_prec(a, us, vs, dx, subdomain_list, kappa):
     """ Get preconditioner """
 
-    p = 0
+    p = a
     for tag, subdomain in subdomain_list.items():
-        #tag = subdomain['tag']
         # Get test and trial functions
         u = us[tag]; v = vs[tag]
-        p += kappa[tag] *  inner(grad(u), grad(v)) * dx(tag)
         # Add mass matrix for each cellular subdomain (i.e. all subdomain but ECS)
         if tag > 0:
             """
@@ -195,7 +193,6 @@ def create_prec(us, vs, dx, subdomain_list, kappa):
 
             p += kappa[tag]*(1/Lp**2)*inner(u, v)*dx(tag)
             """
-
             p += inner(u, v) * dx(tag)
 
     return p
@@ -329,7 +326,7 @@ def emi_system(mesh, ct, ft, physical_params, ion_list, subdomain_list,
 
     # Create preconditioner
     p = create_prec(
-            us, vs, dx, subdomain_list, kappa
+            a, us, vs, dx, subdomain_list, kappa
     )
 
     L = create_rhs(

@@ -239,7 +239,7 @@ def plot_concentration(fname, dt, Tstop, points):
 
 # Time variables
 dt = 1.0e-4
-T = 1.0e-1
+T = 1.0e-2
 
 # Make 2D plot
 fname = "2D"
