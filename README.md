@@ -71,6 +71,15 @@ marked cell in ECS with 0 and cells in ICS with 1 we have an interface
 normal pointing inwards. In general, normals will always point from lower to
 higher (e.g. from 0 -> 1)
 
+In the code, each cell type and the membrane of each cell type will have their
+own submesh. To avoid creation of very many submeshes, all cells that are
+"biologically the same", i.e. cells with the same physical parameters
+(tortuosity) and same initial concentrations, e.g. all glial cells should be
+tagged with same tag.
+
+In the run..py files, the cell tags and membrane tags must be added/updated
+according to the tags in the mesh.
+
 ### License
 
 The software is free: you can redistribute it and/or modify it under the terms
