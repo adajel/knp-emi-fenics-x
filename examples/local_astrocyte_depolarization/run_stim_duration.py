@@ -8,6 +8,8 @@ from knpemi.pdeSolver import create_solver_knp
 
 from knpemi.utils import set_initial_conditions, setup_membrane_model
 from knpemi.utils import interpolate_to_membrane
+from knpemi.utils import update_ode_variables
+from knpemi.utils import update_pde_variables
 
 import mm_glial as mm_glial
 import mm_hh as mm_hh
@@ -25,6 +27,7 @@ from ufl import (
         And,
         lt,
         gt,
+        ge,
 )
 
 # Define colors for printing
@@ -43,92 +46,6 @@ i_res = "-"
 e_res = "+"
 
 comm = MPI.COMM_WORLD
-
-def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list,
-        subdomain_list, mesh, ct, tag, k):
-    """ Update parameters in ODE solver (based on previous PDEs step) """
-    # Get function space on membrane (gamma interface)
-    Q = phi_M_prev.function_space
-
-    # Set traces of ECS and ICS concentrations on membrane (from PDE solver) in ODE solver
-    for idx, ion in enumerate(ion_list):
-        # Determine the function source based on the index
-        is_last = (idx == len(ion_list) - 1)
-        c_e = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
-        c_i = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
-
-        # Get and set extra and intracellular traces
-        k_e, k_i = interpolate_to_membrane(c_e, c_i, Q, mesh, ct, subdomain_list, tag)
-        ode_model.set_parameter(f"{ion['name']}_e", k_e)
-        ode_model.set_parameter(f"{ion['name']}_i", k_i)
-
-    # If first time step do nothing (the initial value for phi_M in ODEs are
-    # taken from ODE file). For all other time steps, update the membrane
-    # potential in ODE solver based on previous PDEs step
-    if k > 0: ode_model.set_membrane_potential(phi_M_prev)
-
-    return
-
-
-def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
-        ion_list, subdomain_list, mesh, ct):
-    """ Update parameters in PDE solver for next time step """
-    # Number of ions to solve for
-    N_ions = len(ion_list[:-1])
-    # Get physical parameters
-    psi = physical_parameters['psi']
-    rho = physical_parameters['rho']
-
-    for tag, subdomain in subdomain_list.items():
-        # Add contribution from immobile ions to eliminated ion
-        c_elim_sum = - (1.0 / ion_list[-1]['z']) * rho['z'] * rho[tag]
-
-        for idx, ion in enumerate(ion_list[:-1]):
-            # Update previous concentration and scatter forward
-            c_prev[tag][idx].x.array[:] = c[tag][idx].x.array
-            c_prev[tag][idx].x.scatter_forward()
-
-            # Add contribution to eliminated ion from ion concentration
-            c_prev_sub = c_prev[tag][idx]
-            c_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_prev_sub
-
-        # Interpolate ufl sum onto V
-        V = c[tag][idx].function_space
-        c_elim = dolfinx.fem.Function(V)
-        expr = dolfinx.fem.Expression(c_elim_sum, V.element.interpolation_points)
-        c_elim.interpolate(expr)
-
-        # Update eliminated ion concentration
-        ion_list[-1][f'c_{tag}'].x.array[:] = c_elim.x.array
-
-        # Update Nernst potentials for all cells (i.e. all subdomain but ECS)
-        if tag != 0:
-            # Update Nernst potentials for each ion we solve for
-            for idx, ion in enumerate(ion_list[:-1]):
-                # Get previous extra and intracellular concentrations
-                c_e = c_prev[0][idx]
-                c_i = c_prev[tag][idx]
-                # Update Nernst potential
-                ion['E'] =  1 / (psi * ion['z']) * ln(c_e(e_res) / c_i(i_res))
-
-            # Update Nernst potential for eliminated ion
-            c_e_elim = ion_list[-1][f'c_0']
-            c_i_elim = ion_list[-1][f'c_{tag}']
-            ion_list[-1]['E'] = 1 / (psi * ion['z']) * ln(c_e_elim(e_res) / c_i_elim(i_res))
-
-            # Update membrane potential
-            phi_e = phi[0]
-            phi_i = phi[tag]
-            phi_M_prev_sub = phi_M_prev[tag]
-
-            # Update previous membrane potential (source term PDEs)
-            Q = phi_M_prev_sub.function_space
-            tr_phi_e, tr_phi_i = interpolate_to_membrane(phi_e, phi_i, Q, mesh, ct, subdomain_list, tag)
-            phi_M_prev[tag].x.array[:] = tr_phi_i.x.array - tr_phi_e.x.array
-            phi_M_prev[tag].x.scatter_forward()
-
-    return
-
 
 def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
     # Write potential to file
@@ -152,10 +69,27 @@ def write_to_file_mem(xdmf, fname, tag, phi_M, t):
     xdmf.write_function(phi_M[tag], t=float(t))
     adios4dolfinx.write_function(fname, phi_M[tag], time=float(t))
 
+    """
+    # Write traces of concentrations on membrane to file
+    for idx, ion in enumerate(ion_list):
+        # Determine the function source based on the index
+        is_last = (idx == len(ion_list) - 1)
+        c_e = ion_list[-1]['c_0'] if is_last else c[0][idx]
+        c_i = ion_list[-1][f'c_{tag}'] if is_last else c[tag][idx]
+        # Get extra and intracellular traces
+        Q = phi_M[tag].function_space
+        k_e, k_i = interpolate_to_membrane(c_e, c_i, Q, mesh, ct, subdomain_list, tag)
+        # Write to file
+        xdmf.write_function(k_e, t=float(t))
+        xdmf.write_function(k_i, t=float(t))
+        adios4dolfinx.write_function(fname, k_e, time=float(t))
+        adios4dolfinx.write_function(fname, k_i, time=float(t))
+    """
+
     return
 
 
-def solve_odes(mem_models, c_prev, phi_M_prev, ion_list, stim_params, dt,
+def solve_odes(c_prev, phi_M_prev, ion_list, stim_params, dt,
         mesh, ct, subdomain_list, k):
     """ Solve ODEs (membrane models) for each membrane tag in each subdomain """
 
@@ -213,13 +147,15 @@ def read_mesh(mesh_file):
     return mesh, ct, ft
 
 
-def solve_system():
+def solve_system(mesh_file, fname):
     """ Solve system (PDEs and ODEs) """
+
+    print("reading mesh...")
+    mesh, ct, ft = read_mesh(mesh_file)
+    print("read mesh.")
+
     # Read mesh and create sub-meshes for extra and intracellular domains and
     # for cellular membranes / interfaces (for solving ODEs)
-    mesh_path = 'meshes/remarked_mesh/mesh.xdmf'
-
-    mesh, ct, ft = read_mesh(mesh_path)
 
     # Create subdomains (extracellular space and cells) with:
     # - tag (subdomain tag)
@@ -227,22 +163,26 @@ def solve_system():
     # - ode_models : dictionary with membrane models (value) and corresponding facet tag (key)
     # Note that the tags set here must match the cell tags and facet tags from the mesh
     ECS = {"name":"ECS",
-           "tag":0} # NB! ECS tag must always be zero.
-
+           "tag":0,              # NB! ECS tag must always be zero.
+    }
     neuron = {"name":"neuron",
-              "tag":1,
-              "membrane_tags":[1],
-              "ode_models":{1:mm_hh}}
+             "tag":1,
+             "membrane_tags":[1],
+             "ode_models":{1:mm_hh},
+    }
 
     glial = {"name":"glial",
              "tag":2,
              "membrane_tags":[2],
-             "ode_models":{2:mm_glial}}
+             "ode_models":{2:mm_glial},
+    }
 
     # Extract sub-meshes
     mesh_sub_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
+
     mesh_sub_1, sub_to_parent_1, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ct, neuron['tag'])
     mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, neuron['membrane_tags'])
+
     mesh_sub_2, sub_to_parent_2, sub_vertex_to_parent_2, _, _ = scifem.extract_submesh(mesh, ct, glial['tag'])
     mesh_mem_2, mem_to_parent_2, mem_vertex_to_parent_2, _, _ = scifem.extract_submesh(mesh, ft, glial['membrane_tags'])
 
@@ -258,7 +198,7 @@ def solve_system():
     neuron["mesh_mem"] = mesh_mem_1
     neuron["mem_to_parent"] = mem_to_parent_1
 
-    # Set sub meshes glial domain
+    # Set sub meshes neuron domain
     glial["mesh_sub"] = mesh_sub_2
     glial["sub_to_parent"] = sub_to_parent_2
     glial["sub_vertex_to_parent"] = sub_vertex_to_parent_2
@@ -271,7 +211,7 @@ def solve_system():
     t = dolfinx.fem.Constant(mesh, 0.0)
 
     dt = 0.1                         # global time step (ms)
-    Tstop = 1                        # ms
+    Tstop = 15                       # ms
     n_steps_ODE = 25                 # number of ODE steps
 
     # Physical parameters
@@ -289,30 +229,29 @@ def solve_system():
     K_e_init = 3.092970607490389
     K_n_init = 124.13988964240784
     K_g_init = 99.3100014897692
+
     Na_e_init = 144.60625137617149
     Na_n_init = 12.850454639128186
     Na_g_init = 15.775818906083778
+
     Cl_e_init = 133.62525154406637
     Cl_n_init = 5.0
     Cl_g_init = 5.203660274163705
-
-    Cl_e_init = Na_e_init + K_e_init
-    Cl_n_init = Na_n_init + K_n_init
-    Cl_g_init = Na_g_init + K_g_init
 
     lambda_e = 1.0
     lambda_i = 1.0
 
     # Set background charge / immobile ions
     rho_z = -1
-    rho_e = rho_z * (Na_e_init + K_e_init - Cl_e_init)
-    rho_g = rho_z * (Na_g_init + K_g_init - Cl_g_init)
-    rho_n = rho_z * (Na_n_init + K_n_init - Cl_n_init)
+    rho_e = Na_e_init + K_e_init - Cl_e_init
+    rho_n = Na_n_init + K_n_init - Cl_n_init
+    rho_g = Na_g_init + K_g_init - Cl_g_init
 
     rho = {'z':rho_z,
-           0:dolfinx.fem.Constant(mesh_sub_0, rho_e),
-           1:dolfinx.fem.Constant(mesh_sub_1, rho_n),
-           2:dolfinx.fem.Constant(mesh_sub_2, rho_g)}
+             0:dolfinx.fem.Constant(mesh_sub_0, rho_e),
+             1:dolfinx.fem.Constant(mesh_sub_1, rho_n),
+             2:dolfinx.fem.Constant(mesh_sub_2, rho_g),
+    }
 
     # Set parameters
     physical_parameters = {'dt':dolfinx.fem.Constant(mesh, dt),
@@ -323,29 +262,36 @@ def solve_system():
                            'C_M':dolfinx.fem.Constant(mesh, C_M),
                            'R':dolfinx.fem.Constant(mesh, R),
                            'temperature':dolfinx.fem.Constant(mesh, temperature),
-                           'rho':rho}
+                           'rho':rho,
+    }
 
     # diffusion coefficients for each sub-domain
     D_Na_sub = {0:dolfinx.fem.Constant(mesh_sub_0, D_Na/(lambda_e**2)),
                 1:dolfinx.fem.Constant(mesh_sub_1, D_Na/(lambda_i**2)),
-                2:dolfinx.fem.Constant(mesh_sub_2, D_Na/(lambda_i**2))}
+                2:dolfinx.fem.Constant(mesh_sub_2, D_Na/(lambda_i**2)),
+    }
     D_K_sub = {0:dolfinx.fem.Constant(mesh_sub_0, D_K/(lambda_e**2)),
                1:dolfinx.fem.Constant(mesh_sub_1, D_K/(lambda_i**2)),
-               2:dolfinx.fem.Constant(mesh_sub_2, D_K/(lambda_i**2))}
+               2:dolfinx.fem.Constant(mesh_sub_2, D_K/(lambda_i**2)),
+    }
     D_Cl_sub = {0:dolfinx.fem.Constant(mesh_sub_0, D_Cl/(lambda_e**2)),
                 1:dolfinx.fem.Constant(mesh_sub_1, D_Cl/(lambda_i**2)),
-                2:dolfinx.fem.Constant(mesh_sub_2, D_Cl/(lambda_i**2))}
+                2:dolfinx.fem.Constant(mesh_sub_2, D_Cl/(lambda_i**2)),
+    }
 
     # initial concentrations for each sub-domain
     Na_init = {0:dolfinx.fem.Constant(mesh_sub_0, Na_e_init), \
                1:dolfinx.fem.Constant(mesh_sub_1, Na_n_init),
-               2:dolfinx.fem.Constant(mesh_sub_2, Na_g_init)}
+               2:dolfinx.fem.Constant(mesh_sub_2, Na_g_init),
+    }
     K_init = {0:dolfinx.fem.Constant(mesh_sub_0, K_e_init), \
               1:dolfinx.fem.Constant(mesh_sub_1, K_n_init),
-              2:dolfinx.fem.Constant(mesh_sub_2, K_g_init)}
+              2:dolfinx.fem.Constant(mesh_sub_2, K_g_init),
+    }
     Cl_init = {0:dolfinx.fem.Constant(mesh_sub_0, Cl_e_init), \
                1:dolfinx.fem.Constant(mesh_sub_1, Cl_n_init),
-               2:dolfinx.fem.Constant(mesh_sub_2, Cl_g_init)}
+               2:dolfinx.fem.Constant(mesh_sub_2, Cl_g_init),
+    }
 
     # Spatial coordinates
     x, y, z = SpatialCoordinate(mesh)
@@ -355,21 +301,36 @@ def solve_system():
     y_L = 2100e-7; y_U = 2900e-7
     z_L = 2100e-7; z_U = 2500e-7
 
-    # Strength of stimuli
+    # Strength of source term
     f_value = 500
 
-    # Define when (t) and where (x, y, z) source term is applied
-    f_condition = And(gt(t, 0.2),
-                  And(lt(t, 1.2),
+    # Frequency of source term (application of source term)
+    period = 10         # 10 ms repeat
+    pulse_width = 1     # 1 ms duration
+    delay = 0.2         # 0.2 ms start offset
+
+    # NB! As modulo is not supported by UFL, the source term is defined as a
+    # constant, and updated in the time-loop further down. If the
+    # source term is changed, the time loop further down must also be updated.
+    # To be fixed..
+    source_active = dolfinx.fem.Constant(mesh, 0.0)
+    source_active.value = 1 if (t.value - delay) % period < pulse_width else 0
+
+    # Define when (t) and where (x, y, z) source term is applied. The source
+    # terms is on for 1 ms every 10th ms with a delay of 0.2 ms, i.e. the pulse
+    # is on if: (t >= delay) and ((t - delay) % period < pulse_width). The
+    # source  term is applied in a region of interest defined by x_U, x_L, y_U,
+    # y_L, z_U, z_L)
+    f_condition = And(ge(t, delay),
                   And(gt(x, x_L),
                   And(lt(x, x_U),
                   And(lt(y, y_U),
                   And(gt(y, y_L),
-                  And(gt(z, z_L), lt(z, z_U))))))))
+                  And(gt(z, z_L), lt(z, z_U)))))))
 
     # Define source terms
-    f_source_K = conditional(f_condition, f_value, 0)
-    f_source_Na = conditional(f_condition, - f_value, 0)
+    f_source_K = conditional(f_condition, f_value, 0) * source_active
+    f_source_Na = conditional(f_condition, - f_value, 0) * source_active
 
     # Create ions (channel conductivity is set below in the membrane model)
     Na = {'c_init':Na_init,
@@ -402,7 +363,7 @@ def solve_system():
     set_initial_conditions(ion_list, subdomain_list, c_prev)
 
     # Membrane parameters
-    g_syn_bar = 0.5                     # synaptic conductivity (S/m**2)
+    g_syn_bar = 0.0                     # synaptic conductivity (S/m**2)
     # Set stimulus ODE
     stimulus = {'stim_amplitude': g_syn_bar}
     stimulus_locator = lambda x: (x[0] < 20e-4)
@@ -416,10 +377,13 @@ def solve_system():
             stim_params, physical_parameters, neuron['ode_models'],
             ft, phi_M_prev[neuron['tag']].function_space, ion_list
     )
+
+    # setup membrane models for each cell
     mem_models_glial = setup_membrane_model(
             stim_params, physical_parameters, glial['ode_models'],
             ft, phi_M_prev[glial['tag']].function_space, ion_list
     )
+
     # Add membrane models to each cell in subdomain list
     subdomain_list[neuron['tag']]['mem_models'] = mem_models_neuron
     subdomain_list[glial['tag']]['mem_models'] = mem_models_glial
@@ -438,24 +402,39 @@ def solve_system():
 
     # Specify entity maps for each sub-mesh to ensure correct assembly
     entity_maps = [sub_to_parent_0, \
-                   sub_to_parent_1, mem_to_parent_1, \
+                   sub_to_parent_1, mem_to_parent_1,
                    sub_to_parent_2, mem_to_parent_2]
+
+    # Set solver parameters EMI (True is direct, and False is iterate) 
+    direct_emi = False
+    rtol_emi = 1E-6
+    atol_emi = 1E-40
+    threshold_emi = 0.9
+
+    # Set solver parameters KNP (True is direct, and False is iterate) 
+    direct_knp = False
+    rtol_knp = 1E-7
+    atol_knp = 2E-40
+    threshold_knp = 0.75
 
     # Create solver emi problem
     problem_emi = create_solver_emi(
-            a_emi, L_emi, phi, entity_maps, subdomain_list, comm
+            a_emi, L_emi, phi, entity_maps, subdomain_list, comm,
+            direct=direct_emi, p=p_emi, atol=atol_emi, rtol=rtol_emi,
+            threshold=threshold_emi
     )
 
     # Create solver knp problem
     problem_knp = create_solver_knp(
-            a_knp, L_knp, c, entity_maps, subdomain_list, comm
+            a_knp, L_knp, c, entity_maps, subdomain_list, comm,
+            direct=direct_knp, p=p_knp, atol=atol_knp, rtol=rtol_knp,
+            threshold=threshold_knp
     )
 
     # Crate dictionary for storing XDMF files and checkpoint filenames
     xdmf_sub = {}; xdmf_mem = {}
     fname_bp_sub = {}; fname_bp_mem = {}
 
-    fname = "local_PAP_depolarization"
 
     # Create files (XDMF and checkpoint) for saving results
     for tag, subdomain in subdomain_list.items():
@@ -478,7 +457,7 @@ def solve_system():
 
         # Solve ODEs
         solve_odes(
-                mem_models_neuron, c_prev, phi_M_prev, ion_list, stim_params,
+                c_prev, phi_M_prev, ion_list, stim_params,
                 dt, mesh, ct, subdomain_list, k
             )
 
@@ -491,8 +470,11 @@ def solve_system():
                 ion_list, subdomain_list, mesh, ct,
         )
 
-        # update time
+        # Update time
         t.value = float(t + dt)
+
+        # Update source term
+        source_active.value = 1 if (t.value - delay) % period < pulse_width else 0
 
         # Write results to file
         for tag, subdomain in subdomain_list.items():
@@ -509,5 +491,6 @@ def solve_system():
             xdmf_mem[tag].close()
 
 if __name__ == "__main__":
-    solve_system()
-
+    mesh_file = 'meshes/remarked_mesh/mesh.xdmf'
+    fname = "local_PAP_depolarization"
+    solve_system(mesh_file, fname)

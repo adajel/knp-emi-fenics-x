@@ -8,12 +8,14 @@ def init_state_values(**values):
     Initialize state values
     """
     # Init values
-    phi_M_init = -85.85765274084892
+    phi_M_init = -85.84503411546689
 
     init_values = np.array([phi_M_init], dtype=np.float64)
 
     # State indices and limit checker
     state_ind = dict([("V", 0)])
+
+    assert len(init_values) == len(state_ind)
 
     for state_name, value in values.items():
         if state_name not in state_ind:
@@ -29,7 +31,6 @@ def init_parameter_values(**values):
     """
     Initialize parameter values
     """
-
     # Membrane parameters
     g_leak_Na = 0.1         # Na leak conductivity (mS/cm**2)
     g_leak_K  = 1.696       # K leak conductivity (mS/cm**2)
@@ -44,29 +45,30 @@ def init_parameter_values(**values):
 
     # Set initial parameter values
     init_values = np.array([g_leak_Cl, g_leak_Na, g_leak_K,
-                            0, 0, 0,
                             0, 0,
                             0, 0, 0,
-                            0, 0,
                             m_K, m_Na, I_max,
                             K_e_init, K_i_init,
-                            0, 0, 0, 0, 0, 0,
+                            0, 0,
+                            0, 0,
+                            0, 0,
                             0, 0, 0,
                             0],
                             dtype=np.float64)
 
     # Parameter indices and limit checker
     param_ind = dict([("g_leak_Cl", 0), ("g_leak_Na", 1), ("g_leak_K", 2),
-                      ("E_Cl", 3), ("E_Na", 4), ("E_K", 5),
-                      ("Cm", 6), ("stim_amplitude", 7),
-                      ("I_ch_Na", 8), ("I_ch_K", 9), ("I_ch_Cl", 10),
-                      ("m_K", 11), ("m_Na", 12), ("I_max", 13),
-                      ("K_e_init", 14), ("K_i_init", 15),
-                      ("K_e", 16), ("K_i", 17),
-                      ("Na_e", 18), ("Na_i", 19),
-                      ("Cl_e", 20), ("Cl_i", 21),
-                      ("z_Na", 22), ("z_K", 23), ("z_Cl", 24),
-                      ("psi", 25)])
+                      ("Cm", 3), ("stim_amplitude", 4),
+                      ("I_ch_Na", 5), ("I_ch_K", 6), ("I_ch_Cl", 7),
+                      ("m_K", 8), ("m_Na", 9), ("I_max", 10),
+                      ("K_e_init", 11), ("K_i_init", 12),
+                      ("K_e", 13), ("K_i", 14),
+                      ("Na_e", 15), ("Na_i", 16),
+                      ("Cl_e", 17), ("Cl_i", 18),
+                      ("z_Na", 19), ("z_K", 20), ("z_Cl", 21),
+                      ("psi", 22)])
+
+    assert len(init_values) == len(param_ind)
 
     for param_name, value in values.items():
         if param_name not in param_ind:
@@ -98,17 +100,18 @@ def parameter_indices(*params):
     """
     Parameter indices
     """
+
+    # Parameter indices and limit checker
     param_inds = dict([("g_leak_Cl", 0), ("g_leak_Na", 1), ("g_leak_K", 2),
-                       ("E_Cl", 3), ("E_Na", 4), ("E_K", 5),
-                       ("Cm", 6), ("stim_amplitude", 7),
-                       ("I_ch_Na", 8), ("I_ch_K", 9), ("I_ch_Cl", 10),
-                       ("m_K", 11), ("m_Na", 12), ("I_max", 13),
-                       ("K_e_init", 14), ("K_i_init", 15),
-                       ("K_e", 16), ("K_i", 17),
-                       ("Na_e", 18), ("Na_i", 19),
-                       ("Cl_e", 20), ("Cl_i", 21),
-                       ("z_Na", 22), ("z_K", 23), ("z_Cl", 24),
-                       ("psi", 25)])
+                      ("Cm", 3), ("stim_amplitude", 4),
+                      ("I_ch_Na", 5), ("I_ch_K", 6), ("I_ch_Cl", 7),
+                      ("m_K", 8), ("m_Na", 9), ("I_max", 10),
+                      ("K_e_init", 11), ("K_i_init", 12),
+                      ("K_e", 13), ("K_i", 14),
+                      ("Na_e", 15), ("Na_i", 16),
+                      ("Cl_e", 17), ("Cl_i", 18),
+                      ("z_Na", 19), ("z_K", 20), ("z_Cl", 21),
+                      ("psi", 22)])
 
     indices = []
     for param in params:
@@ -129,49 +132,36 @@ import math
 @cfunc(lsoda_sig, nopython=True) 
 def rhs_numba(t, states, values, parameters):
     """
-    Compute the right hand side of the\
-        hodgkin_huxley_squid_axon_model_1952_original ODE
+    Compute the right hand side of the ODE system
     """
-
-    # Assign states
-    #assert(len(states)) == 4
-
-    # Assign parameters
-    #assert(len(parameters)) == 11
-
-    # # Init return args
-    # if values is None:
-    #     values = np.zeros((4,), dtype=np.float64)
-    # else:
-    #     assert isinstance(values, np.ndarray) and values.shape == (4,)
-    #
 
     g_leak_Cl = parameters[0]
     g_leak_Na = parameters[1]
     g_leak_K = parameters[2]
-    E_Cl = parameters[3]
-    E_Na = parameters[4]
-    E_K = parameters[5]
-    Cm = parameters[6]
-    stim_amplitude = parameters[7]
-    I_ch_Na = parameters[8]
-    I_ch_K = parameters[9]
-    I_ch_Cl = parameters[10]
-    m_K = parameters[11]
-    m_Na = parameters[12]
-    I_max = parameters[13]
-    K_e_init = parameters[14]
-    K_i_init = parameters[15]
-    K_e = parameters[16]
-    K_i = parameters[17]
-    Na_e = parameters[18]
-    Na_i = parameters[19]
-    Cl_e = parameters[20]
-    Cl_i = parameters[21]
-    z_Na = parameters[22]
-    z_K = parameters[23]
-    z_Cl = parameters[24]
-    psi = parameters[25]
+    Cm = parameters[3]
+    stim_amplitude = parameters[4]
+    I_ch_Na = parameters[5]
+    I_ch_K = parameters[6]
+    I_ch_Cl = parameters[7]
+    m_K = parameters[8]
+    m_Na = parameters[9]
+    I_max = parameters[10]
+    K_e_init = parameters[11]
+    K_i_init = parameters[12]
+    K_e = parameters[13]
+    K_i = parameters[14]
+    Na_e = parameters[15]
+    Na_i = parameters[16]
+    Cl_e = parameters[17]
+    Cl_i = parameters[18]
+    z_Na = parameters[19]
+    z_K = parameters[20]
+    z_Cl = parameters[21]
+    psi = parameters[22]
+
+    E_Na = 1/psi * 1/z_K * math.log(Na_e/Na_i)
+    E_K = 1/psi * 1/z_K * math.log(K_e/K_i)
+    E_Cl = 1/psi * 1/z_Cl * math.log(Cl_e/Cl_i)
 
     # Physical parameters (PDEs)
     temperature = 307e3            # temperature (m K)
@@ -192,7 +182,7 @@ def rhs_numba(t, states, values, parameters):
     g_Kir = np.sqrt(K_e/K_e_init)*(A*B)/(C*D)
 
     # define and return current
-    i_Kir = g_leak_K * g_Kir * (states[0] - E_K)              # umol/(cm^2*ms)
+    i_Kir = g_leak_K * g_Kir * (states[0] - E_K)               # umol/(cm^2*ms)
 
     # Expressions for the Sodium channel component
     i_Na = g_leak_Na * (states[0] - E_Na) + 3 * i_pump
@@ -204,11 +194,11 @@ def rhs_numba(t, states, values, parameters):
     i_Cl = g_leak_Cl * (states[0] - E_Cl)
 
     # set I_ch_Na
-    parameters[8] = i_Na
+    parameters[5] = i_Na
     # set I_ch_K
-    parameters[9] = i_K
+    parameters[6] = i_K
     # set I_ch_Cl
-    parameters[10] = i_Cl
+    parameters[7] = i_Cl
 
     # update membrane potential
     values[0] = (- i_K - i_Na - i_Cl)/Cm

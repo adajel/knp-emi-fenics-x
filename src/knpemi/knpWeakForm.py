@@ -26,8 +26,8 @@ def create_measures(mesh, ct, ft):
 
     # Get interface/membrane tags
     gamma_tags = np.unique(ft.values)
-    subdomain_data = []
 
+    subdomain_data = []
     # Define measures on membrane interface gamma
     for tag in gamma_tags:
         ordered_integration_data = scifem.compute_interface_data(ct, ft.find(tag))
@@ -189,6 +189,7 @@ def create_rhs(vs, phi, phi_M_prev, c_prev, dx, dS, physical_params, ion_list,
                 for jdx, mm in enumerate(mem_models):
                     # Get facet tag
                     tag_mm = mm['ode'].tag
+
                     if splitting_scheme:
                         # Robin condition terms with splitting
                         g_robin_e = phi_M_prev_sub \

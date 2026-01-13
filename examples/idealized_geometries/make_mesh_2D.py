@@ -121,4 +121,7 @@ def main(output_path, resolution_factor):
 
 if __name__=="__main__":
     fname = "2D"
+    main(f"meshes/{fname}/", 0)
+    main(f"meshes/{fname}/", 1)
     main(f"meshes/{fname}/", 2)
+    main(f"meshes/{fname}/", 3)

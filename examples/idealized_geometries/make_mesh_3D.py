@@ -198,5 +198,4 @@ def main(output_path, resolution_factor):
     xdmf.close()
 
 if __name__=="__main__":
-    main("meshes/3D/", 1)
-
+    main("meshes/3D/", 0)

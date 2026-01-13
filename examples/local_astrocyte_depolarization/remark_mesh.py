@@ -7,6 +7,60 @@ import scifem
 
 comm = MPI.COMM_WORLD
 
+# Region in which to apply the source term (cm)
+x_L = 2100e-7; x_U = 2900e-7
+y_L = 2100e-7; y_U = 2900e-7
+z_L = 2100e-7; z_U = 2500e-7
+
+def print_coordinates(coordinates, domain, domain_prefix):
+    # list of point in domain and ROI
+    points = []
+    for i in coordinates:
+        for j in i:
+            x = j[0]
+            y = j[1]
+            z = j[2]
+            if x_L < x < x_U and y_L < y < y_U and z_L < z < z_U:
+               points.append([x, y, z])
+
+    middle = int(round((len(points) - 1)/2, 0))
+
+    point = points[middle]
+    x = point[0]
+    y = point[1]
+    z = point[2]
+
+    print(f"Coordinates of point in {domain}")
+    print(f"x_{domain_prefix} = {x}")
+    print(f"y_{domain_prefix} = {y}")
+    print(f"z_{domain_prefix} = {z}")
+    print("-----------------------------------")
+
+    point = points[middle-5]
+    x = point[0]
+    y = point[1]
+    z = point[2]
+
+    print(f"Coordinates of point in {domain}")
+    print(f"x_{domain_prefix} = {x}")
+    print(f"y_{domain_prefix} = {y}")
+    print(f"z_{domain_prefix} = {z}")
+    print("-----------------------------------")
+
+    point = points[middle+5]
+    x = point[0]
+    y = point[1]
+    z = point[2]
+
+    print(f"Coordinates of point in {domain}")
+    print(f"x_{domain_prefix} = {x}")
+    print(f"y_{domain_prefix} = {y}")
+    print(f"z_{domain_prefix} = {z}")
+    print("-----------------------------------")
+
+
+
+
 if __name__ == "__main__":
 
     # Get mesh
@@ -106,28 +160,34 @@ if __name__ == "__main__":
 
     xdmf.close()
 
-
     # Get the indices of facets with tag value 1
     tagged_facet_indices = ft.find(1)
     vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ft.dim, tagged_facet_indices)
     coordinates = mesh.geometry.x[vertex_indices]
-    print("Coordinates of tagged entities membrane:")
-    print("x_M = ", coordinates[1][1][0])
-    print("y_M = ", coordinates[1][1][1])
-    print("z_M = ", coordinates[1][1][2])
-    print("-----------------------------------")
-    print("M = ", coordinates)
+    print_coordinates(coordinates, "membrane neuron", "M")
 
     tagged_facet_indices = ct.find(1)
     vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ct.dim, tagged_facet_indices)
     coordinates = mesh.geometry.x[vertex_indices]
-    print("Coordinates of tagged entities ICS:")
-    print(coordinates)
-    print("-----------------------------------")
+    print_coordinates(coordinates, "ICS neuron", "i")
 
     tagged_facet_indices = ct.find(0)
     vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ct.dim, tagged_facet_indices)
     coordinates = mesh.geometry.x[vertex_indices]
-    print("Coordinates of tagged entities ECS:")
-    print(coordinates)
-    print("-----------------------------------")
+    print_coordinates(coordinates, "ECS neuron", "e")
+
+    # Get the indices of facets with tag value 2
+    tagged_facet_indices = ft.find(2)
+    vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ft.dim, tagged_facet_indices)
+    coordinates = mesh.geometry.x[vertex_indices]
+    print_coordinates(coordinates, "membrane glial", "M")
+
+    tagged_facet_indices = ct.find(2)
+    vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ct.dim, tagged_facet_indices)
+    coordinates = mesh.geometry.x[vertex_indices]
+    print_coordinates(coordinates, "ICS glial", "i")
+
+    tagged_facet_indices = ct.find(0)
+    vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ct.dim, tagged_facet_indices)
+    coordinates = mesh.geometry.x[vertex_indices]
+    print_coordinates(coordinates, "ECS glial", "e")

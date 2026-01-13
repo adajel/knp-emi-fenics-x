@@ -19,6 +19,8 @@ def init_state_values(**values):
     # State indices and limit checker
     state_ind = dict([("m", 0), ("h", 1), ("n", 2), ("V", 3)])
 
+    assert len(init_values) == len(state_ind)
+
     for state_name, value in values.items():
         if state_name not in state_ind:
             raise ValueError("{0} is not a state.".format(state_name))
@@ -63,6 +65,8 @@ def init_parameter_values(**values):
                       ("I_ch_Na", 15), ("I_ch_K", 16), ("I_ch_Cl", 17),
                       ("z_Na", 18), ("z_K", 19), ("z_Cl", 20),
                       ("psi", 21)])
+
+    assert len(init_values) == len(param_ind)
 
     for param_name, value in values.items():
         if param_name not in param_ind:
@@ -152,13 +156,6 @@ def rhs_numba(t, states, values, parameters):
     z_K = parameters[19]
     z_Cl = parameters[20]
     psi = parameters[21]
-
-    K_e = 3.092970607490389
-    K_i = 124.13988964240784
-    Na_e = 144.60625137617149
-    Na_i = 12.850454639128186
-    Cl_e = 133.62525154406637
-    Cl_i = 5.0
 
     E_Na = 1/psi * 1/z_K * math.log(Na_e/Na_i)
     E_K = 1/psi * 1/z_K * math.log(K_e/K_i)

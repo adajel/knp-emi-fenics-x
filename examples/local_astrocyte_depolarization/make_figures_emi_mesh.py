@@ -78,46 +78,38 @@ def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop):
 
     return phi_Ms
 
-def plot_3D_concentration(dt, Tstop):
+def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag):
 
     temperature = 300e3 # temperature (K)
     F = 96485e3         # Faraday's constant (C/mol)
     R = 8.314e3         # Gas constant (J/(K*mol))
 
-    time = np.arange(0, T-dt, dt)
+    time = np.arange(0, Tstop-dt, dt)
 
-    x_M =  0.0004892481747231438
-    y_M =  0.000490263330078125
-    z_M =  0.00044665183023830085
+    x_M = x['M'][0]
+    y_M = x['M'][1]
+    z_M = x['M'][2]
 
-    x_i = 4.81205259e-04
-    y_i = 1.29052837e-05
-    z_i = 1.17366730e-05
+    x_i = x['i'][0]
+    y_i = x['i'][1]
+    z_i = x['i'][2]
 
-    x_e = 1.40603525e-04
-    y_e = 4.78290389e-04
-    z_e = 4.79140187e-04
+    x_e = x['e'][0]
+    y_e = x['e'][1]
+    z_e = x['e'][2]
 
     point_e = np.array([[x_e, y_e, z_e]])
     point_i = np.array([[x_i, y_i, z_i]])
     point_M = np.array([[x_M, y_M, z_M]])
 
-    #################################################################
-    # get data axon A is stimulated
-    checkpoint_fname_e = 'results/3D/checkpoint_sub_0.bp'
-    checkpoint_fname_i = 'results/3D/checkpoint_sub_1.bp'
-    checkpoint_fname_M = 'results/3D/checkpoint_mem_1.bp'
+    checkpoint_fname_e = f'results/{fname_in}/checkpoint_sub_0.bp'
+    checkpoint_fname_i = f'results/{fname_in}/checkpoint_sub_{tag}.bp'
+    checkpoint_fname_M = f'results/{fname_in}/checkpoint_mem_{tag}.bp'
 
-    # bulk concentrations
-    tag_e = 0
-    tag_i = 1
-
-    Na_e, K_e, Cl_e, phi_e = get_time_series_sub(checkpoint_fname_e, point_e, tag_e, dt, Tstop)
-    Na_i, K_i, Cl_i, phi_i = get_time_series_sub(checkpoint_fname_i, point_i, tag_i, dt, Tstop)
-    phi_M = get_time_series_mem(checkpoint_fname_M, point_M, tag_i, dt, Tstop)
-
-    #################################################################
-    # get data axons BC are stimulated
+    # get timeseries in points
+    Na_e, K_e, Cl_e, phi_e = get_time_series_sub(checkpoint_fname_e, point_e, 0, dt, Tstop)
+    Na_i, K_i, Cl_i, phi_i = get_time_series_sub(checkpoint_fname_i, point_i, tag, dt, Tstop)
+    phi_M = get_time_series_mem(checkpoint_fname_M, point_M, tag, dt, Tstop)
 
     # Concentration plots
     fig = plt.figure(figsize=(12*0.9,12*0.9))
@@ -164,41 +156,79 @@ def plot_3D_concentration(dt, Tstop):
     plt.tight_layout()
 
     # save figure to file
-    plt.savefig('results/3D/pot_con_3D.svg', format='svg')
+    plt.savefig(f'results/{fname_in}/summary_{fname_out}.svg', format='svg')
 
-    f_phi_M = open('results/3D/phi_M_2D.txt', "w")
+    f_phi_M = open(f'results/{fname_in}/phi_M_2D.txt', "w")
     for p in phi_M:
         f_phi_M.write("%.10f \n" % p)
     f_phi_M.close()
 
-    f_K_e = open('results/3D/K_ECS_2D.txt', "w")
+    f_K_e = open(f'results/{fname_in}/K_ECS_2D.txt', "w")
     for p in K_e:
         f_K_e.write("%.10f \n" % p)
     f_K_e.close()
 
-    f_K_i = open('results/3D/K_ICS_2D.txt', "w")
+    f_K_i = open(f'results/{fname_in}/K_ICS_2D.txt', "w")
     for p in K_i:
         f_K_i.write("%.10f \n" % p)
     f_K_i.close()
 
-    f_Na_e = open('results/3D/Na_ECS_2D.txt', "w")
+    f_Na_e = open(f'results/{fname_in}/Na_ECS_2D.txt', "w")
     for p in Na_e:
         f_Na_e.write("%.10f \n" % p)
     f_Na_e.close()
 
-    f_Na_i = open('results/3D/Na_ICS_2D.txt', "w")
+    f_Na_i = open(f'results/{fname_in}/Na_ICS_2D.txt', "w")
     for p in Na_i:
         f_Na_i.write("%.10f \n" % p)
     f_Na_i.close()
 
     return
 
+fname_in = "local_PAP_depolarization"
+fname_out_N = "neuron"
+fname_out_G = "glial"
+tag_N = 1
+tag_G = 2
+
 # create directory for figures
-if not os.path.isdir('results/3D'):
-    os.mkdir('results/3D')
+if not os.path.isdir(f'results/{fname_in}'):
+    os.mkdir(f'results/{fname_in}')
 
 # create figures
 dt = 0.1
-T = 2
+Tstop = 15
 
-plot_3D_concentration(dt, T)
+# EMI points neuron
+x_M = 0.00021805911552094111
+y_M = 0.00022208269041793245
+z_M = 0.00023494927229732336
+x_i = 0.00021895646088814492
+y_i = 0.00023021958580729074
+z_i = 0.00023207341100176107
+x_e = 0.00025308818813279027
+y_e = 0.00023698776419221233
+z_e = 0.00023301680991154913
+x_N = {'M':[x_M, y_M, z_M],
+       'i':[x_i, y_i, z_i],
+       'e':[x_e, y_e, z_e],
+}
+
+plot_3D_concentration(fname_in, fname_out_N, dt, Tstop, x_N, tag_N)
+
+# EMI points glial
+x_M = 0.00026834450833705247
+y_M = 0.0002889436164406373
+z_M = 0.00022057539244152102
+x_i = 0.0002757962756580815
+y_i = 0.00028978895336808524
+z_i = 0.00024707838038751177
+x_e = 0.00027393821446464905
+y_e = 0.0002511162579901399
+z_e = 0.0002376715140603816
+x_G = {'M':[x_M, y_M, z_M],
+       'i':[x_i, y_i, z_i],
+       'e':[x_e, y_e, z_e],
+}
+
+plot_3D_concentration(fname_in, fname_out_G, dt, Tstop, x_G, tag_G)

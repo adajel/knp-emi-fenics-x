@@ -123,11 +123,11 @@ def read_mesh(mesh_file):
     return mesh, ct, ft
 
 
-def solve_system():
+def solve_system(mesh_path, fname):
     """ Solve system (PDEs and ODEs) """
+
     # Read mesh and create sub-meshes for extra and intracellular domains and
     # for cellular membranes / interfaces (for solving ODEs)
-    mesh_path = 'meshes/2D/mesh_2.xdmf'
     mesh, ct, ft = read_mesh(mesh_path)
 
     # Subdomain tags (same as is mesh). NB! ECS tag must always be zero.
@@ -307,8 +307,6 @@ def solve_system():
     xdmf_sub = {}; xdmf_mem = {}
     fname_bp_sub = {}; fname_bp_mem = {}
 
-    fname = "2D"
-
     # Create files (XDMF and checkpoint) for saving results
     for tag, subdomain in subdomain_list.items():
         xdmf = dolfinx.io.XDMFFile(comm, f"results/{fname}/results_sub_{tag}.xdmf", "w")
@@ -325,6 +323,10 @@ def solve_system():
             xdmf_mem[tag] = xdmf
             fname_bp_mem[tag] = f"results/{fname}/checkpoint_mem_{tag}.bp"
 
+    # Lists for storing number of iteration in solver for each time step
+    num_it_emi = []
+    num_it_knp = []
+
     for k in range(int(round(Tstop/float(dt)))):
         print(f'solving for t={float(t)}')
 
@@ -337,6 +339,10 @@ def solve_system():
         # Solve PDEs
         problem_emi.solve()
         problem_knp.solve()
+
+        # Add iteration count to list
+        num_it_emi.append(problem_emi.solver.getIterationNumber())
+        num_it_knp.append(problem_knp.solver.getIterationNumber())
 
         update_pde_variables(
                 c, c_prev, phi, phi_M_prev, physical_parameters,
@@ -360,5 +366,23 @@ def solve_system():
         if tag > 0:
             xdmf_mem[tag].close()
 
+    return num_it_emi, num_it_knp
+
 if __name__ == "__main__":
-    solve_system()
+
+    avg_it_knp = []
+    avg_it_emi = []
+
+    for res in [0, 1, 2, 3]:
+        # Path to mesh file
+        mesh_path = f'meshes/2D/mesh_{res}.xdmf'
+        # Filename for storing results
+        fname = f"2D_{res}"
+        # Solve problem with mesh resolution {res}
+        it_emi, it_knp = solve_system(mesh_path, fname)
+        # Calculate average number of iterations in linear solver
+        avg_it_emi.append(sum(it_emi)/len(it_emi))
+        avg_it_knp.append(sum(it_knp)/len(it_knp))
+
+    print(f"average number of iterations emi iterative solver: {avg_it_emi}")
+    print(f"average number of iterations knp iterative solver: {avg_it_knp}")

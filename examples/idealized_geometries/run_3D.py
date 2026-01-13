@@ -124,12 +124,14 @@ def read_mesh(mesh_file):
     return mesh, ct, ft
 
 
-def solve_system():
+def solve_system(mesh_path, fname):
     """ Solve system (PDEs and ODEs) """
     # Read mesh and create sub-meshes for extra and intracellular domains and
     # for cellular membranes / interfaces (for solving ODEs)
-    mesh_path = 'meshes/3D/mesh_1.xdmf'
+
+    print("reading mesh...")
     mesh, ct, ft = read_mesh(mesh_path)
+    print("read mesh.")
 
     # Subdomain tags (same as is mesh). NB! ECS tag must always be zero.
     ECS = {"tag":0,
@@ -162,7 +164,7 @@ def solve_system():
     t = dolfinx.fem.Constant(mesh, 0.0) # time constant
 
     dt = 1.0e-4                         # global time step (ms)
-    Tstop = 1.0e-1                      # global end time (ms)
+    Tstop = 2.0e-3                      # global end time (ms)
     n_steps_ODE = 25                    # number of ODE steps
 
     # Physical parameters
@@ -250,7 +252,7 @@ def solve_system():
     set_initial_conditions(ion_list, subdomain_list, c_prev)
 
     # Set stimulus ODE
-    g_syn_bar = 10                     # synaptic conductivity (S/m**2)
+    g_syn_bar = 0                     # synaptic conductivity (S/m**2)
     stimulus = {'stim_amplitude': g_syn_bar}
     stimulus_locator = lambda x: (x[0] < 20e-6)
 
@@ -310,8 +312,6 @@ def solve_system():
     xdmf_sub = {}; xdmf_mem = {}
     fname_bp_sub = {}; fname_bp_mem = {}
 
-    fname = "3D"
-
     # Create files (XDMF and checkpoint) for saving results
     for tag, subdomain in subdomain_list.items():
         xdmf = dolfinx.io.XDMFFile(comm, f"results/{fname}/results_sub_{tag}.xdmf", "w")
@@ -328,6 +328,10 @@ def solve_system():
             xdmf_mem[tag] = xdmf
             fname_bp_mem[tag] = f"results/{fname}/checkpoint_mem_{tag}.bp"
 
+    # Lists for storing number of iteration in solver for each time step
+    num_it_emi = []
+    num_it_knp = []
+
     for k in range(int(round(Tstop/float(dt)))):
         print(f'solving for t={float(t)}')
 
@@ -340,6 +344,10 @@ def solve_system():
         # Solve PDEs
         problem_emi.solve()
         problem_knp.solve()
+
+        # Add iteration count to list
+        num_it_emi.append(problem_emi.solver.getIterationNumber())
+        num_it_knp.append(problem_knp.solver.getIterationNumber())
 
         update_pde_variables(
                 c, c_prev, phi, phi_M_prev, physical_parameters,
@@ -363,5 +371,23 @@ def solve_system():
         if tag > 0:
             xdmf_mem[tag].close()
 
+    return num_it_emi, num_it_knp
+
 if __name__ == "__main__":
-    solve_system()
+
+    avg_it_knp = []
+    avg_it_emi = []
+
+    for res in [1]:
+        # Path to mesh
+        mesh_path = f'meshes/3D/mesh_{res}.xdmf'
+        # Filename for storing results
+        fname = f"3D_{res}"
+        # Solve problem with mesh resolution {res}
+        num_it_emi, num_it_knp = solve_system(mesh_path, fname)
+        # Calculate average number of iterations in linear solver
+        avg_it_emi.append(sum(num_it_emi)/len(num_it_emi))
+        avg_it_knp.append(sum(num_it_knp)/len(num_it_knp))
+
+    print(avg_it_emi)
+    print(avg_it_knp)

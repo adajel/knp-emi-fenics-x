@@ -2,6 +2,10 @@ import dolfinx
 import numpy as np
 import scifem
 
+from mpi4py import MPI
+import numpy.typing as npt
+from typing import Iterable
+
 from knpemi.odeSolver import MembraneModel
 
 from ufl import (
@@ -10,6 +14,78 @@ from ufl import (
 
 i_res = "-"
 e_res = "+"
+
+def extract_facet_integration_data(
+    cell_tags: dolfinx.mesh.MeshTags,
+    cell_values: Iterable[int],
+    facet_indices: npt.NDArray[np.int32],
+) -> npt.NDArray[np.int32]:
+    """
+    Given a facet in `facet_indices`, find the cells tagged with a given set of `cell_values`,
+    and compute the integration data for those cells.
+
+    """
+    if isinstance(cell_values, int):
+        cell_values = (cell_values,)
+
+    if len(facet_indices) == 0:
+        return np.empty((0, 2), dtype=np.int32)
+    cell_tags.topology.create_connectivity(cell_tags.topology.dim - 1, cell_tags.topology.dim)
+    cell_tags.topology.create_connectivity(cell_tags.topology.dim, cell_tags.topology.dim-1)
+
+    f_to_c = cell_tags.topology.connectivity(cell_tags.topology.dim - 1, cell_tags.topology.dim)
+    c_to_f = cell_tags.topology.connectivity(cell_tags.topology.dim, cell_tags.topology.dim - 1)
+
+    # Extract the cells connected to each facet.
+    # Assumption is that there can only be two cells per facet, and should always be
+    # two cells per facet.
+    exterior_facet_indices = dolfinx.cpp.mesh.exterior_facet_indices(cell_tags.topology)
+ 
+    is_exterior = np.isin(facet_indices, exterior_facet_indices)
+    if is_exterior.any():
+        raise RuntimeError("Facet is assumed to be an interior facet")
+ 
+    num_cells_per_facet = f_to_c.offsets[facet_indices + 1] - f_to_c.offsets[facet_indices]
+
+
+    num_facets = 0
+    num_facets_per_cell = c_to_f.offsets[1:] - c_to_f.offsets[:-1]
+  
+    idata = np.zeros((0, 2), dtype=np.int32)
+    for num_connections in [1,2]:
+        n_sided_interior = np.flatnonzero(num_cells_per_facet == num_connections)
+        if len(n_sided_interior) == 0:
+            continue
+        sub_facets = facet_indices[n_sided_interior]
+        num_facets += len(n_sided_interior)
+        
+        facet_pos = np.vstack([f_to_c.offsets[sub_facets]+i for i in range(num_connections)]).T
+        cells = f_to_c.array[facet_pos].flatten()
+        assert all(
+        num_facets_per_cell[cells.flatten()] == num_facets_per_cell[cells.flatten()[0]]
+    ), "All connected cells must have the same number of facets (not mixed topology)."
+    
+        facets = np.vstack(
+            [
+                c_to_f.array[c_to_f.offsets[cells] + i]
+                for i in range(num_facets_per_cell[cells[0]])
+            ]
+        ).T
+    
+        # Repeat facet indices twice to be able to do vectorized match
+        rep_fi = np.repeat(sub_facets, num_connections)
+        indicator = (facets == rep_fi[:, None])
+        _row, local_pos = np.nonzero(indicator)
+        assert np.unique(_row).shape[0] == len(_row)
+        _idata = np.vstack([cells, local_pos]).T.reshape(-1, 2)
+        idata = np.vstack([idata, _idata])
+
+    assert num_facets == len(num_cells_per_facet), "Facets shared by more than two cells are not supported"
+
+    is_marked = cell_tags.indices[np.isin(cell_tags.values, np.asarray(cell_values))]
+
+    return idata[np.isin(idata[:, 0], is_marked)]
+
 
 def set_initial_conditions(ion_list, subdomain_list, c_prev):
     """ Set initial conditions given by constants """
@@ -83,7 +159,7 @@ def interpolate_to_membrane(ue, ui, Q, mesh, ct, subdomain_list, tag):
 
     num_facets_local = (
         mesh_g.topology.index_map(mesh_g.topology.dim).size_local
-        + mesh_g.topology.index_map(mesh_g.topology.dim).num_ghosts
+        #+ mesh_g.topology.index_map(mesh_g.topology.dim).num_ghosts
     )
 
     cell_map = mesh.topology.index_map(mesh.topology.dim)
@@ -94,10 +170,10 @@ def interpolate_to_membrane(ue, ui, Q, mesh, ct, subdomain_list, tag):
     )
 
     # Compute ordered integration entities on the interface
-    interface_integration_entities = scifem.compute_interface_data(
-        ct, facet_indices=g_to_parent_map, include_ghosts=True
-    )
-    mapped_entities = interface_integration_entities.copy()
+    #interface_integration_entities = scifem.compute_interface_data(
+    #    ct, facet_indices=g_to_parent_map, include_ghosts=False
+    #)
+    #mapped_entities = interface_integration_entities.copy()
 
     # For each submesh, get the relevant integration entities
     parent_to_e = e_to_parent.sub_topology_to_topology(
@@ -106,10 +182,17 @@ def interpolate_to_membrane(ue, ui, Q, mesh, ct, subdomain_list, tag):
     parent_to_i = i_to_parent.sub_topology_to_topology(
         np.arange(num_cells_local, dtype=np.int32), inverse=True
     )
-    mapped_entities[:, 0] = parent_to_e[interface_integration_entities[:, 0]]
-    mapped_entities[:, 2] = parent_to_i[interface_integration_entities[:, 2]]
-    assert np.all(mapped_entities[:, 0] >= 0)
-    assert np.all(mapped_entities[:, 2] >= 0)
+
+    e_side = extract_facet_integration_data(ct, (0), g_to_parent_map)
+    i_side = extract_facet_integration_data(ct, (tag), g_to_parent_map)
+
+    mapped_e = e_side.copy()
+    mapped_e[:, 0] = parent_to_e[e_side[:,0]]
+    mapped_i = i_side.copy()
+    mapped_i[:, 0] = parent_to_i[i_side[:,0]]
+
+    assert np.all(mapped_e[:,0] >= 0)
+    assert np.all(mapped_i[:,0] >= 0)
 
     # Create two functions on the interface submesh
     qe = dolfinx.fem.Function(Q, name=ue.name)
@@ -117,11 +200,13 @@ def interpolate_to_membrane(ue, ui, Q, mesh, ct, subdomain_list, tag):
 
     # Interpolate volume functions (on submesh) onto all cells of the interface submesh
     scifem.interpolation.interpolate_to_surface_submesh(
-        ue, qe, np.arange(len(g_to_parent_map), dtype=np.int32), mapped_entities[:, :2]
+        ue, qe, np.arange(len(g_to_parent_map), dtype=np.int32),
+        mapped_e
     )
     qe.x.scatter_forward()
     scifem.interpolation.interpolate_to_surface_submesh(
-        ui, qi, np.arange(len(g_to_parent_map), dtype=np.int32), mapped_entities[:, 2:]
+        ui, qi, np.arange(len(g_to_parent_map), dtype=np.int32),
+        mapped_i
     )
     qi.x.scatter_forward()
 
@@ -142,10 +227,15 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list,
         c_e = ion_list[-1]['c_0'] if is_last else c_prev[0][idx]
         c_i = ion_list[-1][f'c_{tag}'] if is_last else c_prev[tag][idx]
 
-        # Get and set extra and intracellular traces
+        # Get extra and intracellular traces from PDE solution
         k_e, k_i = interpolate_to_membrane(c_e, c_i, Q, mesh, ct, subdomain_list, tag)
+
+        # Set extra and intracellular traces in ODE solver
         ode_model.set_parameter(f"{ion['name']}_e", k_e)
         ode_model.set_parameter(f"{ion['name']}_i", k_i)
+
+        print("k_e", min(k_e.x.array[:]))
+        print("k_i", min(k_i.x.array[:]))
 
     # If first time step do nothing (the initial value for phi_M in ODEs are
     # taken from ODE file). For all other time steps, update the membrane
@@ -177,8 +267,8 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
             c_prev_sub = c_prev[tag][idx]
             c_elim_sum += - (1.0 / ion_list[-1]['z']) * ion['z'] * c_prev_sub
 
-        # Interpolate ufl sum onto V
-        V = c[tag][tag].function_space
+        # Interpolate ufl sum onto V (functionspace of first ion in ion list)
+        V = c[tag][0].function_space
         c_elim = dolfinx.fem.Function(V)
         expr = dolfinx.fem.Expression(c_elim_sum, V.element.interpolation_points)
         c_elim.interpolate(expr)
@@ -199,7 +289,7 @@ def update_pde_variables(c, c_prev, phi, phi_M_prev, physical_parameters,
             # Update Nernst potential for eliminated ion
             c_e_elim = ion_list[-1][f'c_0']
             c_i_elim = ion_list[-1][f'c_{tag}']
-            ion_list[-1]['E'] = 1 / (psi * ion['z']) * ln(c_e_elim(e_res) / c_i_elim(i_res))
+            ion_list[-1]['E'] = 1 / (psi * ion_list[-1]['z']) * ln(c_e_elim(e_res) / c_i_elim(i_res))
 
             # Update membrane potential
             phi_e = phi[0]
