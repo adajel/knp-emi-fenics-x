@@ -234,9 +234,6 @@ def update_ode_variables(ode_model, c_prev, phi_M_prev, ion_list,
         ode_model.set_parameter(f"{ion['name']}_e", k_e)
         ode_model.set_parameter(f"{ion['name']}_i", k_i)
 
-        print("k_e", min(k_e.x.array[:]))
-        print("k_i", min(k_i.x.array[:]))
-
     # If first time step do nothing (the initial value for phi_M in ODEs are
     # taken from ODE file). For all other time steps, update the membrane
     # potential in ODE solver based on previous PDEs step
