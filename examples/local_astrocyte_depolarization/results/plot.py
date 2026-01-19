@@ -5,9 +5,8 @@ import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.pyplot as plt
 
-blue1 = '#365C8D'
-orange = '#FFA500'
-green1 = '#A0DA39'
+red = '#db2525'
+blue = '#1f3ecc'
 
 # set font & text parameters
 font = {'family' : 'serif',
@@ -64,33 +63,33 @@ ax = plt.gca()
 ax1 = fig.add_subplot(3,2,1)
 plt.title(r'Na$^+$ concentration (ECS)')
 plt.ylabel(r'[Na]$_e$ (mM)')
-plt.plot(Na_e_100, linewidth=3, color=orange, label="100 Hz")
-plt.plot(Na_e_300, linewidth=3, color=blue1, label="300 Hz")
+plt.plot(t, Na_e_300, linewidth=3, color=red, label="300 Hz")
+plt.plot(t, Na_e_100, linewidth=3, color=blue, label="100 Hz")
 
 ax3 = fig.add_subplot(3,2,2)
 plt.title(r'K$^+$ concentration (ECS)')
 plt.ylabel(r'[K]$_e$ (mM)')
-plt.plot(K_e_100, linewidth=3, color=orange, label="100 Hz")
-plt.plot(K_e_300, linewidth=3, color=blue1, label="300 Hz")
+plt.plot(t, K_e_300, linewidth=3, color=red, label="300 Hz")
+plt.plot(t, K_e_100, linewidth=3, color=blue, label="100 Hz")
 
 ax2 = fig.add_subplot(3,2,3)
 plt.title(r'Na$^+$ concentration (ICS)')
 plt.ylabel(r'[Na]$_i$ (mM)')
-plt.plot(Na_i_100,linewidth=3, color=orange, label="100 Hz")
-plt.plot(Na_i_300,linewidth=3, color=blue1, label="300 Hz")
+plt.plot(t, Na_i_300,linewidth=3, color=red, label="300 Hz")
+plt.plot(t, Na_i_100,linewidth=3, color=blue, label="100 Hz")
 
 ax2 = fig.add_subplot(3,2,4)
 plt.title(r'K$^+$ concentration (ICS)')
 plt.ylabel(r'[K]$_i$ (mM)')
-plt.plot(K_i_100, linewidth=3, color=orange, label="100 Hz")
-plt.plot(K_i_300, linewidth=3, color=blue1, label="300 Hz")
+plt.plot(t, K_i_300, linewidth=3, color=red, label="300 Hz")
+plt.plot(t, K_i_100, linewidth=3, color=blue, label="100 Hz")
 
 ax5 = fig.add_subplot(3,2,5)
 plt.title(r'Membrane potential')
 plt.ylabel(r'$\phi_M$ (mV)')
 plt.xlabel(r'time (ms)')
-plt.plot(phi_M_100, linewidth=3, color=orange, label="100 Hz")
-plt.plot(phi_M_300, linewidth=3, color=blue1, label="300 Hz")
+plt.plot(t, phi_M_300, linewidth=3, color=red, label="300 Hz")
+plt.plot(t, phi_M_100, linewidth=3, color=blue, label="100 Hz")
 
 plt.legend()
 
