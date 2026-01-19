@@ -58,9 +58,6 @@ def print_coordinates(coordinates, domain, domain_prefix):
     print(f"z_{domain_prefix} = {z}")
     print("-----------------------------------")
 
-
-
-
 if __name__ == "__main__":
 
     # Get mesh

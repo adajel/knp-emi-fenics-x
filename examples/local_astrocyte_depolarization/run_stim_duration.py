@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-
 from knpemi.emiWeakForm import emi_system, create_functions_emi
 from knpemi.knpWeakForm import knp_system, create_functions_knp
 
@@ -19,6 +18,8 @@ import adios4dolfinx
 import scifem
 from mpi4py import MPI
 import numpy as np
+import argparse
+import yaml
 
 from ufl import (
         ln,
@@ -147,8 +148,11 @@ def read_mesh(mesh_file):
     return mesh, ct, ft
 
 
-def solve_system(mesh_file, fname):
+def solve_system(config):
     """ Solve system (PDEs and ODEs) """
+
+    mesh_file = config['mesh_file'] # path to mesh file
+    fname = config["fname"]         # directory for saving results
 
     print("reading mesh...")
     mesh, ct, ft = read_mesh(mesh_file)
@@ -211,7 +215,7 @@ def solve_system(mesh_file, fname):
     t = dolfinx.fem.Constant(mesh, 0.0)
 
     dt = 0.1                         # global time step (ms)
-    Tstop = 100                      # ms
+    Tstop = config["Tstop"]          # ms
     n_steps_ODE = 25                 # number of ODE steps
 
     # Physical parameters
@@ -238,8 +242,8 @@ def solve_system(mesh_file, fname):
     Cl_n_init = 5.0
     Cl_g_init = 5.203660274163705
 
-    lambda_e = 1.6
-    lambda_i = 3.4
+    lambda_i = config["lambda_i"]
+    lambda_e = config["lambda_e"]
 
     # Set background charge / immobile ions
     rho_z = -1
@@ -302,12 +306,13 @@ def solve_system(mesh_file, fname):
     z_L = 2100e-7; z_U = 2500e-7
 
     # Strength of source term
-    f_value = 150
+    f_value = config["f_value"]
 
     # Frequency of source term (application of source term)
-    period = 10         # 10 ms repeat
-    pulse_width = 1     # 1 ms duration
-    delay = 0.2         # 0.2 ms start offset
+    period = config["period"]           # repeat every period (frequency)
+    pulse_width = config["pulse_width"] # duration (ms)
+    delay = config["delay"]             # start offset (ms)
+    end_time = config["end_time"]       # turn source term off after end_time (ms)
 
     # NB! As modulo is not supported by UFL, the source term is defined as a
     # constant, and updated in the time-loop further down. If the
@@ -491,18 +496,17 @@ def solve_system(mesh_file, fname):
             xdmf_mem[tag].close()
 
 if __name__ == "__main__":
-    mesh_file = 'meshes/remarked_mesh/mesh.xdmf'
-    fname = "local_PAP_depolarization"
-    solve_system(mesh_file, fname)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-c",
+        metavar="config.yml",
+        help="path to config file",
+        type=str,
+    )
+    conf_arg = vars(parser.parse_args())
+    config_file_path = conf_arg["c"]
 
-    """
-    with open(f"config_files/{config_name}.yml") as conf_file:
+    with open(f"config_files/{config_file_path}.yml") as conf_file:
         config = yaml.load(conf_file, Loader=yaml.FullLoader)
 
-    T = config["T"]
-    f_source = config["f_source"]
-    period = config["period"]
-    delay = config["delay"]
-    lambda_i = config["lambda_i"]
-    lambda_e = config["lambda_e"]
-    """
+    solve_system(config)

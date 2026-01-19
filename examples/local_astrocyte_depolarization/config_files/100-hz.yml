@@ -1,0 +1,10 @@
+mesh_file : 'meshes/remarked_mesh/mesh.xdmf'
+fname : "local_PAP_depolarization_100_hz"
+Tstop : 100    # end time (ms)
+f_value : 60   # strength of source term
+period: 10     # period source term stimuli
+delay: 0.2     # delay source term stimuli
+pulse_width: 1 # 1 ms duration
+end_time : 100 # turn source term off after 100 ms
+lambda_e : 1.6 # ECS tortuosity
+lambda_i : 3.4 # ICS tortuosity

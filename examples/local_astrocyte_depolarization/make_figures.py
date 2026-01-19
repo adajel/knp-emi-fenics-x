@@ -3,6 +3,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import matplotlib.pyplot as plt
 import numpy as np
+import argparse
+import yaml
 import os
 
 import dolfinx
@@ -184,11 +186,24 @@ def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag):
 
     return
 
-#fname_in = "local_PAP_depolarization_100_hz"
-#for fname_in in ["local_PAP_depolarization_100_hz", "local_PAP_depolarization_300_hz"]:
-for fname_in in ["local_PAP_depolarization_100_hz_short"]:
-    fname_out_N = "neuron_short"
-    fname_out_G = "glial_short"
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-c",
+        metavar="config.yml",
+        help="path to config file",
+        type=str,
+    )
+    conf_arg = vars(parser.parse_args())
+    config_file_path = conf_arg["c"]
+
+    with open(f"config_files/{config_file_path}.yml") as conf_file:
+        config = yaml.load(conf_file, Loader=yaml.FullLoader)
+
+    fname_in = config["fname"]
+
+    fname_out_N = "neuron"
+    fname_out_G = "glial"
     tag_N = 1
     tag_G = 2
 
@@ -198,7 +213,7 @@ for fname_in in ["local_PAP_depolarization_100_hz_short"]:
 
     # create figures
     dt = 0.1
-    Tstop = 2
+    Tstop = config["Tstop"]
 
     # EMI points glial
     x_M = 0.00026834450833705247
@@ -233,5 +248,3 @@ for fname_in in ["local_PAP_depolarization_100_hz_short"]:
     }
 
     plot_3D_concentration(fname_in, fname_out_N, dt, Tstop, x_N, tag_N)
-
-
