@@ -29,31 +29,31 @@ fdir_100 = "local_PAP_depolarization_100_hz"
 fdir_300 = "local_PAP_depolarization_300_hz"
 
 # write phi_M
-fname = f"{fdir_100}/phi_M.txt"
+fname = f"{fdir_100}/phi_M_glial.txt"
 phi_M_100 = read_me(fname)
-fname = f"{fdir_300}/phi_M.txt"
+fname = f"{fdir_300}/phi_M_glial.txt"
 phi_M_300 = read_me(fname)
 
 t = np.linspace(0, len(phi_M_100)*1.0e-4, len(phi_M_100))*1000
 
-fname = f"{fdir_100}/Na_ECS.txt"
+fname = f"{fdir_100}/Na_ECS_glial.txt"
 Na_e_100 = read_me(fname)
-fname = f"{fdir_300}/Na_ECS.txt"
+fname = f"{fdir_300}/Na_ECS_glial.txt"
 Na_e_300 = read_me(fname)
 
-fname = f"{fdir_100}/Na_ICS.txt"
+fname = f"{fdir_100}/Na_ICS_glial.txt"
 Na_i_100 = read_me(fname)
-fname = f"{fdir_300}/Na_ICS.txt"
+fname = f"{fdir_300}/Na_ICS_glial.txt"
 Na_i_300 = read_me(fname)
 
-fname = f"{fdir_100}/K_ECS.txt"
+fname = f"{fdir_100}/K_ECS_glial.txt"
 K_e_100 = read_me(fname)
-fname = f"{fdir_300}/K_ECS.txt"
+fname = f"{fdir_300}/K_ECS_glial.txt"
 K_e_300 = read_me(fname)
 
-fname_ = f"{fdir_100}/K_ICS.txt"
+fname = f"{fdir_100}/K_ICS_glial.txt"
 K_i_100 = read_me(fname)
-fname = f"{fdir_300}/K_ICS.txt"
+fname = f"{fdir_300}/K_ICS_glial.txt"
 K_i_300 = read_me(fname)
 
 # Concentration plots
