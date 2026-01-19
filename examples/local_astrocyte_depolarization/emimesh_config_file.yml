@@ -1,0 +1,34 @@
+name : synapse_smooth_2
+fixed :
+  raw:
+    cloudpath : "precomputed://gs://iarpa_microns/minnie/minnie65/seg_m1300"
+    mip : 2 # resolution of data
+    #position : "183194-137154-18498" # neuro: 86+63, astro: 91?
+    #position : "146822-178894-23053" # 864691136334120627 and 864691136144674612
+    #position : "154440-176572-23215" # 864691135181906946 and 864691136144674612
+
+    # seems OK, but the closest astrocyte is not that big (is it even astro?)
+    # Two synapses close to each other.
+    # n1 = 864691135502890692, n2 = 864691135786756292, a = 864691135502890692
+    #position : "165214-193474-20479" # one synapse, other astrocyte
+    #position : "165270-193450-20507" # other synapse, other astrocyte
+
+    # new location, possibly big astricyte close
+    # n1 = 864691136144674612, n2 = 864891136092833460, as = 864691135384117978
+    position : "162258-200928-20530"
+
+  processing:
+    operation : 
+      - "removeislands minsize=5000" # 10000 looks OK wrt island in astrocyte
+      - "dilate iterations=1 radius=1" # swell cells
+      - "smooth iterations=2 radius=1"
+      - "smooth iterations=1 radius=1 labels='[864691135384117978]'"
+      - "erode iterations=1 radius=1"  # shrink cells
+      - "removeislands minsize=5000" # 10000 looks OK wrt island in astrocyte
+raw:
+  size : [5000] # nm
+processing:
+  dx : 20 # resolution of mesh
+  ncells : [100]
+meshing:
+    envelopsize : [18]
