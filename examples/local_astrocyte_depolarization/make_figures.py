@@ -41,6 +41,7 @@ def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop):
 
     t = dt
     while t <= Tstop:
+        print(f"Reading data for t = {t}")
         # Read results from file
         adios4dolfinx.read_function(checkpoint_fname, K, time=t, name=f"c_K_{tag}")
         adios4dolfinx.read_function(checkpoint_fname, Cl, time=t, name=f"c_Cl_{tag}")
@@ -69,10 +70,8 @@ def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop):
 
     t = dt
     while t <= Tstop:
-        print(t)
+        print(f"Reading data for t = {t}")
         adios4dolfinx.read_function(checkpoint_fname, phi_M, time=t, name=f"phi_M_{tag}")
-        print(phi_M.x.array[:])
-        print(scifem.evaluate_function(phi_M, point)[0])
         phi_Ms.append(scifem.evaluate_function(phi_M, point)[0])
         t += dt
 
@@ -185,50 +184,54 @@ def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag):
 
     return
 
-fname_in = "local_PAP_depolarization"
-fname_out_N = "neuron"
-fname_out_G = "glial"
-tag_N = 1
-tag_G = 2
+#fname_in = "local_PAP_depolarization_100_hz"
+#for fname_in in ["local_PAP_depolarization_100_hz", "local_PAP_depolarization_300_hz"]:
+for fname_in in ["local_PAP_depolarization_100_hz_short"]:
+    fname_out_N = "neuron_short"
+    fname_out_G = "glial_short"
+    tag_N = 1
+    tag_G = 2
 
-# create directory for figures
-if not os.path.isdir(f'results/{fname_in}'):
-    os.mkdir(f'results/{fname_in}')
+    # create directory for figures
+    if not os.path.isdir(f'results/{fname_in}'):
+        os.mkdir(f'results/{fname_in}')
 
-# create figures
-dt = 0.1
-Tstop = 15
+    # create figures
+    dt = 0.1
+    Tstop = 2
 
-# EMI points neuron
-x_M = 0.00021805911552094111
-y_M = 0.00022208269041793245
-z_M = 0.00023494927229732336
-x_i = 0.00021895646088814492
-y_i = 0.00023021958580729074
-z_i = 0.00023207341100176107
-x_e = 0.00025308818813279027
-y_e = 0.00023698776419221233
-z_e = 0.00023301680991154913
-x_N = {'M':[x_M, y_M, z_M],
-       'i':[x_i, y_i, z_i],
-       'e':[x_e, y_e, z_e],
-}
+    # EMI points glial
+    x_M = 0.00026834450833705247
+    y_M = 0.0002889436164406373
+    z_M = 0.00022057539244152102
+    x_i = 0.0002757962756580815
+    y_i = 0.00028978895336808524
+    z_i = 0.00024707838038751177
+    x_e = 0.00027393821446464905
+    y_e = 0.0002511162579901399
+    z_e = 0.0002376715140603816
+    x_G = {'M':[x_M, y_M, z_M],
+           'i':[x_i, y_i, z_i],
+           'e':[x_e, y_e, z_e],
+    }
 
-plot_3D_concentration(fname_in, fname_out_N, dt, Tstop, x_N, tag_N)
+    plot_3D_concentration(fname_in, fname_out_G, dt, Tstop, x_G, tag_G)
 
-# EMI points glial
-x_M = 0.00026834450833705247
-y_M = 0.0002889436164406373
-z_M = 0.00022057539244152102
-x_i = 0.0002757962756580815
-y_i = 0.00028978895336808524
-z_i = 0.00024707838038751177
-x_e = 0.00027393821446464905
-y_e = 0.0002511162579901399
-z_e = 0.0002376715140603816
-x_G = {'M':[x_M, y_M, z_M],
-       'i':[x_i, y_i, z_i],
-       'e':[x_e, y_e, z_e],
-}
+    # EMI points neuron
+    x_M = 0.00021805911552094111
+    y_M = 0.00022208269041793245
+    z_M = 0.00023494927229732336
+    x_i = 0.00021895646088814492
+    y_i = 0.00023021958580729074
+    z_i = 0.00023207341100176107
+    x_e = 0.00025308818813279027
+    y_e = 0.00023698776419221233
+    z_e = 0.00023301680991154913
+    x_N = {'M':[x_M, y_M, z_M],
+           'i':[x_i, y_i, z_i],
+           'e':[x_e, y_e, z_e],
+    }
 
-plot_3D_concentration(fname_in, fname_out_G, dt, Tstop, x_G, tag_G)
+    plot_3D_concentration(fname_in, fname_out_N, dt, Tstop, x_N, tag_N)
+
+

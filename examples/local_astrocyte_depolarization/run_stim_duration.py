@@ -211,7 +211,7 @@ def solve_system(mesh_file, fname):
     t = dolfinx.fem.Constant(mesh, 0.0)
 
     dt = 0.1                         # global time step (ms)
-    Tstop = 15                       # ms
+    Tstop = 100                      # ms
     n_steps_ODE = 25                 # number of ODE steps
 
     # Physical parameters
@@ -238,8 +238,8 @@ def solve_system(mesh_file, fname):
     Cl_n_init = 5.0
     Cl_g_init = 5.203660274163705
 
-    lambda_e = 1.0
-    lambda_i = 1.0
+    lambda_e = 1.6
+    lambda_i = 3.4
 
     # Set background charge / immobile ions
     rho_z = -1
@@ -302,7 +302,7 @@ def solve_system(mesh_file, fname):
     z_L = 2100e-7; z_U = 2500e-7
 
     # Strength of source term
-    f_value = 500
+    f_value = 150
 
     # Frequency of source term (application of source term)
     period = 10         # 10 ms repeat
@@ -494,3 +494,15 @@ if __name__ == "__main__":
     mesh_file = 'meshes/remarked_mesh/mesh.xdmf'
     fname = "local_PAP_depolarization"
     solve_system(mesh_file, fname)
+
+    """
+    with open(f"config_files/{config_name}.yml") as conf_file:
+        config = yaml.load(conf_file, Loader=yaml.FullLoader)
+
+    T = config["T"]
+    f_source = config["f_source"]
+    period = config["period"]
+    delay = config["delay"]
+    lambda_i = config["lambda_i"]
+    lambda_e = config["lambda_e"]
+    """
