@@ -27,6 +27,7 @@ from ufl import (
         conditional,
         And,
         lt,
+        le,
         gt,
         ge,
 )
@@ -65,12 +66,11 @@ def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
     return
 
 
-def write_to_file_mem(xdmf, fname, tag, phi_M, t):
+def write_to_file_mem(xdmf, fname, tag, mesh, ct, ion_list, subdomain_list, phi_M, c, t):
     # Write potential to file
     xdmf.write_function(phi_M[tag], t=float(t))
     adios4dolfinx.write_function(fname, phi_M[tag], time=float(t))
 
-    """
     # Write traces of concentrations on membrane to file
     for idx, ion in enumerate(ion_list):
         # Determine the function source based on the index
@@ -85,7 +85,6 @@ def write_to_file_mem(xdmf, fname, tag, phi_M, t):
         xdmf.write_function(k_i, t=float(t))
         adios4dolfinx.write_function(fname, k_e, time=float(t))
         adios4dolfinx.write_function(fname, k_i, time=float(t))
-    """
 
     return
 
@@ -154,9 +153,9 @@ def solve_system(config):
     mesh_file = config['mesh_file'] # path to mesh file
     fname = config["fname"]         # directory for saving results
 
-    print("reading mesh...")
+    print(f'{bcolors.OKBLUE}Reading mesh from {mesh_file} ...')
     mesh, ct, ft = read_mesh(mesh_file)
-    print("read mesh.")
+    print(f'mesh read. ms{bcolors.ENDC}')
 
     # Read mesh and create sub-meshes for extra and intracellular domains and
     # for cellular membranes / interfaces (for solving ODEs)
@@ -301,9 +300,9 @@ def solve_system(config):
     x, y, z = SpatialCoordinate(mesh)
 
     # Region in which to apply the source term
-    x_L = 2100e-7; x_U = 2900e-7
-    y_L = 2100e-7; y_U = 2900e-7
-    z_L = 2100e-7; z_U = 2500e-7
+    x_L = config["x_L"]; x_U = config["x_U"]
+    y_L = config["y_L"]; y_U = config["y_U"]
+    z_L = config["z_L"]; z_U = config["z_U"]
 
     # Strength of source term
     f_value = config["f_value"]
@@ -327,11 +326,12 @@ def solve_system(config):
     # source  term is applied in a region of interest defined by x_U, x_L, y_U,
     # y_L, z_U, z_L)
     f_condition = And(ge(t, delay),
+                  And(le(t, end_time),
                   And(gt(x, x_L),
                   And(lt(x, x_U),
                   And(lt(y, y_U),
                   And(gt(y, y_L),
-                  And(gt(z, z_L), lt(z, z_U)))))))
+                  And(gt(z, z_L), lt(z, z_U))))))))
 
     # Define source terms
     f_source_K = conditional(f_condition, f_value, 0) * source_active
@@ -458,7 +458,7 @@ def solve_system(config):
             fname_bp_mem[tag] = f"results/{fname}/checkpoint_mem_{tag}.bp"
 
     for k in range(int(round(Tstop/float(dt)))):
-        print(f'solving for t={float(t)}')
+        print(f'{bcolors.OKBLUE}solving for t = {float(t):.2f} ms{bcolors.ENDC}')
 
         # Solve ODEs
         solve_odes(
@@ -470,6 +470,7 @@ def solve_system(config):
         problem_emi.solve()
         problem_knp.solve()
 
+        # Update PDEs variables for next time step
         update_pde_variables(
                 c, c_prev, phi, phi_M_prev, physical_parameters,
                 ion_list, subdomain_list, mesh, ct,
@@ -478,7 +479,7 @@ def solve_system(config):
         # Update time
         t.value = float(t + dt)
 
-        # Update source term
+        # Update ECS source terms
         source_active.value = 1 if (t.value - delay) % period < pulse_width else 0
 
         # Write results to file
@@ -487,7 +488,7 @@ def solve_system(config):
             write_to_file_sub(xdmf_sub[tag], fname_bp_sub[tag], tag, phi, c, ion_list, t)
             # membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
             if tag > 0:
-                write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, phi_M_prev, t)
+                write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, mesh, ct, ion_list, subdomain_list, phi_M_prev, c, t)
 
     # Close XDMF files
     for tag, subdomain in subdomain_list.items():

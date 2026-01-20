@@ -26,6 +26,16 @@ e_res = "+"
 
 comm = MPI.COMM_WORLD
 
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
     # Write potential to file
@@ -333,7 +343,7 @@ def solve_system(mesh_path, fname):
     num_it_knp = []
 
     for k in range(int(round(Tstop/float(dt)))):
-        print(f'solving for t={float(t)}')
+        print(f'{bcolors.OKBLUE}Solving for t = {float(t):.4f} s{bcolors.ENDC}')
 
         # Solve ODEs
         solve_odes(

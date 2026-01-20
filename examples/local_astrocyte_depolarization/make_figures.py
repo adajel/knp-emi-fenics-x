@@ -43,7 +43,7 @@ def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop):
 
     t = dt
     while t <= Tstop:
-        print(f"Reading data for t = {t}")
+        print(f"Reading data, subdomain {tag}, t = {t:.2f}")
         # Read results from file
         adios4dolfinx.read_function(checkpoint_fname, K, time=t, name=f"c_K_{tag}")
         adios4dolfinx.read_function(checkpoint_fname, Cl, time=t, name=f"c_Cl_{tag}")
@@ -51,10 +51,10 @@ def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop):
         adios4dolfinx.read_function(checkpoint_fname, phi, time=t, name=f"phi_{tag}")
 
         # Append (results) function evaluated in point to list
-        Ks.append(scifem.evaluate_function(K, point)[0])
-        Cls.append(scifem.evaluate_function(Cl, point)[0])
-        Nas.append(scifem.evaluate_function(Na, point)[0])
-        phis.append(scifem.evaluate_function(phi, point)[0])
+        Ks.append(scifem.evaluate_function(K, point)[0][0])
+        Cls.append(scifem.evaluate_function(Cl, point)[0][0])
+        Nas.append(scifem.evaluate_function(Na, point)[0][0])
+        phis.append(scifem.evaluate_function(phi, point)[0][0])
 
         t += dt
 
@@ -65,19 +65,59 @@ def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop):
     mesh_mem = adios4dolfinx.read_mesh(checkpoint_fname, MPI.COMM_WORLD)
     # Create function space and function for storing data
     V = dolfinx.fem.functionspace(mesh_mem, ("CG", 1))
+
     phi_M = dolfinx.fem.Function(V)
+    tr_Ki = dolfinx.fem.Function(V)
+    tr_Ke = dolfinx.fem.Function(V)
+    tr_Nai = dolfinx.fem.Function(V)
+    tr_Nae = dolfinx.fem.Function(V)
+    tr_Cli = dolfinx.fem.Function(V)
+    tr_Cle = dolfinx.fem.Function(V)
 
     # Create list for point evaluation of functions over time
     phi_Ms = []
+    tr_K_es = []
+    tr_K_is = []
+    tr_Cl_es = []
+    tr_Cl_is = []
+    tr_Na_es = []
+    tr_Na_is = []
 
     t = dt
     while t <= Tstop:
-        print(f"Reading data for t = {t}")
+        print(f"Reading data, membrane {tag}, t = {t:.2f}")
+
+        # Membrane potential
         adios4dolfinx.read_function(checkpoint_fname, phi_M, time=t, name=f"phi_M_{tag}")
-        phi_Ms.append(scifem.evaluate_function(phi_M, point)[0])
+        phi_Ms.append(scifem.evaluate_function(phi_M, point)[0][0])
+
+        # Trace of K from ICS
+        adios4dolfinx.read_function(checkpoint_fname, tr_Ki, time=t, name=f"c_K_{tag}")
+        tr_K_is.append(scifem.evaluate_function(tr_Ki, point)[0][0])
+
+        # Trace of Cl from ICS
+        adios4dolfinx.read_function(checkpoint_fname, tr_Cli, time=t, name=f"c_Cl_{tag}")
+        tr_Cl_is.append(scifem.evaluate_function(tr_Cli, point)[0][0])
+
+        # Trace of Na from ICS
+        adios4dolfinx.read_function(checkpoint_fname, tr_Nai, time=t, name=f"c_Na_{tag}")
+        tr_Na_is.append(scifem.evaluate_function(tr_Nai, point)[0][0])
+
+        # Trace of K from ECS
+        adios4dolfinx.read_function(checkpoint_fname, tr_Ke, time=t, name=f"c_K_{0}")
+        tr_K_es.append(scifem.evaluate_function(tr_Ke, point)[0][0])
+
+        # Trace of Cl from ECS
+        adios4dolfinx.read_function(checkpoint_fname, tr_Cle, time=t, name=f"c_Cl_{0}")
+        tr_Cl_es.append(scifem.evaluate_function(tr_Cle, point)[0][0])
+
+        # Trace of Na from ECS
+        adios4dolfinx.read_function(checkpoint_fname, tr_Nae, time=t, name=f"c_Na_{0}")
+        tr_Na_es.append(scifem.evaluate_function(tr_Nae, point)[0][0])
+
         t += dt
 
-    return phi_Ms
+    return phi_Ms, tr_K_es, tr_K_is, tr_Na_es, tr_Na_is, tr_Cl_es, tr_Cl_is
 
 def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag):
 
@@ -108,9 +148,37 @@ def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag):
     checkpoint_fname_M = f'results/{fname_in}/checkpoint_mem_{tag}.bp'
 
     # get timeseries in points
+    phi_M, tr_K_e, tr_K_i, tr_Na_e, tr_Na_i, tr_Cl_e, tr_Cl_i = get_time_series_mem(checkpoint_fname_M, point_M, tag, dt, Tstop)
     Na_e, K_e, Cl_e, phi_e = get_time_series_sub(checkpoint_fname_e, point_e, 0, dt, Tstop)
     Na_i, K_i, Cl_i, phi_i = get_time_series_sub(checkpoint_fname_i, point_i, tag, dt, Tstop)
-    phi_M = get_time_series_mem(checkpoint_fname_M, point_M, tag, dt, Tstop)
+
+    temperature = 300e3; F = 96485e3; R = 8.314e3
+    # Calculate Nernst potentials
+    E_Na = R * temperature / F * np.log(np.array(tr_Na_e) / np.array(tr_Na_i))
+    E_K = R * temperature / F * np.log(np.array(tr_K_e) / np.array(tr_K_i))
+
+    g_leak_K  = 1.696       # K leak conductivity (mS/cm**2)
+    m_K = 1.5               # threshold ECS K (mol/m^3)
+    m_Na = 10               # threshold ICS Na (mol/m^3)
+    I_max = 10.75975        # max pump strength (muA/cm^2)
+    i_pump = I_max * (np.array(tr_K_e) / (np.array(tr_K_e) + m_K)) \
+                   * (np.array(tr_Na_i) ** (1.5) / (np.array(tr_Na_i) ** (1.5) + m_Na ** (1.5)))
+
+    # Set conductance
+    K_e_init = 3.092970607490389
+    K_i_init = 99.3100014897692
+
+    E_K_init = R * temperature / F * np.log(K_e_init/K_i_init)
+    dphi = np.array(phi_M) - np.array(E_K)
+    A = 1 + np.exp(18.4/42.4)                       # shorthand
+    B = 1 + np.exp(-(0.1186e3 + E_K_init)/0.0441e3) # shorthand
+    C = 1 + np.exp((dphi + 0.0185e3)/0.0425e3)      # shorthand
+    D = 1 + np.exp(-(0.1186e3 + np.array(phi_M))/0.0441e3)    # shorthand
+
+    g_Kir = np.sqrt(np.array(tr_K_e)/K_e_init)*(A*B)/(C*D)
+
+    # define and return current
+    i_kir = g_leak_K * g_Kir * (np.array(phi_M) - E_K) # umol/(cm^2*ms)
 
     # Concentration plots
     fig = plt.figure(figsize=(12*0.9,12*0.9))
@@ -159,30 +227,40 @@ def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag):
     # save figure to file
     plt.savefig(f'results/{fname_in}/summary_{fname_out}.svg', format='svg')
 
-    f_phi_M = open(f'results/{fname_in}/phi_M_2D.txt', "w")
+    f_phi_M = open(f'results/{fname_in}/phi_M_{fname_out}.txt', "w")
     for p in phi_M:
         f_phi_M.write("%.10f \n" % p)
     f_phi_M.close()
 
-    f_K_e = open(f'results/{fname_in}/K_ECS_2D.txt', "w")
+    f_K_e = open(f'results/{fname_in}/K_ECS_{fname_out}.txt', "w")
     for p in K_e:
         f_K_e.write("%.10f \n" % p)
     f_K_e.close()
 
-    f_K_i = open(f'results/{fname_in}/K_ICS_2D.txt', "w")
+    f_K_i = open(f'results/{fname_in}/K_ICS_{fname_out}.txt', "w")
     for p in K_i:
         f_K_i.write("%.10f \n" % p)
     f_K_i.close()
 
-    f_Na_e = open(f'results/{fname_in}/Na_ECS_2D.txt', "w")
+    f_Na_e = open(f'results/{fname_in}/Na_ECS_{fname_out}.txt', "w")
     for p in Na_e:
         f_Na_e.write("%.10f \n" % p)
     f_Na_e.close()
 
-    f_Na_i = open(f'results/{fname_in}/Na_ICS_2D.txt', "w")
+    f_Na_i = open(f'results/{fname_in}/Na_ICS_{fname_out}.txt', "w")
     for p in Na_i:
         f_Na_i.write("%.10f \n" % p)
     f_Na_i.close()
+
+    f_i_pump = open(f'results/{fname_in}/i_pump.txt', "w")
+    for p in i_pump:
+        f_i_pump.write("%.10f \n" % p)
+    f_i_pump.close()
+
+    f_i_kir = open(f'results/{fname_in}/i_kir.txt', "w")
+    for p in i_kir:
+        f_i_kir.write("%.10f \n" % p)
+    f_i_kir.close()
 
     return
 
@@ -232,6 +310,7 @@ if __name__ == "__main__":
 
     plot_3D_concentration(fname_in, fname_out_G, dt, Tstop, x_G, tag_G)
 
+    """
     # EMI points neuron
     x_M = 0.00021805911552094111
     y_M = 0.00022208269041793245
@@ -248,3 +327,4 @@ if __name__ == "__main__":
     }
 
     plot_3D_concentration(fname_in, fname_out_N, dt, Tstop, x_N, tag_N)
+    """

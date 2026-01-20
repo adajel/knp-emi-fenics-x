@@ -6,7 +6,12 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.pyplot as plt
 
 red = '#db2525'
+red_light = '#f06c62'
+red_dark = '#611b15'
+
 blue = '#1f3ecc'
+blue_dark = '#00206b'
+blue_light = '#648ded'
 
 # set font & text parameters
 font = {'family' : 'serif',
@@ -26,7 +31,10 @@ def read_me(fname):
     return x
 
 fdir_100 = "local_PAP_depolarization_100_hz"
-fdir_300 = "local_PAP_depolarization_300_hz"
+fdir_300 = "local_PAP_depolarization_100_hz"
+
+#fdir_100 = "baseline"
+#fdir_300 = "baseline"
 
 # write phi_M
 fname = f"{fdir_100}/phi_M_glial.txt"
@@ -56,40 +64,58 @@ K_i_100 = read_me(fname)
 fname = f"{fdir_300}/K_ICS_glial.txt"
 K_i_300 = read_me(fname)
 
+fname = f"{fdir_100}/i_pump.txt"
+i_pump_100 = read_me(fname)
+fname = f"{fdir_300}/i_pump.txt"
+i_pump_300 = read_me(fname)
+
+fname = f"{fdir_100}/i_kir.txt"
+i_kir_100 = read_me(fname)
+fname = f"{fdir_300}/i_kir.txt"
+i_kir_300 = read_me(fname)
+
 # Concentration plots
-fig = plt.figure(figsize=(10*0.9,12*0.9))
+fig = plt.figure(figsize=(10,12))
 ax = plt.gca()
 
 ax1 = fig.add_subplot(3,2,1)
-plt.title(r'Na$^+$ concentration (ECS)')
 plt.ylabel(r'[Na]$_e$ (mM)')
 plt.plot(t, Na_e_300, linewidth=3, color=red, label="300 Hz")
 plt.plot(t, Na_e_100, linewidth=3, color=blue, label="100 Hz")
 
 ax3 = fig.add_subplot(3,2,2)
-plt.title(r'K$^+$ concentration (ECS)')
 plt.ylabel(r'[K]$_e$ (mM)')
 plt.plot(t, K_e_300, linewidth=3, color=red, label="300 Hz")
 plt.plot(t, K_e_100, linewidth=3, color=blue, label="100 Hz")
 
 ax2 = fig.add_subplot(3,2,3)
-plt.title(r'Na$^+$ concentration (ICS)')
-plt.ylabel(r'[Na]$_i$ (mM)')
-plt.plot(t, Na_i_300,linewidth=3, color=red, label="300 Hz")
-plt.plot(t, Na_i_100,linewidth=3, color=blue, label="100 Hz")
-
-ax2 = fig.add_subplot(3,2,4)
-plt.title(r'K$^+$ concentration (ICS)')
-plt.ylabel(r'[K]$_i$ (mM)')
+plt.ylabel(r'[K]$_g$ (mM)')
 plt.plot(t, K_i_300, linewidth=3, color=red, label="300 Hz")
 plt.plot(t, K_i_100, linewidth=3, color=blue, label="100 Hz")
 
-ax5 = fig.add_subplot(3,2,5)
-plt.title(r'Membrane potential')
-plt.ylabel(r'$\phi_M$ (mV)')
+ax5 = fig.add_subplot(3,2,4)
+plt.ylabel(r'$\phi_M^g$ (mV)')
 plt.xlabel(r'time (ms)')
 plt.plot(t, phi_M_300, linewidth=3, color=red, label="300 Hz")
 plt.plot(t, phi_M_100, linewidth=3, color=blue, label="100 Hz")
+
+plt.legend()
+
+ax5 = fig.add_subplot(3,2,5)
+plt.ylabel(r'$I_M^g$ ($\rm \mu A/cm^2$) 300 Hz')
+plt.xlabel(r'time (ms)')
+plt.plot(t, - 2 * np.array(i_pump_300), linewidth=3, color=red, label="pump")
+plt.plot(t, i_kir_300, linewidth=3, color=red_dark, label="kir")
+plt.plot(t, np.array(i_kir_300) - 2 * np.array(i_pump_300), linestyle='dotted', linewidth=3, color=red_light, label="total")
+
+plt.legend()
+
+ax5 = fig.add_subplot(3,2,6)
+plt.ylabel(r'$I_M^g$ ($\rm \mu A/cm^2$) 100 Hz')
+plt.xlabel(r'time (ms)')
+plt.plot(t, - 2 * np.array(i_pump_100), linewidth=3, color=blue, label="pump")
+plt.plot(t, i_kir_100, linewidth=3, color=blue_dark, label="kir")
+plt.plot(t, np.array(i_kir_100) - 2 * np.array(i_pump_100), linestyle='dotted', linewidth=3, color=blue_light, label="total")
 
 plt.legend()
 

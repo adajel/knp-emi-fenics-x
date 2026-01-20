@@ -159,7 +159,7 @@ def interpolate_to_membrane(ue, ui, Q, mesh, ct, subdomain_list, tag):
 
     num_facets_local = (
         mesh_g.topology.index_map(mesh_g.topology.dim).size_local
-        #+ mesh_g.topology.index_map(mesh_g.topology.dim).num_ghosts
+      + mesh_g.topology.index_map(mesh_g.topology.dim).num_ghosts
     )
 
     cell_map = mesh.topology.index_map(mesh.topology.dim)
@@ -168,12 +168,6 @@ def interpolate_to_membrane(ue, ui, Q, mesh, ct, subdomain_list, tag):
     g_to_parent_map = g_to_parent.sub_topology_to_topology(
         np.arange(num_facets_local, dtype=np.int32), inverse=False
     )
-
-    # Compute ordered integration entities on the interface
-    #interface_integration_entities = scifem.compute_interface_data(
-    #    ct, facet_indices=g_to_parent_map, include_ghosts=False
-    #)
-    #mapped_entities = interface_integration_entities.copy()
 
     # For each submesh, get the relevant integration entities
     parent_to_e = e_to_parent.sub_topology_to_topology(

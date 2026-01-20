@@ -61,7 +61,7 @@ def print_coordinates(coordinates, domain, domain_prefix):
 if __name__ == "__main__":
 
     # Get mesh
-    mesh_path = 'meshes/envelopsize+18/'
+    mesh_path = 'meshes/mesh_size_5000/'
     mesh_file = mesh_path + "mesh.xdmf"
     fcts_file = mesh_path + "facets.xdmf"
 

@@ -239,9 +239,8 @@ def plot_concentration(fname, dt, Tstop, points):
 
 # Time variables
 dt = 1.0e-4
-T = 2.0e-3
+T = 1.0e-2
 
-"""
 # Make 2D plot of 2D simulation with mesh resolution 3
 fname = "2D_3"
 # create directory for figures
@@ -257,8 +256,8 @@ point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6]])
 point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6]])
 points = {'ECS':point_e, 'ICS': point_i, 'mem':point_M}
 plot_concentration(fname, dt, T, points)
-"""
 
+"""
 # Make 2D plot of 3D simulation with mesh resolution 1
 fname = "3D_1"
 # create directory for figures
@@ -274,3 +273,4 @@ point_e = np.array([[x_e * 1.0e-6, y_e * 1.0e-6, z_e * 1.0e-6]])
 point_i = np.array([[x_i * 1.0e-6, y_i * 1.0e-6, z_i * 1.0e-6]])
 points = {'ECS':point_e, 'ICS': point_i, 'mem':point_M}
 plot_concentration(fname, dt, T, points)
+"""
