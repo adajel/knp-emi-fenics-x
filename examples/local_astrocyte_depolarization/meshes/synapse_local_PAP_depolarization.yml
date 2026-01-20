@@ -1,0 +1,22 @@
+name : synapse_local_PAP_depolarization
+fixed :
+  raw:
+    cloudpath : "precomputed://gs://iarpa_microns/minnie/minnie65/seg_m1300"
+    mip : 2 # resolution of data
+    position : "162258-200928-20530"
+
+  processing:
+    operation : 
+      - "removeislands minsize=5000" # 10000 looks OK wrt island in astrocyte
+      - "dilate iterations=1 radius=1" # swell cells
+      - "smooth iterations=2 radius=1"
+      - "smooth iterations=1 radius=1 labels='[864691135384117978]'"
+      - "erode iterations=1 radius=1"  # shrink cells
+      - "removeislands minsize=5000" # 10000 looks OK wrt island in astrocyte
+raw:
+  size : [5000, 10000] # nm
+processing:
+  dx : 20 # resolution of mesh
+  ncells : [100]
+meshing:
+    envelopsize : [18]
