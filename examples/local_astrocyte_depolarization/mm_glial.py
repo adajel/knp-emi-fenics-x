@@ -31,6 +31,7 @@ def init_parameter_values(**values):
     """
     Initialize parameter values
     """
+
     # Membrane parameters
     g_leak_Na = 0.1         # Na leak conductivity (mS/cm**2)
     g_leak_K  = 1.696       # K leak conductivity (mS/cm**2)
@@ -175,10 +176,10 @@ def rhs_numba(t, states, values, parameters):
     # set conductance
     E_K_init = R * temperature / F * np.log(K_e_init/K_i_init)
     dphi = states[0] - E_K
-    A = 1 + np.exp(18.4/42.4)                                  # shorthand
-    B = 1 + np.exp(-(0.1186e3 + E_K_init)/0.0441e3)            # shorthand
-    C = 1 + np.exp((dphi + 0.0185e3)/0.0425e3)                 # shorthand
-    D = 1 + np.exp(-(0.1186e3 + states[0])/0.0441e3)           # shorthand
+    A = 1 + np.exp(18.5/42.4)                                   # shorthand
+    B = 1 + np.exp(-(118.6 + E_K_init)/44.1)                    # shorthand
+    C = 1 + np.exp((dphi + 18.5)/42.4)                          # shorthand
+    D = 1 + np.exp(-(118.6 + states[0])/44.1)                   # shorthand
     g_Kir = np.sqrt(K_e/K_e_init)*(A*B)/(C*D)
 
     # define and return current
@@ -194,11 +195,11 @@ def rhs_numba(t, states, values, parameters):
     i_Cl = g_leak_Cl * (states[0] - E_Cl)
 
     # set I_ch_Na
-    parameters[5] = i_Na
+    parameters[5] = 2*i_Na
     # set I_ch_K
-    parameters[6] = i_K
+    parameters[6] = 2*i_K
     # set I_ch_Cl
-    parameters[7] = i_Cl
+    parameters[7] = 2*i_Cl
 
     # update membrane potential
     values[0] = (- i_K - i_Na - i_Cl)/Cm

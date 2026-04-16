@@ -1,16 +1,17 @@
 mesh_file : 'meshes/remarked_mesh/mesh.xdmf'
-fname : "baseline"
-Tstop : 2      # end time (ms)
-f_value : 60   # strength of source term
-period: 10     # period source term stimuli
-delay: 1.0     # delay source term stimuli
-pulse_width: 1 # 1 ms duration
-end_time : 100 # turn source term off after 100 ms
-lambda_e : 1.6 # ECS tortuosity
-lambda_i : 3.4 # ICS tortuosity
-x_L : 2100.0e-7 # lower bound x - region in which to apply the source term
-x_U : 2900.0e-7 # upper bound x - region in which to apply the source term
-y_L : 2100.0e-7 # lower bound y - region in which to apply the source term
-y_U : 2900.0e-7 # upper bound y - region in which to apply the source term
-z_L : 2100.0e-7 # lower bound z - region in which to apply the source term
-z_U : 2500.0e-7 # upper bound z - region in which to apply the source term
+fname : "baseline_double_mem_cur"
+Tstop : 100         # end time (ms)
+f_value : 97        # strength of source term
+period: 10          # period source term stimuli
+delay: 1.0          # delay source term stimuli
+pulse_width: 1      # 1 ms duration
+end_time : 100      # turn source term off after 100 ms
+lambda_e : 1.2      # ECS tortuosity (75% of 1.6)
+lambda_i : 2.55     # ICS tortuosity (75% of 3.4)
+x_L : 2100.0e-7     # lower bound x - region in which to apply the source term
+x_U : 2900.0e-7     # upper bound x - region in which to apply the source term
+y_L : 2100.0e-7     # lower bound y - region in which to apply the source term
+y_U : 2900.0e-7     # upper bound y - region in which to apply the source term
+z_L : 2100.0e-7     # lower bound z - region in which to apply the source term
+z_U : 2500.0e-7     # upper bound z - region in which to apply the source term
+save_frequency : 2  # save solution every 2nd time-step

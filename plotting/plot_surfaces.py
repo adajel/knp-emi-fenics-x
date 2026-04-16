@@ -56,4 +56,4 @@ plt.yticks([200, 400, 600, 800, 1000], fontsize=12)
 ax.tick_params(direction='out', length=10, width=2)
 
 plt.tight_layout()
-plt.savefig("surfaces.png")
+plt.savefig("results/surfaces.png")

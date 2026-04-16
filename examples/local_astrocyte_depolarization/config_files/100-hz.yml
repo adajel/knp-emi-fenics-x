@@ -1,6 +1,6 @@
 mesh_file : 'meshes/remarked_mesh/mesh.xdmf'
 fname : "local_PAP_depolarization_100_hz"
-Tstop : 120     # end time (ms)
+Tstop : 300     # end time (ms)
 f_value : 60    # strength of source term
 period: 10      # period source term stimuli
 delay: 1.0      # delay source term stimuli
@@ -14,3 +14,4 @@ y_L : 2100.0e-7 # lower bound y - region in which to apply the source term
 y_U : 2900.0e-7 # upper bound y - region in which to apply the source term
 z_L : 2100.0e-7 # lower bound z - region in which to apply the source term
 z_U : 2500.0e-7 # upper bound z - region in which to apply the source term
+save_frequency : 5

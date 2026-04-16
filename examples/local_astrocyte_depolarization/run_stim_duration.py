@@ -66,10 +66,10 @@ def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
     return
 
 
-def write_to_file_mem(xdmf, fname, tag, mesh, ct, ion_list, subdomain_list, phi_M, c, t):
+def write_to_file_mem(xdmf, fname, tag, mesh, ct, ion_list, subdomain_list, phi_M_prev, c, t):
     # Write potential to file
-    xdmf.write_function(phi_M[tag], t=float(t))
-    adios4dolfinx.write_function(fname, phi_M[tag], time=float(t))
+    xdmf.write_function(phi_M_prev[tag], t=float(t))
+    adios4dolfinx.write_function(fname, phi_M_prev[tag], time=float(t))
 
     # Write traces of concentrations on membrane to file
     for idx, ion in enumerate(ion_list):
@@ -78,7 +78,7 @@ def write_to_file_mem(xdmf, fname, tag, mesh, ct, ion_list, subdomain_list, phi_
         c_e = ion_list[-1]['c_0'] if is_last else c[0][idx]
         c_i = ion_list[-1][f'c_{tag}'] if is_last else c[tag][idx]
         # Get extra and intracellular traces
-        Q = phi_M[tag].function_space
+        Q = phi_M_prev[tag].function_space
         k_e, k_i = interpolate_to_membrane(c_e, c_i, Q, mesh, ct, subdomain_list, tag)
         # Write to file
         xdmf.write_function(k_e, t=float(t))
@@ -440,6 +440,8 @@ def solve_system(config):
     xdmf_sub = {}; xdmf_mem = {}
     fname_bp_sub = {}; fname_bp_mem = {}
 
+    # Read save frequency from config file
+    save_frequency = config["save_frequency"]
 
     # Create files (XDMF and checkpoint) for saving results
     for tag, subdomain in subdomain_list.items():
@@ -483,12 +485,13 @@ def solve_system(config):
         source_active.value = 1 if (t.value - delay) % period < pulse_width else 0
 
         # Write results to file
-        for tag, subdomain in subdomain_list.items():
-            # concentrations and potentials from previous time step to file
-            write_to_file_sub(xdmf_sub[tag], fname_bp_sub[tag], tag, phi, c, ion_list, t)
-            # membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
-            if tag > 0:
-                write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, mesh, ct, ion_list, subdomain_list, phi_M_prev, c, t)
+        if (k % save_frequency) == 0:
+            for tag, subdomain in subdomain_list.items():
+                # concentrations and potentials from previous time step to file
+                write_to_file_sub(xdmf_sub[tag], fname_bp_sub[tag], tag, phi, c, ion_list, t)
+                # membrane potential to file for all cellular subdomains (i.e. all subdomain but ECS)
+                if tag > 0:
+                    write_to_file_mem(xdmf_mem[tag], fname_bp_mem[tag], tag, mesh, ct, ion_list, subdomain_list, phi_M_prev, c, t)
 
     # Close XDMF files
     for tag, subdomain in subdomain_list.items():

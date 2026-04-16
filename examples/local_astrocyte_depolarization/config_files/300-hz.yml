@@ -5,7 +5,7 @@ f_value : 60   # strength of source term
 period: 3.3    # period source term stimuli
 pulse_width: 1 # 1 ms duration
 delay: 1.0     # delay source term stimuli
-end_time : 32  # turn source term off after 100 ms
+end_time : 35  # turn source term off after 100 ms
 lambda_e : 1.6 # ECS tortuosity
 lambda_i : 3.4 # ICS tortuosity
 x_L : 2100.0e-7 # lower bound x - region in which to apply the source term
@@ -14,3 +14,4 @@ y_L : 2100.0e-7 # lower bound y - region in which to apply the source term
 y_U : 2900.0e-7 # upper bound y - region in which to apply the source term
 z_L : 2100.0e-7 # lower bound z - region in which to apply the source term
 z_U : 2500.0e-7 # upper bound z - region in which to apply the source term
+save_frequency : 2

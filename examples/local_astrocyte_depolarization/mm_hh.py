@@ -9,10 +9,10 @@ def init_state_values(**values):
     Initialize state values
     """
     # Init values
-    n_init = 0.17041625484928405
-    m_init = 0.01365600905697864
-    h_init = 0.8804834256821714
-    phi_M_init = -75.93151471235473
+    n_init = 0.17994146133363148
+    m_init = 0.015211986965658385
+    h_init = 0.8667432624969533
+    phi_M_init = -75.09159534786934
 
     init_values = np.array([m_init, h_init, n_init, phi_M_init], dtype=np.float64)
 

@@ -32,6 +32,9 @@ x_L = 2100.0; x_U = 2900.0
 y_L = 2100.0; y_U = 2900.0
 z_L = 2100.0; z_U = 2500.0
 
+roi_bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
+roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
+
 x_M = 2683.0
 y_M = 2889.0
 z_M = 2206.0
@@ -66,9 +69,10 @@ def get_grid(finame, funame, time):
 
     return grid
 
-def plot_2D(x, origin, camera_position, grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2, grid_ECS_width, grid_glial_width):
+def plot_2D_slice_ROI(x, origin, camera_position, grid_ECS, grid_neuron, \
+                      grid_glial, grid_syn_1, grid_syn_2, grid_ECS_width, \
+                      grid_glial_width):
 
-    roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
     #roi_point = pyvista.PolyData([x_M, y_M, z_M])
 
     slice_plane_ECS = grid_ECS.slice(normal=x, origin=origin)
@@ -83,7 +87,6 @@ def plot_2D(x, origin, camera_position, grid_ECS, grid_neuron, grid_glial, grid_
 
     # Zoom in
     p = pyvista.Plotter(off_screen=True)
-    roi_bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
 
     clipped_ECS_width = slice_plane_ECS_width.clip_box(bounds=roi_bounds, invert=False)
     clipped_glial_width = slice_plane_glial_width.clip_box(bounds=roi_bounds, invert=False)
@@ -154,6 +157,9 @@ def plot_2D(x, origin, camera_position, grid_ECS, grid_neuron, grid_glial, grid_
     p.screenshot(f"results/2D_mesh_roi_{x}.png", transparent_background=True)
     p.close()
 
+def plot_3D_ROI_ECS_width(x, origin, camera_position, grid_ECS, grid_neuron, \
+                         grid_glial, grid_syn_1, grid_syn_2, grid_ECS_width):
+
     # Create 3D plot of ROI
     clipped_ECS = grid_ECS.clip_box(bounds=roi_bounds, invert=False)
     clipped_glial = grid_glial.clip_box(bounds=roi_bounds, invert=False)
@@ -162,7 +168,6 @@ def plot_2D(x, origin, camera_position, grid_ECS, grid_neuron, grid_glial, grid_
     clipped_syn_2 = grid_syn_2.clip_box(bounds=roi_bounds, invert=False)
 
     clipped_ECS_width = grid_ECS_width.clip_box(bounds=roi_bounds, invert=False)
-    clipped_glial_width = grid_glial_width.clip_box(bounds=roi_bounds, invert=False)
 
     p = pyvista.Plotter(off_screen=True)
 
@@ -220,6 +225,15 @@ def plot_2D(x, origin, camera_position, grid_ECS, grid_neuron, grid_glial, grid_
     # Save screenshot
     p.screenshot(f"results/3D_roi_ECS_width.png", transparent_background=True)
     p.close()
+
+def plot_3D_ROI_glial_width(x, origin, camera_position, grid_ECS, grid_neuron, \
+                            grid_glial, grid_syn_1, grid_syn_2, grid_glial_width):
+
+    clipped_glial_width = grid_glial_width.clip_box(bounds=roi_bounds, invert=False)
+    clipped_ECS = grid_ECS.clip_box(bounds=roi_bounds, invert=False)
+    clipped_neuron = grid_neuron.clip_box(bounds=roi_bounds, invert=False)
+    clipped_syn_1 = grid_syn_1.clip_box(bounds=roi_bounds, invert=False)
+    clipped_syn_2 = grid_syn_2.clip_box(bounds=roi_bounds, invert=False)
 
     # Make plot zoom in glial
     p = pyvista.Plotter(off_screen=True)
@@ -283,6 +297,9 @@ grid_syn_2 = get_grid("results_sub_4", "c_K_4", time)
 grid_ECS_width = pyvista.read('ecs.vtk')
 grid_glial_width = pyvista.read('glial.vtk')
 
-plot_2D('x', [x_M, c, c], "yz", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2, grid_ECS_width, grid_glial_width)
-plot_2D('y', [c, y_M, c], "xz", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2, grid_ECS_width, grid_glial_width)
-plot_2D('z', [c, c, z_M], "xy", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2, grid_ECS_width, grid_glial_width)
+plot_2D_slice_ROI('x', [x_M, c, c], "yz", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2, grid_ECS_width, grid_glial_width)
+plot_2D_slice_ROI('y', [c, y_M, c], "xz", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2, grid_ECS_width, grid_glial_width)
+plot_2D_slice_ROI('z', [c, c, z_M], "xy", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2, grid_ECS_width, grid_glial_width)
+
+plot_3D_ROI_ECS_width('z', [c, c, z_M], "xy", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2, grid_ECS_width)
+plot_3D_ROI_glial_width('z', [c, c, z_M], "xy", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2, grid_glial_width)

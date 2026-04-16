@@ -60,4 +60,4 @@ plt.yticks([20, 40, 60, 80], fontsize=12)
 ax.tick_params(direction='out', length=10, width=2)
 
 plt.tight_layout()
-plt.savefig("volumes.png")
+plt.savefig("results/volumes.png")

@@ -147,6 +147,7 @@ if __name__ == "__main__":
     output_path = "meshes/remarked_mesh/"
     # Define the output filename
     xdmf_filename = f"{output_path}mesh.xdmf"
+    vtk_filename = f"{output_path}mesh.pvd"
 
     # Create an XDMFFile object in write mode ('w')
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, xdmf_filename, "w") as xdmf:
@@ -157,6 +158,18 @@ if __name__ == "__main__":
 
     xdmf.close()
 
+    """
+    # Create an XDMFFile object in write mode ('w')
+    with dolfinx.io.VTKFile(MPI.COMM_WORLD, vtk_filename, "w") as vtk:
+        # Write the mesh and cell tags to the XDMF file
+        xdmf.write_mesh(mesh)
+        xdmf.write_meshtags(ct, mesh.geometry)
+        xdmf.write_meshtags(ft, mesh.geometry)
+
+    vtk.close()
+    """
+
+    """
     # Get the indices of facets with tag value 1
     tagged_facet_indices = ft.find(1)
     vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ft.dim, tagged_facet_indices)
@@ -188,3 +201,4 @@ if __name__ == "__main__":
     vertex_indices = dolfinx.mesh.entities_to_geometry(mesh, ct.dim, tagged_facet_indices)
     coordinates = mesh.geometry.x[vertex_indices]
     print_coordinates(coordinates, "ECS glial", "e")
+    """

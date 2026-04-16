@@ -90,7 +90,6 @@ def extract_facet_integration_data(
 def set_initial_conditions(ion_list, subdomain_list, c_prev):
     """ Set initial conditions given by constants """
     for tag, subdomain in subdomain_list.items():
-        #tag = subdomain['tag']
         for idx, ion in enumerate(ion_list):
             # Determine the target objects (c_e and c_i) based on the ion's index
             is_last = (idx == len(ion_list) - 1)
