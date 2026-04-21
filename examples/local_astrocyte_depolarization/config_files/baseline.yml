@@ -1,6 +1,6 @@
 mesh_file : 'meshes/remarked_mesh/mesh.xdmf'
-fname : "baseline_double_mem_cur"
-Tstop : 100         # end time (ms)
+fname : "baseline"
+Tstop : 300         # end time (ms)
 f_value : 97        # strength of source term
 period: 10          # period source term stimuli
 delay: 1.0          # delay source term stimuli
@@ -14,4 +14,4 @@ y_L : 2100.0e-7     # lower bound y - region in which to apply the source term
 y_U : 2900.0e-7     # upper bound y - region in which to apply the source term
 z_L : 2100.0e-7     # lower bound z - region in which to apply the source term
 z_U : 2500.0e-7     # upper bound z - region in which to apply the source term
-save_frequency : 2  # save solution every 2nd time-step
+save_frequency : 5  # save solution every 2nd time-step
