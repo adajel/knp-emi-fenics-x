@@ -43,7 +43,7 @@ sargs_ECS = dict(
     width=0.08,                # Width of the bar
     height=0.4,                # Height of the bar
     title_font_size=20,
-    label_font_size=20,
+    label_font_size=27,
     color='black',
 )
 
@@ -53,12 +53,12 @@ sargs_glial = dict(
     fmt="%.2f",                # Decimal formatting
     font_family="arial",
     vertical=True,             # Horizontal orientation
-    position_x=0.85,           # Move left/right (0 to 1)
+    position_x=0.82,           # Move left/right (0 to 1)
     position_y=0.30,           # Move up/down (0 to 1)
     width=0.08,                # Width of the bar
     height=0.4,                # Height of the bar
     title_font_size=20,
-    label_font_size=20,
+    label_font_size=27,
     color='black',
 )
 
@@ -109,9 +109,9 @@ def get_grid_mesh(finame, funame):
 
     return grid
 
-def get_grid_field(finame, funame, time_index):
+def get_grid_field(dir, finame, funame, time_index):
     # Read mesh from file
-    filename = f"../results/baseline_double_mem_cur/{finame}.xdmf"
+    filename = f"../results/{dir}/{finame}.xdmf"
     function_info = adios4dolfinx.backends.xdmf.backend.extract_function_names_and_timesteps(filename)
     grid = adios4dolfinx.read_mesh(filename, MPI.COMM_WORLD, backend="xdmf")
 
@@ -127,6 +127,7 @@ def get_grid_field(finame, funame, time_index):
 
     # Get time based on provided index
     time = float(timestamps[time_index])
+    print(f"time: {time}")
 
     float_stamps = np.array(timestamps, dtype=np.float64)
     pos = np.flatnonzero(np.isclose(float_stamps, time))
@@ -151,7 +152,7 @@ def plot_ECS_K(grid_ECS, i):
     # Make full 3D plot
     p = pyvista.Plotter(off_screen=True)
 
-    p.add_mesh(slice_plane_ECS, scalar_bar_args=sargs_ECS, cmap=cmap_ECS)
+    p.add_mesh(slice_plane_ECS, scalar_bar_args=sargs_ECS, cmap=cmap_ECS, clim=[3.1, 11])
     p.add_mesh(slice_plane_roi, color="black", style="wireframe", line_width=3, show_edges=True)
 
     # Fix camera position and zoom
@@ -168,7 +169,7 @@ def plot_ECS_K(grid_ECS, i):
     )
 
     # Save screenshot
-    p.screenshot(f"results/ECS_K.png", transparent_background=True)
+    p.screenshot(f"results/ECS_K_{i}.png", transparent_background=True)
     p.close()
 
 def plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i):
@@ -189,7 +190,7 @@ def plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i)
         r"$\phi_M (mV)$",
         position=(0.83, 0.45),      # Right side, halfway up
         orientation=-270,          # Rotate 90 degrees clockwise
-        font_size=11,
+        font_size=13,
         color="black",
         viewport=True              # Uses the 0-1 coordinate system
     )
@@ -201,53 +202,86 @@ def plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i)
     p.reset_camera()
 
     # Save screenshot
-    p.screenshot(f"results/astrocyte_potential_ECS_embedding.png", transparent_background=True)
+    p.screenshot(f"results/astrocyte_potential_ECS_embedding_{i}.png", transparent_background=True)
     p.close()
 
-def plot_astrocyte_potential(grid_glial, i):
+def plot_astrocyte_potential(grid_glial, grid_glial_init, clim, text, i):
 
     roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
 
+    # Then assign it back to a mesh to plot it
+    diff_array = grid_glial.point_data["phi_M_2"] - grid_glial_init.point_data["phi_M_2"]
+    grid_glial["diff"] = diff_array
+
     # Plot the original (ghosted) and the slice
     p = pyvista.Plotter(off_screen=True)
-    p.add_mesh(grid_glial, scalar_bar_args=sargs_glial, cmap=cmap_glial, clim=[-81, -80.62467193603516])
+
+    p.add_mesh(
+        grid_glial,
+        scalars="diff",
+        scalar_bar_args=sargs_glial, \
+        cmap=cmap_glial, clim=clim
+    )
+
     p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
 
     # add title to colorbar
     p.add_text(
-        r"$\phi_M (mV)$",
-        position=(0.83, 0.45),      # Right side, halfway up
-        orientation=-270,          # Rotate 90 degrees clockwise
-        font_size=11,
+        r"$\Delta \phi_M \rm (mV)$",
+        position=(0.96, 0.43),      # Right side, halfway up
+        orientation=-270,           # Rotate 90 degrees clockwise
+        font_size=13,
         color="black",
         viewport=True              # Uses the 0-1 coordinate system
     )
 
+    # add title to colorbar
+    p.add_text(
+        text,
+        position=(0.5, 0.84),      # Right side, halfway up
+        font_size=15,
+        color="black",
+        viewport=True               # Uses the 0-1 coordinate system
+    )
+
     # Fix camera position and zoom
-    p.camera_position = 'yz'
-    p.camera.azimuth += 225
-    p.camera.elevation += 15
-    p.reset_camera()
+    p.camera_position = 'xy'
+    p.camera.azimuth += 30
+    p.camera.elevation += 180
+    #p.reset_camera()
 
     # Save screenshot
-    p.screenshot(f"results/astrocyte_potential.png", transparent_background=True)
+    p.screenshot(f"results/astrocyte_potential_{i}.png", transparent_background=True)
     p.close()
 
-
-
 i = 1
-for time in [92.09999999999904]:
-    time_index = 460
-    grid_ECS = get_grid_field("results_sub_0", "c_K_0", time_index)
-    grid_neuron = get_grid_field("results_sub_1", "c_K_1", time_index)
-    grid_glial = get_grid_field("results_mem_2", "phi_M_2", time_index)
+index_min = 184
+index_max = 185
+clim = [7.0, 13] # adjusted ECS
 
-    grid_ECS_mesh = get_grid_mesh("results_sub_0", "c_K_0")
-    grid_neuron_mesh = get_grid_mesh("results_sub_1", "c_K_1")
-    grid_glial_mesh = get_grid_mesh("results_sub_2", "c_K_2")
+#dir = "baseline"
+#text = r"$\rm baseline$"
 
-    plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i)
-    plot_ECS_K(grid_ECS, i)
-    plot_astrocyte_potential(grid_glial, i)
+dir = "ECS-tort-x5"
+text = r"$\rm ECS \ \lambda \times 5$"
+
+#dir = "ICS-tort-x5"
+#text = r"$\rm ICS \ \lambda \times 5$"
+
+for time_index in [index_min, index_max]:
+    #grid_neuron = get_grid_field(dir, "results_sub_1", "c_K_1", time_index)
+    #grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
+    #grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_K_0", 0)
+
+    grid_glial = get_grid_field(dir, "results_mem_2", "phi_M_2", time_index)
+    grid_glial_init = get_grid_field(dir, "results_mem_2", "phi_M_2", 0)
+
+    #grid_ECS_mesh = get_grid_mesh("results_sub_0", "c_K_0")
+    #grid_neuron_mesh = get_grid_mesh("results_sub_1", "c_K_1")
+    #grid_glial_mesh = get_grid_mesh("results_sub_2", "c_K_2")
+
+    #plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i)
+    #plot_ECS_K(grid_ECS, i)
+    plot_astrocyte_potential(grid_glial, grid_glial_init, clim, text, i)
 
     i += 1

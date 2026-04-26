@@ -18,8 +18,8 @@ values = [vol_a, vol_n]  # um^3
 p_a = vol_a/tot
 p_n = vol_n/tot
 
-print(vol_a)
-print(vol_n)
+#print(vol_a)
+#print(vol_n)
 
 percentages = ['6%', '94%']
 
