@@ -228,7 +228,7 @@ def plot_astrocyte_potential(grid_glial, grid_glial_init, clim, text, i):
     # add title to colorbar
     p.add_text(
         r"$\Delta \phi_M \rm (mV)$",
-        position=(0.96, 0.43),      # Right side, halfway up
+        position=(0.945, 0.42),      # Right side, halfway up
         orientation=-270,           # Rotate 90 degrees clockwise
         font_size=13,
         color="black",
@@ -255,20 +255,27 @@ def plot_astrocyte_potential(grid_glial, grid_glial_init, clim, text, i):
     p.close()
 
 i = 1
-index_min = 184
-index_max = 185
-clim = [7.0, 13] # adjusted ECS
+index_1 = 184
+index_2 = 185
+index_3 = 200
 
-#dir = "baseline"
-#text = r"$\rm baseline$"
+dir = "baseline"
+text = r"$\rm baseline$"
+clim = [7.4, 7.82] # adjusted ECS
 
-dir = "ECS-tort-x5"
-text = r"$\rm ECS \ \lambda \times 5$"
+#dir = "ECS-tort-x5"
+#text = r"$\rm ECS \ \lambda \times 5$"
+#clim = [9.8, 13.02] # adjusted ECS
 
 #dir = "ICS-tort-x5"
 #text = r"$\rm ICS \ \lambda \times 5$"
+#clim = [6.8, 9.05] # adjusted ECS
 
-for time_index in [index_min, index_max]:
+#dir = "ECS-ICS-tort-5x"
+#text = r"$\rm ECS \ and \ ICS \ \lambda \times 5$"
+#clim = [7.7, 17.7] # adjusted ECS
+
+for time_index in [index_1, index_2, index_3]:
     #grid_neuron = get_grid_field(dir, "results_sub_1", "c_K_1", time_index)
     #grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
     #grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_K_0", 0)

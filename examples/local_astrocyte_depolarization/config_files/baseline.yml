@@ -1,6 +1,7 @@
 mesh_file : 'meshes/remarked_mesh/mesh.xdmf'
-fname : "baseline"
-Tstop : 300         # end time (ms)
+fname : "baseline-short"
+Tstop : 1           # end time (ms)
+#Tstop : 300        # end time (ms)
 f_value : 97        # strength of source term
 period: 10          # period source term stimuli
 delay: 1.0          # delay source term stimuli

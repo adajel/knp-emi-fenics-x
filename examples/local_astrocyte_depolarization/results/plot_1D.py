@@ -74,6 +74,12 @@ fname = f"{fdirs}/i_kir_glial.txt"
 I_Kir_3D = read_me(fname)
 fname = f"{fdirs}/i_pump_glial.txt"
 I_pump_3D = read_me(fname)
+fname = f"{fdirs}/rm_glial.txt"
+rm_3D = read_me(fname)
+fname = f"{fdirs}/ri_glial.txt"
+ri_3D = read_me(fname)
+fname = f"{fdirs}/re_glial.txt"
+re_3D = read_me(fname)
 
 # time
 dt = 0.1
@@ -83,7 +89,7 @@ t = np.arange(0, Tstop, dt * save_frequency)
 
 # get index of max value (i.e. where the stimuli is turned off) - same for all
 # model variations
-stimuli_end = np.argmax(phi_M_1D) + 40
+stimuli_end = np.argmax(phi_M_1D) + 20
 print(f"stimuli end: {stimuli_end*0.1*5}")
 
 def get_normalized_phi_M(phi_M):
@@ -118,7 +124,7 @@ def get_normalized_phi_M_space(phi_M):
 
 lw = 4
 
-fig = plt.figure(figsize=(20, 15))
+fig = plt.figure(figsize=(15, 10))
 ax = plt.gca()
 
 phi_M_norm_1D = get_normalized_phi_M(phi_M_1D)
@@ -138,57 +144,72 @@ phi_M_space_norm = get_normalized_phi_M_space(phi_M_space)
 t_normalized_space = np.linspace(100, 200, int(3200/2))
 x = np.linspace(0, 200, 3200)
 
-ax1 = fig.add_subplot(3,4,1)
+ax1 = fig.add_subplot(2,3,1)
 plt.plot(t, K_ECS_3D, linewidth=lw, color=blue, label=r"3D")
 plt.plot(t, K_ECS_1D, linewidth=lw, color=pink, label=r'1D')
 plt.ylabel(r"$c_{K_e}$ (mM)")
 plt.xlabel(r"time (ms)")
-plt.xticks([0, 100, 200,  300])
+#plt.xticks([0, 100, 200,  300])
 
-ax1 = fig.add_subplot(3,4,2)
-plt.plot(np.array(E_K_3D), linewidth=lw, color=blue)
-plt.plot(np.array(E_K_1D), linewidth=lw, color=pink)
+ax1 = fig.add_subplot(2,3,2)
+plt.plot(t, np.array(E_K_3D), linewidth=lw, color=blue)
+plt.plot(t, np.array(E_K_1D), linewidth=lw, color=pink)
 plt.ylabel(r"$\rm E_{K}$ (mV)")
 plt.xlabel(r"time (ms)")
 
-ax1 = fig.add_subplot(3,4,3)
-plt.ylabel(r"$I$ ($\rm \mu A/cm^2$)")
-plt.plot(np.array(I_Kir_3D), linewidth=lw, color=blue, label=r"3D")
-plt.plot(np.array(I_Kir_1D), linewidth=lw, color=pink, label=r'1D')
+ax1 = fig.add_subplot(2,3,3)
+plt.ylabel(r"$\rm I_{Kir}$ ($\rm \mu A/cm^2$)")
+plt.plot(t, np.array(I_Kir_3D), linewidth=lw, color=blue, label=r"3D")
+plt.plot(t, np.array(I_Kir_1D), linewidth=lw, color=pink, label=r'1D')
 plt.xlabel(r"time (ms)")
 
-ax1 = fig.add_subplot(3,4,4)
+ax1 = fig.add_subplot(2,3,4)
 plt.plot(t, K_ICS_3D, linewidth=lw, color=blue, label=r"3D")
 plt.plot(t, K_ICS_1D, linewidth=lw, color=pink, label=r'1D')
 plt.ylabel(r"$c_{K_g}$ (mM)")
 plt.xlabel(r"time (ms)")
-plt.xticks([0, 100, 200,  300])
+#plt.xticks([0, 100, 200,  300])
 
-ax1 = fig.add_subplot(3,4,7)
+ax1 = fig.add_subplot(2,3,5)
 plt.plot(t, phi_M_3D, linewidth=lw, color=blue, label=r"3D")
 plt.plot(t, np.array(phi_M_1D)*1.0e3, linewidth=lw, color=pink, label=r'1D')
-#plt.axvline(x=112.5, color='red', linestyle='--', label='Line at $x=6$')
+plt.axvline(x=102, color='red', linestyle='--', label='Line at $x=6$')
 plt.ylabel(r"$\phi_M$ (mV)")
 plt.xlabel(r"time (ms)")
-plt.xticks([0, 100, 200,  300])
+#plt.xticks([0, 100, 200,  300])
 
-ax1 = fig.add_subplot(3,4,8, xlim=[98, 305])
+ax1 = fig.add_subplot(2,3,6, xlim=[98, 305])
 plt.plot(t_normalized, phi_M_norm_3D, linewidth=lw, color=blue, label=r"3D")
 plt.plot(t_normalized, phi_M_norm_1D, linewidth=lw, color=pink, label=r'1D')
 plt.plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw)
 plt.ylabel(r"normalized $\phi_M$")
 plt.yticks([0.0, 0.25, 0.5, 0.75, 1.0])
-plt.xticks([100, 150, 200, 250, 300])
+#plt.xticks([100, 150, 200, 250, 300])
 plt.xlabel(r"time (ms)")
 plt.legend()
 
-ax1 = fig.add_subplot(3,4,11)
+# make pretty
+ax.axis('off')
+plt.tight_layout()
+
+# save figure to file
+plt.savefig(f'1D_time.svg', format='svg')
+plt.savefig(f'1D_time.png', format='png')
+
+fig = plt.figure(figsize=(20, 10))
+ax = plt.gca()
+
+alpha_i = 0.07
+alpha_e = 0.22
+gamma_m = 4.33e4 # 1/cm
+
+ax1 = fig.add_subplot(2,4,1)
 plt.plot(x, np.array(phi_M_space)*1.0e3, linewidth=lw, color=green, label=r'1D')
 plt.ylabel(r"$\phi_M$ (mV)")
 plt.xticks([0, 50, 100, 150, 200])
 plt.xlabel(r"$x(\mu\rm{m})$")
 
-ax1 = fig.add_subplot(3,4,12)
+ax1 = fig.add_subplot(2,4,2)
 plt.plot(t_normalized_space, phi_M_space_norm, linewidth=lw, color=green, label=r'1D')
 plt.plot([100, 200], [0.36787944117, 0.36787944117], color='grey', linestyle="dotted", linewidth=lw)
 plt.ylabel(r"normalized $\phi_M$")
@@ -196,57 +217,30 @@ plt.yticks([0.0, 0.25, 0.5, 0.75, 1.0])
 plt.xticks([100, 125, 150, 175, 200])
 plt.xlabel(r"$x(\mu\rm{m})$")
 
-# make pretty
-ax.axis('off')
-plt.tight_layout()
-
-# save figure to file
-plt.savefig(f'1D-3D.svg', format='svg')
-plt.savefig(f'1D-3D.png', format='png')
-
-fig = plt.figure(figsize=(20, 10))
-ax = plt.gca()
-
 ax1 = fig.add_subplot(2,4,3)
-plt.plot(t, np.array(E_K_1D), linewidth=lw, color=blue)
-plt.ylabel(r"$\rm E_{K}$ (mV) 1D")
+plt.plot(t, np.sqrt(np.array(rm_3D) / (np.array(ri_3D) + np.array(re_3D))), linewidth=lw, color=blue)
+plt.ylabel(r"Length constant (cm)")
 plt.xlabel(r"time (ms)")
 
 ax1 = fig.add_subplot(2,4,4)
-plt.ylabel(r"$I_kir$ ()")
-#plt.plot(t, np.array(I_Kir_3D), linewidth=lw, color=blue, label=r'3D')
-#plt.plot(t, np.array(I_Kir_1D), linewidth=lw, color=pink, label=r'1D')
-plt.plot(t, np.array(E_K_3D), linewidth=lw, color=blue)
-plt.ylabel(r"$\rm E_{K}$ (mV) 3D")
-plt.xlabel(r"time (ms)")
-plt.legend()
-
-ax1 = fig.add_subplot(2,4,7, ylim=[-95, 25])
-plt.ylabel(r"$I$ ($\mu\rm A/\rm cm^2$) 1D")
-plt.plot(t, np.array(I_Kir_1D), linewidth=lw, color=blue, label=r'$I_{\rm Kir}$')
-plt.plot(t, - 2 * np.array(I_pump_1D), linewidth=lw, color=dark_blue, label=r'$I^{\rm K}_{\rm pump}$')
-plt.plot(t, np.array(I_Na_1D), linewidth=lw, color=pink_light, label=r'$I_{\rm Na}$')
-plt.plot(t, 3 * np.array(I_pump_1D), linewidth=lw, color=dark_pink, label=r'$I^{\rm Na}_{\rm pump}$')
-plt.plot(t, np.array(I_Cl_1D), linewidth=lw, color=orange, label=r'$I_{\rm Cl}$')
+plt.plot(t, np.sqrt(np.array(rm_3D)) * (1 / gamma_m), linewidth=lw, color=blue)
+plt.ylabel(r"r_m ($\Omega$ cm)")
 plt.xlabel(r"time (ms)")
 
-g_Na = 0.1
-g_Cl = 0.05
-
-ax1 = fig.add_subplot(2,4,8, ylim=[-95, 25])
-plt.ylabel(r"$I$ ($\mu \rm A/\rm cm^2$) 3D")
-plt.plot(t, np.array(I_Kir_3D), linewidth=lw, color=blue, label=r'$I_{\rm Kir}$')
-plt.plot(t, - 2 * np.array(I_pump_3D), linewidth=lw, color=dark_blue, label=r'$I^{\rm K}_{\rm pump}$')
-plt.plot(t, g_Na * (np.array(phi_M_3D) - np.array(E_Na_3D)), linewidth=lw, color=pink_light, label=r'$I_{\rm Na}$')
-plt.plot(t, 3 * np.array(I_pump_3D), linewidth=lw, color=dark_pink, label=r'$I^{\rm Na}_{\rm pump}$')
-plt.plot(t, g_Cl * (np.array(phi_M_3D) - np.array(E_Cl_3D)), linewidth=lw, color=orange, label=r'$I_{\rm Cl}$')
+ax1 = fig.add_subplot(2,4,5)
+plt.plot(t, np.sqrt(np.array(ri_3D)) * (1 / alpha_i), linewidth=lw, color=blue)
+plt.ylabel(r"r_i ($\Omega$ cm)")
 plt.xlabel(r"time (ms)")
-plt.legend()
+
+ax1 = fig.add_subplot(2,4,6)
+plt.plot(t, np.sqrt(np.array(re_3D)) * (1 / alpha_e), linewidth=lw, color=blue)
+plt.ylabel(r"r_e ($\Omega$ cm)")
+plt.xlabel(r"time (ms)")
 
 # make pretty
 ax.axis('off')
 plt.tight_layout()
 
 # save figure to file
-plt.savefig(f'drive-forces-depo.svg', format='svg')
-plt.savefig(f'drive-forces-depo.png', format='png')
+plt.savefig(f'1D_space.svg', format='svg')
+plt.savefig(f'1D_space.png', format='png')

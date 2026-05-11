@@ -42,13 +42,6 @@ fname = f"{fdirs}/K_ICS_glial.txt"
 K_ICS_I = read_me(fname)
 fname = f"{fdirs}/i_kir_glial.txt"
 I_Kir_I = read_me(fname)
-
-#fname = f"{fdirs}/I_Na_glial.txt"
-#I_Na_I = read_me(fname)
-#fname = f"{fdirs}/I_Cl_glial.txt"
-#I_Cl_I = read_me(fname)
-#fname = f"{fdirs}/I_pump_glial.txt"
-#I_pump_I = read_me(fname)
 fname = f"{fdirs}/E_Cl_glial.txt"
 E_Cl_I = read_me(fname)
 fname = f"{fdirs}/E_Na_glial.txt"
@@ -65,21 +58,28 @@ fname = f"{fdirs}/K_ICS_glial.txt"
 K_ICS_E = read_me(fname)
 fname = f"{fdirs}/i_kir_glial.txt"
 I_Kir_E = read_me(fname)
-
-
-
-#fname = f"{fdirs}/I_Na_glial.txt"
-#I_Na_E = read_me(fname)
-#fname = f"{fdirs}/I_Cl_glial.txt"
-#I_Cl_E = read_me(fname)
-#fname = f"{fdirs}/I_pump_glial.txt"
-#I_pump_E = read_me(fname)
 fname = f"{fdirs}/E_Cl_glial.txt"
 E_Cl_E = read_me(fname)
 fname = f"{fdirs}/E_Na_glial.txt"
 E_Na_E = read_me(fname)
 fname = f"{fdirs}/E_K_glial.txt"
 E_K_E = read_me(fname)
+
+fdirs = "ECS-ICS-tort-5x"
+fname = f"{fdirs}/phi_M_glial.txt"
+phi_M_EI = read_me(fname)
+fname = f"{fdirs}/K_ECS_glial.txt"
+K_ECS_EI = read_me(fname)
+fname = f"{fdirs}/K_ICS_glial.txt"
+K_ICS_EI = read_me(fname)
+fname = f"{fdirs}/i_kir_glial.txt"
+I_Kir_EI = read_me(fname)
+fname = f"{fdirs}/E_Cl_glial.txt"
+E_Cl_EI = read_me(fname)
+fname = f"{fdirs}/E_Na_glial.txt"
+E_Na_EI = read_me(fname)
+fname = f"{fdirs}/E_K_glial.txt"
+E_K_EI = read_me(fname)
 
 # get phi_M time
 fdirs = "baseline"
@@ -141,14 +141,10 @@ def get_normalized_phi_M_space(phi_M):
 ### Make plot concentrations, potential and normalized potential ###
 ### ------------------------------------------------------------ ###
 
-lw = 4
-
-fig = plt.figure(figsize=(20, 15))
-ax = plt.gca()
-
 phi_M_norm_bs = get_normalized_phi_M(phi_M_bs)
 phi_M_norm_I = get_normalized_phi_M(phi_M_I)
 phi_M_norm_E = get_normalized_phi_M(phi_M_E)
+phi_M_norm_EI = get_normalized_phi_M(phi_M_EI)
 
 #print(phi_M_norm_E)
 #print(phi_M_norm_I)
@@ -156,25 +152,29 @@ phi_M_norm_E = get_normalized_phi_M(phi_M_E)
 
 #exit(0)
 
-indices_bs = [i for i, x in enumerate(phi_M_norm_bs) if (x > 0.49 and x < 0.51)]
-indices_I = [i for i, x in enumerate(phi_M_norm_I) if (x > 0.49 and x < 0.51)]
-indices_E = [i for i, x in enumerate(phi_M_norm_E) if (x > 0.49 and x < 0.51)]
+indices_bs = [i for i, x in enumerate(phi_M_norm_bs) if (x > 0.495 and x < 0.505)]
+indices_I = [i for i, x in enumerate(phi_M_norm_I) if (x > 0.495 and x < 0.505)]
+indices_E = [i for i, x in enumerate(phi_M_norm_E) if (x > 0.495 and x < 0.505)]
+indices_EI = [i for i, x in enumerate(phi_M_norm_EI) if (x > 0.495 and x < 0.505)]
 
 print(indices_I)
 print(indices_E)
+print(indices_EI)
 print(indices_bs)
 print("time constant bs", indices_bs[0]*dt*save_frequency)
 print("time constant I", indices_I[0]*dt*save_frequency)
 print("time constant E", indices_E[0]*dt*save_frequency)
+print("time constant EI", indices_EI[0]*dt*save_frequency)
 
 t_normalized = np.arange(stimuli_end * dt * save_frequency, Tstop, dt * save_frequency)
 
-#phi_M_space_norm = get_normalized_phi_M_space(phi_M_space)
-#t_normalized_space = np.linspace(100, 200, int(3200/2))
-#x = np.linspace(0, 200, 3200)
+lw = 4
+fig = plt.figure(figsize=(20, 15))
+ax = plt.gca()
 
 ax1 = fig.add_subplot(3,4,1)
 plt.plot(t, K_ECS_E, linewidth=lw, color=pink)
+plt.plot(t, K_ECS_EI, linewidth=lw, color=orange, linestyle="dashed")
 plt.plot(t, K_ECS_I, linewidth=lw, color=blue)
 plt.plot(t, K_ECS_bs, linewidth=lw, color=green, linestyle="dotted")
 plt.ylabel(r"$c_{K_e}$ (mM)")
@@ -183,6 +183,7 @@ plt.xlabel(r"time (ms)")
 
 ax1 = fig.add_subplot(3,4,2)
 plt.plot(t, np.array(E_K_E), linewidth=lw, color=pink)
+plt.plot(t, np.array(E_K_EI), linewidth=lw, color=orange, linestyle="dashed")
 plt.plot(t, np.array(E_K_I), linewidth=lw, color=blue)
 plt.plot(t, np.array(E_K_bs), linewidth=lw, color=green, linestyle="dotted")
 plt.ylabel(r"$\rm E_{K}$ (mV)")
@@ -191,12 +192,14 @@ plt.xlabel(r"time (ms)")
 ax1 = fig.add_subplot(3,4,5)
 plt.ylabel(r"$I$ ($\rm \mu A/cm^2$)")
 plt.plot(t, np.array(I_Kir_E), linewidth=lw, color=pink)
+plt.plot(t, np.array(I_Kir_EI), linewidth=lw, color=orange, linestyle="dashed")
 plt.plot(t, np.array(I_Kir_I), linewidth=lw, color=blue)
 plt.plot(t, np.array(I_Kir_bs), linewidth=lw, color=green, linestyle="dotted")
 plt.xlabel(r"time (ms)")
 
 ax1 = fig.add_subplot(3,4,6)
 plt.plot(t, K_ICS_E, linewidth=lw, color=pink)
+plt.plot(t, K_ICS_EI, linewidth=lw, color=orange, linestyle="dashed")
 plt.plot(t, K_ICS_I, linewidth=lw, color=blue)
 plt.plot(t, K_ICS_bs, linewidth=lw, color=green, linestyle="dotted")
 plt.ylabel(r"$c_{K_g}$ (mM)")
@@ -204,8 +207,9 @@ plt.xlabel(r"time (ms)")
 #plt.xticks([0, 60, 120])
 
 ax1 = fig.add_subplot(3,4,9)
-plt.plot(t, phi_M_E, linewidth=lw, color=pink, label=r"E")
-plt.plot(t, phi_M_I, linewidth=lw, color=blue, label=r"I")
+plt.plot(t, phi_M_E, linewidth=lw, color=pink)
+plt.plot(t, phi_M_EI, linewidth=lw, color=orange, linestyle="dashed")
+plt.plot(t, phi_M_I, linewidth=lw, color=blue)
 plt.plot(t, phi_M_bs, linewidth=lw, color=green, linestyle="dotted", label=r"bs")
 #plt.axvline(x=112.5, color='red', linestyle='--', label='Line at $x=6$')
 plt.axvline(x=104.5, color='red', linestyle='--', label='Line at $x=6$')
@@ -215,6 +219,7 @@ plt.xlabel(r"time (ms)")
 
 ax1 = fig.add_subplot(3,4,10, xlim=[112, 305])
 plt.plot(t_normalized, phi_M_norm_E, linewidth=lw, color=pink, label=r"ECS $\lambda \times 5$")
+plt.plot(t_normalized, phi_M_norm_EI, linewidth=lw, color=orange, linestyle="dashed", label=r"ECS and ICS $\lambda \times 5$")
 plt.plot(t_normalized, phi_M_norm_I, linewidth=lw, color=blue, label=r'ICS $\lambda \times 5$')
 plt.plot(t_normalized, phi_M_norm_bs, linewidth=lw, color=green, linestyle="dotted", label=r'baseline')
 plt.plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw)

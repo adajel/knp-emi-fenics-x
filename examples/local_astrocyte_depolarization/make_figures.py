@@ -8,7 +8,7 @@ import yaml
 import os
 
 import dolfinx
-import adios4dolfinx
+from io4dolfinx import read_point_data
 from mpi4py import MPI
 import scifem
 
@@ -23,13 +23,17 @@ mpl.rcParams['image.cmap'] = 'jet'
 
 comm = MPI.COMM_WORLD
 
-def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop, save_frequency):
+def get_time_series_sub(fname, point, tag, dt, Tstop, save_frequency):
 
-    # Read mesh
-    mesh_sub = adios4dolfinx.read_mesh(checkpoint_fname, MPI.COMM_WORLD)
+    # Open file
+    #
+    print(f"filename: {fname}")
+    xdmf = dolfinx.io.XDMFFile(comm, fname, "r")
+    # .. and read mesh
+    mesh = xdmf.read_mesh()
 
     # Create function space and functions for storing data
-    V = dolfinx.fem.functionspace(mesh_sub, ("CG", 1))
+    V = dolfinx.fem.functionspace(mesh, ("CG", 1))
     K = dolfinx.fem.Function(V)
     Cl = dolfinx.fem.Function(V)
     Na = dolfinx.fem.Function(V)
@@ -44,17 +48,15 @@ def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop, save_frequency)
     t = dt
     k = 0
     while t <= Tstop:
-        #tr = round(t, 1) # round to number with one decimal
         tr = t           # round to number with one decimal
 
         if (k % save_frequency) == 0:
-            #print(f"Reading data, subdomain {tag}, t = {t:.2f}")
             print(f"Reading data, subdomain {tag}, t = {t}")
             # Read results from file
-            adios4dolfinx.read_function(checkpoint_fname, K, time=tr, name=f"c_K_{tag}")
-            adios4dolfinx.read_function(checkpoint_fname, Cl, time=tr, name=f"c_Cl_{tag}")
-            adios4dolfinx.read_function(checkpoint_fname, Na, time=tr, name=f"c_Na_{tag}")
-            adios4dolfinx.read_function(checkpoint_fname, phi, time=tr, name=f"phi_{tag}")
+            K = read_point_data(fname, time=tr, mesh=mesh, name=f"c_K_{tag}")
+            Cl = read_point_data(fname, time=tr, mesh=mesh, name=f"c_Cl_{tag}")
+            Na = read_point_data(fname, time=tr, mesh=mesh, name=f"c_Na_{tag}")
+            ph = read_point_data(fname, time=tr, mesh=mesh, name=f"phi_{tag}")
 
             # Append (results) function evaluated in point to list
             Ks.append(scifem.evaluate_function(K, point)[0][0])
@@ -67,11 +69,12 @@ def get_time_series_sub(checkpoint_fname, point, tag, dt, Tstop, save_frequency)
 
     return Nas, Ks, Cls, phis
 
-def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop, save_frequency):
+def get_time_series_mem(fname, point, tag, dt, Tstop, save_frequency):
     # Read mesh
-    mesh_mem = adios4dolfinx.read_mesh(checkpoint_fname, MPI.COMM_WORLD)
+    xdmf = dolfinx.io.XDMFFile(comm, fname, "r")
+    mesh = xdmf.read_mesh()
     # Create function space and function for storing data
-    V = dolfinx.fem.functionspace(mesh_mem, ("CG", 1))
+    V = dolfinx.fem.functionspace(mesh, ("CG", 1))
 
     phi_M = dolfinx.fem.Function(V)
     tr_Ki = dolfinx.fem.Function(V)
@@ -100,31 +103,31 @@ def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop, save_frequency)
             print(f"Reading data, membrane {tag}, t = {t:.2f}")
 
             # Membrane potential
-            adios4dolfinx.read_function(checkpoint_fname, phi_M, time=tr, name=f"phi_M_{tag}")
+            phi_M = read_point_data(fname, time=tr, mesh=mesh, name=f"phi_M_{tag}")
             phi_Ms.append(scifem.evaluate_function(phi_M, point)[0][0])
 
             # Trace of K from ICS
-            adios4dolfinx.read_function(checkpoint_fname, tr_Ki, time=tr, name=f"c_K_{tag}")
+            tr_Ki = read_point_data(fname, time=tr, mesh=mesh, name=f"c_K_{tag}")
             tr_K_is.append(scifem.evaluate_function(tr_Ki, point)[0][0])
 
             # Trace of Cl from ICS
-            adios4dolfinx.read_function(checkpoint_fname, tr_Cli, time=tr, name=f"c_Cl_{tag}")
+            tr_Cli = read_point_data(fname, time=tr, mesh=mesh, name=f"c_Cl_{tag}")
             tr_Cl_is.append(scifem.evaluate_function(tr_Cli, point)[0][0])
 
             # Trace of Na from ICS
-            adios4dolfinx.read_function(checkpoint_fname, tr_Nai, time=tr, name=f"c_Na_{tag}")
+            tr_Nai = read_point_data(fname, time=tr, mesh=mesh, name=f"c_Na_{tag}")
             tr_Na_is.append(scifem.evaluate_function(tr_Nai, point)[0][0])
 
             # Trace of K from ECS
-            adios4dolfinx.read_function(checkpoint_fname, tr_Ke, time=tr, name=f"c_K_{0}")
+            tr_Ke = read_point_data(fname, time=tr, mesh=mesh, name=f"c_K_{0}")
             tr_K_es.append(scifem.evaluate_function(tr_Ke, point)[0][0])
 
             # Trace of Cl from ECS
-            adios4dolfinx.read_function(checkpoint_fname, tr_Cle, time=tr, name=f"c_Cl_{0}")
+            tr_Cle = read_point_data(fname,  time=tr, mesh=mesh, name=f"c_Cl_{0}")
             tr_Cl_es.append(scifem.evaluate_function(tr_Cle, point)[0][0])
 
             # Trace of Na from ECS
-            adios4dolfinx.read_function(checkpoint_fname, tr_Nae, time=tr, name=f"c_Na_{0}")
+            tr_Nae = read_point_data(fname, time=tr, mesh=mesh, name=f"c_Na_{0}")
             tr_Na_es.append(scifem.evaluate_function(tr_Nae, point)[0][0])
 
         t += dt
@@ -132,7 +135,8 @@ def get_time_series_mem(checkpoint_fname, point, tag, dt, Tstop, save_frequency)
 
     return phi_Ms, tr_K_es, tr_K_is, tr_Na_es, tr_Na_is, tr_Cl_es, tr_Cl_is
 
-def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag, save_frequency):
+def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag, \
+        save_frequency, config):
 
     temperature = 300e3 # temperature (K)
     F = 96485e3         # Faraday's constant (C/mol)
@@ -156,14 +160,14 @@ def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag, save_frequency
     point_i = np.array([[x_i, y_i, z_i]])
     point_M = np.array([[x_M, y_M, z_M]])
 
-    checkpoint_fname_e = f'results/{fname_in}/checkpoint_sub_0.bp'
-    checkpoint_fname_i = f'results/{fname_in}/checkpoint_sub_{tag}.bp'
-    checkpoint_fname_M = f'results/{fname_in}/checkpoint_mem_{tag}.bp'
+    fname_e = f'results/{fname_in}/results_sub_0.xdmf'
+    fname_i = f'results/{fname_in}/results_sub_{tag}.xdmf'
+    fname_M = f'results/{fname_in}/results_mem_{tag}.xdmf'
 
     # get timeseries in points
-    Na_e, K_e, Cl_e, phi_e = get_time_series_sub(checkpoint_fname_e, point_e, 0, dt, Tstop, save_frequency)
-    Na_i, K_i, Cl_i, phi_i = get_time_series_sub(checkpoint_fname_i, point_i, tag, dt, Tstop, save_frequency)
-    phi_M, tr_K_e, tr_K_i, tr_Na_e, tr_Na_i, tr_Cl_e, tr_Cl_i = get_time_series_mem(checkpoint_fname_M, point_M, tag, dt, Tstop, save_frequency)
+    Na_e, K_e, Cl_e, phi_e = get_time_series_sub(fname_e, point_e, 0, dt, Tstop, save_frequency)
+    Na_i, K_i, Cl_i, phi_i = get_time_series_sub(fname_i, point_i, tag, dt, Tstop, save_frequency)
+    phi_M, tr_K_e, tr_K_i, tr_Na_e, tr_Na_i, tr_Cl_e, tr_Cl_i = get_time_series_mem(fname_M, point_M, tag, dt, Tstop, save_frequency)
 
     temperature = 300e3; F = 96485e3; R = 8.314e3
     # Calculate Nernst potentials
@@ -193,6 +197,37 @@ def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag, save_frequency
 
     # define and return current
     i_kir = g_leak_K * g_Kir * (np.array(phi_M) - E_K) # umol/(cm^2*ms)
+
+    psi = R * temperature / F
+    D_Na = 1.33e-8
+    D_K = 1.96e-8
+    D_Cl = 2.03e-8
+
+    g_leak_Na = 0.1
+    g_leak_Cl = 0.05
+
+    lambda_e = config["lambda_e"]
+    lambda_i = config["lambda_i"]
+
+    D_K_i = D_K * lambda_i
+    D_Na_i = D_Na * lambda_i
+    D_Cl_i = D_Cl * lambda_i
+
+    D_K_e = D_K * lambda_e
+    D_Na_e = D_Na * lambda_e
+    D_Cl_e = D_Cl * lambda_e
+
+    g_m = g_leak_K * g_Kir + g_leak_Na + g_leak_Cl
+    g_i = (F*F) / (R * temperature)  * (D_K_i * np.array(tr_K_i) + D_Na_i * np.array(tr_Na_i) + D_Cl_i * np.array(tr_Cl_i))
+    g_e = (F*F) / (R * temperature)  * (D_K_e * np.array(tr_K_e) + D_Na_e * np.array(tr_Na_e) + D_Cl_e * np.array(tr_Cl_e))
+
+    print(f"g_m: {g_m} mS/cm**2")
+    print(f"g_i: {g_i} S/cm")
+    print(f"g_e: {g_e} S/cm")
+
+    r_m = 1.0 / g_m
+    r_i = 1.0 / g_i
+    r_e = 1.0 / g_e
 
     # Concentration plots
     fig = plt.figure(figsize=(12*0.9,12*0.9))
@@ -331,12 +366,28 @@ def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag, save_frequency
         f_E_Cl.write("%.10f \n" % p)
     f_E_Cl.close()
 
+    f_rm = open(f'results/{fname_in}/rm_{fname_out}.txt', "w")
+    for p in r_m:
+        f_rm.write("%.10f \n" % p)
+    f_rm.close()
+
+    f_ri = open(f'results/{fname_in}/ri_{fname_out}.txt', "w")
+    for p in r_i:
+        f_ri.write("%.10f \n" % p)
+    f_ri.close()
+
+    f_re = open(f'results/{fname_in}/re_{fname_out}.txt', "w")
+    for p in r_e:
+        f_re.write("%.10f \n" % p)
+    f_re.close()
+
     return
 
-def normalize(checkpoint_fname, fname_out, tag, time):
+def normalize(fname, fname_out, tag, time):
 
     # Read mesh
-    mesh_mem = adios4dolfinx.read_mesh(checkpoint_fname, MPI.COMM_WORLD)
+    xdmf = dolfinx.io.XDMFFile(comm, fname, "r")
+    mesh_mem = xdmf.read_mesh()
 
     # Create function space and function for storing data
     V = dolfinx.fem.functionspace(mesh_mem, ("CG", 1))
@@ -344,7 +395,7 @@ def normalize(checkpoint_fname, fname_out, tag, time):
     phi_M_normalized = dolfinx.fem.Function(V)
 
     # Membrane potential
-    adios4dolfinx.read_function(checkpoint_fname, phi_M, time=time, name=f"phi_M_{tag}")
+    phi_M = read_point_data(fname, time=time, name=f"phi_M_{tag}")
 
     #min = np.min(phi_M.x.array[:])
     # TODO hack fix island in mesh
@@ -385,15 +436,6 @@ if __name__ == "__main__":
     if not os.path.isdir(f'results/{fname_in}'):
         os.mkdir(f'results/{fname_in}')
 
-    """
-    checkpoint_fname_M = f'results/{fname_in}/checkpoint_mem_{tag_G}.bp'
-    time = 91.59999999999907
-    normalize(checkpoint_fname_M, fname_in, tag_G, time)
-
-    import sys
-    sys.exit(0)
-    """
-
     # create figures
     dt = 0.1
     Tstop = config["Tstop"]
@@ -415,7 +457,8 @@ if __name__ == "__main__":
 
     # Read save frequency from config file
     save_frequency = config["save_frequency"]
-    plot_3D_concentration(fname_in, fname_out_G, dt, Tstop, x_G, tag_G, save_frequency)
+    plot_3D_concentration(fname_in, fname_out_G, dt, Tstop, x_G, tag_G,
+            save_frequency, config)
 
     """
     # EMI points neuron

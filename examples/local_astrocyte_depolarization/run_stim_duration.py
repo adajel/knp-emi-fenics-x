@@ -14,12 +14,12 @@ import mm_glial as mm_glial
 import mm_hh as mm_hh
 
 import dolfinx
-import adios4dolfinx
 import scifem
 from mpi4py import MPI
 import numpy as np
 import argparse
 import yaml
+import dolfinx
 
 from ufl import (
         ln,
@@ -52,7 +52,6 @@ comm = MPI.COMM_WORLD
 def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
     # Write potential to file
     xdmf.write_function(phi[tag], t=float(t))
-    adios4dolfinx.write_function(fname, phi[tag], time=float(t))
 
     for idx in range(len(ion_list)):
         # Determine the function source based on the index
@@ -61,7 +60,6 @@ def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
 
         # Write concentration to file
         xdmf.write_function(c_tag, t=float(t))
-        adios4dolfinx.write_function(fname, c_tag, time=float(t))
 
     return
 
@@ -69,7 +67,6 @@ def write_to_file_sub(xdmf, fname, tag, phi, c, ion_list, t):
 def write_to_file_mem(xdmf, fname, tag, mesh, ct, ion_list, subdomain_list, phi_M_prev, c, t):
     # Write potential to file
     xdmf.write_function(phi_M_prev[tag], t=float(t))
-    adios4dolfinx.write_function(fname, phi_M_prev[tag], time=float(t))
 
     # Write traces of concentrations on membrane to file
     for idx, ion in enumerate(ion_list):
@@ -83,8 +80,6 @@ def write_to_file_mem(xdmf, fname, tag, mesh, ct, ion_list, subdomain_list, phi_
         # Write to file
         xdmf.write_function(k_e, t=float(t))
         xdmf.write_function(k_i, t=float(t))
-        adios4dolfinx.write_function(fname, k_e, time=float(t))
-        adios4dolfinx.write_function(fname, k_i, time=float(t))
 
     return
 
@@ -222,9 +217,9 @@ def solve_system(config):
     temperature = 307e3              # temperature (mK)
     F = 96500e3                      # Faraday's constant (mC/mol)
     R = 8.315e3                      # Gas Constant (mJ/(K*mol))
-    D_Na = 1.33e-8                   # diffusion coefficients Na (cm/ms)
-    D_K = 1.96e-8                    # diffusion coefficients K (cm/ms)
-    D_Cl = 2.03e-8                   # diffusion coefficients Cl (cm/ms)
+    D_Na = 1.33e-8                   # diffusion coefficients Na (cm²/ms)
+    D_K = 1.96e-8                    # diffusion coefficients K (cm²/ms)
+    D_Cl = 2.03e-8                   # diffusion coefficients Cl (cm²/ms)
     psi = F / (R * temperature)      # shorthand
     C_phi = C_M / dt                 # shorthand
 
@@ -447,7 +442,6 @@ def solve_system(config):
     for tag, subdomain in subdomain_list.items():
         xdmf = dolfinx.io.XDMFFile(comm, f"results/{fname}/results_sub_{tag}.xdmf", "w")
         xdmf.write_mesh(subdomain['mesh_sub'])
-        adios4dolfinx.write_mesh(f"results/{fname}/checkpoint_sub_{tag}.bp", subdomain['mesh_sub'])
         xdmf_sub[tag] = xdmf
         fname_bp_sub[tag] = f"results/{fname}/checkpoint_sub_{tag}.bp"
 
@@ -455,7 +449,6 @@ def solve_system(config):
         if tag > 0:
             xdmf = dolfinx.io.XDMFFile(comm, f"results/{fname}/results_mem_{tag}.xdmf", "w")
             xdmf.write_mesh(subdomain['mesh_mem'])
-            adios4dolfinx.write_mesh(f"results/{fname}/checkpoint_mem_{tag}.bp", subdomain['mesh_mem'])
             xdmf_mem[tag] = xdmf
             fname_bp_mem[tag] = f"results/{fname}/checkpoint_mem_{tag}.bp"
 
