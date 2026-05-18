@@ -49,15 +49,15 @@ sargs_ECS = dict(
 
 sargs_glial = dict(
     title=" ",
-    n_labels=5,                # Number of labels
+    n_labels=6,                # Number of labels
     fmt="%.2f",                # Decimal formatting
     font_family="arial",
     vertical=True,             # Horizontal orientation
-    position_x=0.82,           # Move left/right (0 to 1)
-    position_y=0.30,           # Move up/down (0 to 1)
-    width=0.08,                # Width of the bar
-    height=0.4,                # Height of the bar
-    title_font_size=20,
+    position_x=0.84,           # Move left/right (0 to 1)
+    position_y=0.27,           # Move up/down (0 to 1)
+    width=0.1,                # Width of the bar
+    height=0.50,               # Height of the bar
+    title_font_size=27,
     label_font_size=27,
     color='black',
 )
@@ -205,7 +205,7 @@ def plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i)
     p.screenshot(f"results/astrocyte_potential_ECS_embedding_{i}.png", transparent_background=True)
     p.close()
 
-def plot_astrocyte_potential(grid_glial, grid_glial_init, clim, text, i):
+def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, text, i):
 
     roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
 
@@ -220,7 +220,7 @@ def plot_astrocyte_potential(grid_glial, grid_glial_init, clim, text, i):
         grid_glial,
         scalars="diff",
         scalar_bar_args=sargs_glial, \
-        cmap=cmap_glial, clim=clim
+        cmap=cmap_glial,# clim=clim
     )
 
     p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
@@ -228,7 +228,7 @@ def plot_astrocyte_potential(grid_glial, grid_glial_init, clim, text, i):
     # add title to colorbar
     p.add_text(
         r"$\Delta \phi_M \rm (mV)$",
-        position=(0.945, 0.42),      # Right side, halfway up
+        position=(0.98, 0.44),     # Right side, halfway up
         orientation=-270,           # Rotate 90 degrees clockwise
         font_size=13,
         color="black",
@@ -251,7 +251,7 @@ def plot_astrocyte_potential(grid_glial, grid_glial_init, clim, text, i):
     #p.reset_camera()
 
     # Save screenshot
-    p.screenshot(f"results/astrocyte_potential_{i}.png", transparent_background=True)
+    p.screenshot(f"results/{fname}.png", transparent_background=True)
     p.close()
 
 i = 1
@@ -259,9 +259,24 @@ index_1 = 184
 index_2 = 185
 index_3 = 200
 
-dir = "baseline"
-text = r"$\rm baseline$"
-clim = [7.4, 7.82] # adjusted ECS
+#dir = "baseline"
+#text = r"$\rm baseline$"
+#clim = [7.4, 7.82] # adjusted ECS
+
+#dir = "baseline"
+#text = r"$\rm baseline$"
+#clim = [6.65, 9.92] # adjusted ECS 7.43 - 7.82
+#fname = "astrocyte_potential_bs"
+
+dir = "ICS-tort-x5"
+text = r"$\rm \lambda_i \times 5$"
+clim = [6.65, 9.92] # adjusted ECS 6.88 - 9.05
+fname = "astrocyte_potential_I5"
+
+#dir = "ICS-tort-x7"
+#text = r"$\rm \lambda_i \times 7$"
+#clim = [6.65, 9.92] # adjusted ECS 6.65 - 9.92
+#fname = "astrocyte_potential_I7"
 
 #dir = "ECS-tort-x5"
 #text = r"$\rm ECS \ \lambda \times 5$"
@@ -276,6 +291,9 @@ clim = [7.4, 7.82] # adjusted ECS
 #clim = [7.7, 17.7] # adjusted ECS
 
 for time_index in [index_1, index_2, index_3]:
+
+    fname_i = f"{fname}_{i}"
+
     #grid_neuron = get_grid_field(dir, "results_sub_1", "c_K_1", time_index)
     #grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
     #grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_K_0", 0)
@@ -283,12 +301,16 @@ for time_index in [index_1, index_2, index_3]:
     grid_glial = get_grid_field(dir, "results_mem_2", "phi_M_2", time_index)
     grid_glial_init = get_grid_field(dir, "results_mem_2", "phi_M_2", 0)
 
+    # Remove small islands in plot
+    ri_grid_glial = grid_glial.connectivity(extraction_mode='largest')
+    ri_grid_glial_init = grid_glial_init.connectivity(extraction_mode='largest')
+
     #grid_ECS_mesh = get_grid_mesh("results_sub_0", "c_K_0")
     #grid_neuron_mesh = get_grid_mesh("results_sub_1", "c_K_1")
     #grid_glial_mesh = get_grid_mesh("results_sub_2", "c_K_2")
 
     #plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i)
     #plot_ECS_K(grid_ECS, i)
-    plot_astrocyte_potential(grid_glial, grid_glial_init, clim, text, i)
+    plot_astrocyte_potential(fname_i, ri_grid_glial, ri_grid_glial_init, clim, text, i)
 
     i += 1

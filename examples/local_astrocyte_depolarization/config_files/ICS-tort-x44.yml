@@ -1,17 +1,17 @@
 mesh_file : 'meshes/remarked_mesh/mesh.xdmf'
-fname : "baseline"
+fname : "ICS-tort-x44"
 Tstop : 300         # end time (ms)
 f_value : 97        # strength of source term
 period: 10          # period source term stimuli
 delay: 1.0          # delay source term stimuli
 pulse_width: 1      # 1 ms duration
 end_time : 100      # turn source term off after 100 ms
-lambda_e : 1.2      # ECS tortuosity (75% of 1.6)
-lambda_i : 2.55     # ICS tortuosity (75% of 3.4)
+lambda_e : 1.2      # ECS tortuosity
+lambda_i : 11.4036  # ICS tortuosity (2.55 * 4.472)
 x_L : 2100.0e-7     # lower bound x - region in which to apply the source term
 x_U : 2900.0e-7     # upper bound x - region in which to apply the source term
 y_L : 2100.0e-7     # lower bound y - region in which to apply the source term
 y_U : 2900.0e-7     # upper bound y - region in which to apply the source term
 z_L : 2100.0e-7     # lower bound z - region in which to apply the source term
 z_U : 2500.0e-7     # upper bound z - region in which to apply the source term
-save_frequency : 5  # save solution every 2nd time-step
+save_frequency : 5

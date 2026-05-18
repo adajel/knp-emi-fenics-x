@@ -56,7 +56,7 @@ def get_time_series_sub(fname, point, tag, dt, Tstop, save_frequency):
             K = read_point_data(fname, time=tr, mesh=mesh, name=f"c_K_{tag}")
             Cl = read_point_data(fname, time=tr, mesh=mesh, name=f"c_Cl_{tag}")
             Na = read_point_data(fname, time=tr, mesh=mesh, name=f"c_Na_{tag}")
-            ph = read_point_data(fname, time=tr, mesh=mesh, name=f"phi_{tag}")
+            phi = read_point_data(fname, time=tr, mesh=mesh, name=f"phi_{tag}")
 
             # Append (results) function evaluated in point to list
             Ks.append(scifem.evaluate_function(K, point)[0][0])
@@ -209,25 +209,24 @@ def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag, \
     lambda_e = config["lambda_e"]
     lambda_i = config["lambda_i"]
 
-    D_K_i = D_K * lambda_i
-    D_Na_i = D_Na * lambda_i
-    D_Cl_i = D_Cl * lambda_i
+    D_K_i = D_K / lambda_i**2
+    D_Na_i = D_Na / lambda_i**2
+    D_Cl_i = D_Cl / lambda_i**2
 
-    D_K_e = D_K * lambda_e
-    D_Na_e = D_Na * lambda_e
-    D_Cl_e = D_Cl * lambda_e
+    D_K_e = D_K / lambda_e**2
+    D_Na_e = D_Na / lambda_e**2
+    D_Cl_e = D_Cl / lambda_e**2
 
-    g_m = g_leak_K * g_Kir + g_leak_Na + g_leak_Cl
-    g_i = (F*F) / (R * temperature)  * (D_K_i * np.array(tr_K_i) + D_Na_i * np.array(tr_Na_i) + D_Cl_i * np.array(tr_Cl_i))
-    g_e = (F*F) / (R * temperature)  * (D_K_e * np.array(tr_K_e) + D_Na_e * np.array(tr_Na_e) + D_Cl_e * np.array(tr_Cl_e))
+    # Units membrane:
+    # g_tot             (mS / cm**2)
+    # r_m               (kOhm * cm**3)
+    # Units bulk:
+    # sigma_e, sigma_i  (mS / cm)
+    # r_e, r_i          (kOhm * cm)
 
-    print(f"g_m: {g_m} mS/cm**2")
-    print(f"g_i: {g_i} S/cm")
-    print(f"g_e: {g_e} S/cm")
-
-    r_m = 1.0 / g_m
-    r_i = 1.0 / g_i
-    r_e = 1.0 / g_e
+    g_tot = g_leak_K * g_Kir + g_leak_Na + g_leak_Cl
+    sigma_i = (F*F) / (R * temperature)  * (D_K_i * np.array(tr_K_i) + D_Na_i * np.array(tr_Na_i) + D_Cl_i * np.array(tr_Cl_i))
+    sigma_e = (F*F) / (R * temperature)  * (D_K_e * np.array(tr_K_e) + D_Na_e * np.array(tr_Na_e) + D_Cl_e * np.array(tr_Cl_e))
 
     # Concentration plots
     fig = plt.figure(figsize=(12*0.9,12*0.9))
@@ -366,20 +365,20 @@ def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag, \
         f_E_Cl.write("%.10f \n" % p)
     f_E_Cl.close()
 
-    f_rm = open(f'results/{fname_in}/rm_{fname_out}.txt', "w")
-    for p in r_m:
-        f_rm.write("%.10f \n" % p)
-    f_rm.close()
+    f_g_tot = open(f'results/{fname_in}/g_tot_{fname_out}.txt', "w")
+    for p in g_tot:
+        f_g_tot.write("%.10f \n" % p)
+    f_g_tot.close()
 
-    f_ri = open(f'results/{fname_in}/ri_{fname_out}.txt', "w")
-    for p in r_i:
-        f_ri.write("%.10f \n" % p)
-    f_ri.close()
+    f_sigma_i = open(f'results/{fname_in}/sigma_i_{fname_out}.txt', "w")
+    for p in sigma_i:
+        f_sigma_i.write("%.10f \n" % p)
+    f_sigma_i.close()
 
-    f_re = open(f'results/{fname_in}/re_{fname_out}.txt', "w")
-    for p in r_e:
-        f_re.write("%.10f \n" % p)
-    f_re.close()
+    f_sigma_e = open(f'results/{fname_in}/sigma_e_{fname_out}.txt', "w")
+    for p in sigma_e:
+        f_sigma_e.write("%.10f \n" % p)
+    f_sigma_e.close()
 
     return
 
