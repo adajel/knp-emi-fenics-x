@@ -7,15 +7,16 @@ import matplotlib.pyplot as plt
 
 #blue = '#3d83c4'
 blue = "#0000FF"
-grey = "#423c3c"
 green = "#057a69"
-pink = '#e31be3'
 
+grey = "#423c3c"
+pink = '#e31be3'
 blue_light = "#56B4E9"
-dark_blue = "#1C3A5A"
-pink_light = "#EC407A"
-dark_pink = "#AD1457"
-orange = "#FF9D3A"
+blue_dark = "#191970"
+blue = "#3975db"
+
+pink_t = '#e31be330'
+green_t = "#057a6930"
 
 # set font & text parameters
 font = {'family' : 'serif',
@@ -130,7 +131,7 @@ def get_normalized_phi_M_space(phi_M):
 
 lw = 4
 
-fig = plt.figure(figsize=(15, 10))
+fig = plt.figure(figsize=(15, 15))
 ax = plt.gca()
 
 phi_M_norm_1D = get_normalized_phi_M(phi_M_1D)
@@ -150,57 +151,46 @@ phi_M_space_norm = get_normalized_phi_M_space(phi_M_space)
 t_normalized_space = np.linspace(100, 200, int(3200/2))
 x = np.linspace(0, 200, 3200)
 
-ax1 = fig.add_subplot(2,3,1)
-plt.plot(t, K_ECS_3D, linewidth=lw, color=blue, label=r"3D")
-plt.plot(t, K_ECS_1D, linewidth=lw, color=pink, label=r'1D')
+ax1 = fig.add_subplot(3,3,1)
+plt.plot(t, K_ECS_3D, linewidth=lw, color=pink, label=r"3D")
+plt.plot(t, K_ECS_1D, linewidth=lw, color=green, label=r'1D')
 plt.ylabel(r"$c_{K_e}$ (mM)")
 plt.xlabel(r"time (ms)")
 #plt.xticks([0, 100, 200,  300])
 
-ax1 = fig.add_subplot(2,3,2)
-plt.plot(t, E_K_3D, linewidth=lw, color=blue)
-plt.plot(t, E_K_1D, linewidth=lw, color=pink)
+ax1 = fig.add_subplot(3,3,2)
+plt.plot(t, E_K_3D, linewidth=lw, color=pink)
+plt.plot(t, E_K_1D, linewidth=lw, color=green)
 plt.ylabel(r"$\rm E_{K}$ (mV)")
 plt.xlabel(r"time (ms)")
 
-ax1 = fig.add_subplot(2,3,3)
+ax1 = fig.add_subplot(3,3,3)
 plt.ylabel(r"$\rm I_{Kir}$ ($\rm \mu A/cm^2$)")
-plt.plot(t, I_Kir_3D, linewidth=lw, color=blue, label=r"3D")
-plt.plot(t, I_Kir_1D, linewidth=lw, color=pink, label=r'1D')
+plt.plot(t, I_Kir_3D, linewidth=lw, color=pink, label=r"3D")
+plt.plot(t, I_Kir_1D, linewidth=lw, color=green, label=r'1D')
 plt.xlabel(r"time (ms)")
 
-ax1 = fig.add_subplot(2,3,4)
-plt.plot(t, K_ICS_3D, linewidth=lw, color=blue, label=r"3D")
-plt.plot(t, K_ICS_1D, linewidth=lw, color=pink, label=r'1D')
+ax1 = fig.add_subplot(3,3,4)
+plt.plot(t, K_ICS_3D, linewidth=lw, color=pink, label=r"3D")
+plt.plot(t, K_ICS_1D, linewidth=lw, color=green, label=r'1D')
 plt.ylabel(r"$c_{K_g}$ (mM)")
 plt.xlabel(r"time (ms)")
-#plt.xticks([0, 100, 200,  300])
 
-ax1 = fig.add_subplot(2,3,5)
-plt.plot(t, phi_M_3D, linewidth=lw, color=blue, label=r"3D")
-plt.plot(t, phi_M_1D*1.0e3, linewidth=lw, color=pink, label=r'1D')
-plt.axvline(x=102, color='red', linestyle='--', label='Line at $x=6$')
+ax1 = fig.add_subplot(3,3,5)
+plt.plot(t, phi_M_3D, linewidth=lw, color=pink, label=r"3D")
+plt.plot(t, phi_M_1D*1.0e3, linewidth=lw, color=green, label=r'1D')
+plt.axvline(x=102, color='red', linestyle='--', linewidth=lw*1.2)
 plt.ylabel(r"$\phi_M$ (mV)")
 plt.xlabel(r"time (ms)")
-#plt.xticks([0, 100, 200,  300])
 
-ax1 = fig.add_subplot(2,3,6, xlim=[98, 305])
-plt.plot(t_normalized, phi_M_norm_3D, linewidth=lw, color=blue, label=r"3D")
-plt.plot(t_normalized, phi_M_norm_1D, linewidth=lw, color=pink, label=r'1D')
-plt.plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw)
+ax1 = fig.add_subplot(3,3,6, xlim=[98, 305])
+plt.plot(t_normalized, phi_M_norm_3D, linewidth=lw, color=pink, label=r"3D")
+plt.plot(t_normalized, phi_M_norm_1D, linewidth=lw, color=green, label=r'1D')
+plt.plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw*1.2)
 plt.ylabel(r"normalized $\phi_M$")
 plt.yticks([0.0, 0.25, 0.5, 0.75, 1.0])
-#plt.xticks([100, 150, 200, 250, 300])
 plt.xlabel(r"time (ms)")
 plt.legend()
-
-# make pretty
-ax.axis('off')
-plt.tight_layout()
-
-# save figure to file
-plt.savefig(f'1D_time.svg', format='svg')
-plt.savefig(f'1D_time.png', format='png')
 
 # Calculate stuff for resistance and length constant
 alpha_i = 0.11
@@ -226,16 +216,13 @@ length_constant_no_ECS = np.sqrt(rm_1D / ri_1D) # m
 # Calculate length constant using formula from Halnes et al 2013 (eq 16)
 length_constant_no_ECS_Halnes_formula = np.sqrt(alpha_i * sigma_i_1D / (gamma_m_1D * g_tot_1D))  # m
 
-fig = plt.figure(figsize=(15, 5))
-ax = plt.gca()
-
-ax1 = fig.add_subplot(1,3,1)
+ax1 = fig.add_subplot(3,3,7)
 plt.plot(x, phi_M_space*1.0e3, linewidth=lw, color=green, label=r'1D')
 plt.ylabel(r"$\phi_M$ (mV)")
 plt.xticks([0, 50, 100, 150, 200])
 plt.xlabel(r"$x(\mu\rm{m})$")
 
-ax1 = fig.add_subplot(1,3,2)
+ax1 = fig.add_subplot(3,3,8)
 plt.plot(t_normalized_space, phi_M_space_norm, linewidth=lw, color=green, label=r'1D')
 plt.plot([100, 200], [0.36787944117, 0.36787944117], color='grey', linestyle="dotted", linewidth=lw)
 plt.ylabel(r"normalized $\phi_M$")
@@ -249,40 +236,105 @@ indices = np.where(np.isclose(phi_M_space_norm, x, atol=0.001))[0][0]
 x_value = indices*6.25e-2
 print(f"length_constant is: {x_value} um")
 
-ax1 = fig.add_subplot(1,3,3)
-plt.plot(t, length_constant_1D * 1.0e6, linewidth=lw, color=pink)
-plt.ylabel(r"Length constant theoretical ($\mu$m)")
+ax1 = fig.add_subplot(3,3,9)
+plt.plot(t, length_constant_1D * 1.0e6, linewidth=lw, color=green)
+plt.plot(t, length_constant_3D * 1.0e4, linewidth=lw, color=pink)
+plt.ylabel(r"Theoretical length constant ($\mu$m)")
 plt.xlabel(r"time (ms)")
-
-#ax1 = fig.add_subplot(2,4,4)
-##plt.plot(t, length_constant_3D * 1.0e4, linewidth=lw, color=blue)
-#plt.ylabel(r"Length constant theoretical 3D ($\mu$m)")
-#plt.xlabel(r"time (ms)")
-
-#ax1 = fig.add_subplot(2,3,4)
-#plt.plot(t, rm_3D * 1.0e3, linewidth=lw, color=blue) # convert from k Ohm cm**3 to Ohm cm**3
-#plt.plot(t, rm_1D * 1.0e6, linewidth=lw, color=pink) # convert from \Omega m**3 to \Omega cm**3
-#plt.ylabel(r"$\rm r_m$ ($\Omega \rm{cm}^{3}$)")
-#plt.xlabel(r"time (ms)")
-#
-#ax1 = fig.add_subplot(2,3,5)
-#plt.plot(t, ri_3D * 1.0e3, linewidth=lw, color=blue) # convert from k Ohm to Ohm
-#plt.plot(t, ri_1D * 1.0e2, linewidth=lw, color=pink) # convert from m to cm
-#plt.ylabel(r"$\rm r_i$ ($\Omega \rm{cm}$)")
-#plt.xlabel(r"time (ms)")
-##plt.yticks([3.4e6, 3.41e6, 3.42e6, 3.43e6, 3.44e6])
-#
-#ax1 = fig.add_subplot(2,3,6)
-#plt.plot(t, re_3D * 1.0e2, linewidth=lw, color=blue, label="3D") # convert from m to cm
-#plt.plot(t, re_1D * 1.0e2, linewidth=lw, color=pink, label="1D") # convert from m to cm
-#plt.ylabel(r"$\rm r_e$ ($\Omega \rm{cm}$)")
-#plt.xlabel(r"time (ms)")
-#plt.legend()
 
 # make pretty
 ax.axis('off')
 plt.tight_layout()
 
 # save figure to file
-plt.savefig(f'1D_space.svg', format='svg')
-plt.savefig(f'1D_space.png', format='png')
+plt.savefig(f'1D.svg', format='svg')
+plt.savefig(f'1D.png', format='png')
+
+# Make bar-plot with mean values
+
+K_stim_1D = np.mean(K_ECS_1D[:stimuli_end])
+K_stim_3D = np.mean(K_ECS_3D[:stimuli_end])
+K_decay_1D = np.mean(K_ECS_1D[stimuli_end:])
+K_decay_3D = np.mean(K_ECS_3D[stimuli_end:])
+
+E_K_stim_1D = np.mean(E_K_1D[:stimuli_end])
+E_K_stim_3D = np.mean(E_K_3D[:stimuli_end])
+E_K_decay_1D = np.mean(E_K_1D[stimuli_end:])
+E_K_decay_3D = np.mean(E_K_3D[stimuli_end:])
+
+I_Kir_stim_1D = np.mean(I_Kir_1D[:stimuli_end])
+I_Kir_stim_3D = np.mean(I_Kir_3D[:stimuli_end])
+I_Kir_decay_1D = np.mean(I_Kir_1D[stimuli_end:])
+I_Kir_decay_3D = np.mean(I_Kir_3D[stimuli_end:])
+
+categories = [r'stimuli', r'decay', r'total']
+
+h1_1D = [K_stim_1D, K_decay_1D, K_stim_1D]
+f1_1D = [0, 0, K_stim_1D]
+h1_3D = [K_stim_3D, K_decay_3D, K_stim_3D]
+f1_3D = [0, 0, K_stim_3D]
+
+h2_1D = [E_K_stim_1D, E_K_decay_1D, E_K_stim_1D]
+f2_1D = [0, 0, E_K_stim_1D]
+h2_3D = [E_K_stim_3D, E_K_decay_3D, E_K_stim_3D]
+f2_3D = [0, 0, E_K_stim_3D]
+
+h3_1D = [I_Kir_stim_1D, I_Kir_decay_1D, I_Kir_stim_1D]
+f3_1D = [0, 0, I_Kir_stim_1D]
+h3_3D = [I_Kir_stim_3D, I_Kir_decay_3D, I_Kir_stim_3D]
+f3_3D = [0, 0, I_Kir_stim_3D]
+
+colors_h = [pink, green, pink_t, green_t, pink, green]
+colors_f = [pink, green, pink_t, green_t, pink_t, green_t]
+
+colors_1D_h = [green, green_t, green]
+colors_1D_f = [green, green_t, green_t]
+colors_3D_h = [pink, pink_t, pink]
+colors_3D_f = [pink, pink_t, pink_t]
+
+# 2. Set the positions of the bars on the x-axis
+x = np.arange(len(categories)) 
+width = 0.4  # Width of each bar
+
+fig, ax = plt.subplots(figsize=(8, 5))
+fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 5))
+
+# 3. Define each subplot explicitly
+# Top Left
+axes[0].bar(x - width/2, h1_1D, width, label=r'1D', color=colors_1D_h, edgecolor='black')
+axes[0].bar(x - width/2, f1_1D, width, color=colors_1D_f, edgecolor='black', bottom=h1_1D)
+axes[0].bar(x + width/2, h1_3D, width, label=r'3D', color=colors_3D_h, edgecolor='black')
+axes[0].bar(x + width/2, f1_3D, width, color=colors_3D_f, edgecolor='black', bottom=h1_3D)
+axes[0].set_ylabel(r'Mean $[\rm{K}^+]_e$ (mM)')
+axes[0].legend()
+axes[0].set_xticks(x)
+axes[0].set_xticklabels(categories)
+
+# Top Right
+axes[1].bar(x - width/2, h2_1D, width, label=r'1D', color=colors_1D_h, edgecolor='black')
+axes[1].bar(x - width/2, f2_1D, width,  color=colors_1D_f, edgecolor='black', bottom=h2_1D)
+axes[1].bar(x + width/2, h2_3D, width, label=r'3D', color=colors_3D_h, edgecolor='black')
+axes[1].bar(x + width/2, f2_3D, width, label=r'3D', color=colors_3D_f, edgecolor='black', bottom=h2_3D)
+axes[1].set_ylabel(r'Mean $\rm E_K$ (mV)')
+axes[1].set_xticks(x)
+axes[1].set_xticklabels(categories)
+
+# Bottom Left
+axes[2].bar(x - width/2, h3_1D, width, color=colors_1D_h, edgecolor='black')
+axes[2].bar(x - width/2, f3_1D, width, color=colors_1D_f, edgecolor='black', bottom=h3_1D)
+axes[2].bar(x + width/2, h3_3D, width, color=colors_3D_h, edgecolor='black')
+axes[2].bar(x + width/2, f3_3D, width, color=colors_3D_f, edgecolor='black', bottom=h3_3D)
+axes[2].set_ylabel(r"Mean $\rm I_{Kir}$ ($\rm \mu A/cm^2$)")
+
+
+axes[2].set_xticks(x)
+axes[2].set_xticklabels(categories)
+axes[2].set_ylim([-37, 8])
+axes[2].set_xticklabels(categories)
+
+# 4. Final layout touch
+plt.tight_layout()
+# 4. Clean up layout to prevent labels from overlapping
+plt.savefig(f'1D_histrogram.png', format='png')
+plt.savefig(f'1D_histrogram.svg', format='svg')
+plt.close()
