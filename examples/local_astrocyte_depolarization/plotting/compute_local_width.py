@@ -36,7 +36,6 @@ def compute_local_width(mesh, ecs_id, labelname="label", width_bins=None):
             ecs["local_width"] = np.maximum(ecs["local_width"],  2*ri*(current_dist<ri))
     return ecs
 
-#grid = pv.read("grid.vtk")
 mesh = meshio.read("../meshes/mesh_size_5000/mesh.xdmf")
 meshio.write("mesh.vtk", mesh)
 grid = pv.read("mesh.vtk")

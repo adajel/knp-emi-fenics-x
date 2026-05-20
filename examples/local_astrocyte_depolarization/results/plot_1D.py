@@ -254,6 +254,8 @@ length_constant_no_ECS_Halnes_formula = np.sqrt(alpha_i * sigma_i_1D / (gamma_m_
 
 ax1 = fig.add_subplot(3,3,7)
 plt.plot(x, phi_M_space*1.0e3, linewidth=lw, color=green, label=r'1D')
+x1 = 99.5; x2 = 100.5
+plt.axvspan(x1, x2, color='lightgrey', alpha=0.5, zorder=0)
 plt.ylabel(r"$\rm \phi_M$ (mV)")
 plt.xticks([0, 50, 100, 150, 200])
 plt.xlabel(r"$x(\mu\rm{m})$")
