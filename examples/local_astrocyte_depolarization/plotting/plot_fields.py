@@ -38,11 +38,11 @@ sargs_ECS = dict(
     fmt="%.2f",                # Decimal formatting
     font_family="arial",
     vertical=True,             # Horizontal orientation
-    position_x=0.85,           # Move left/right (0 to 1)
-    position_y=0.30,           # Move up/down (0 to 1)
-    width=0.08,                # Width of the bar
-    height=0.4,                # Height of the bar
-    title_font_size=20,
+    position_x=0.80,           # Move left/right (0 to 1)
+    position_y=0.27,           # Move up/down (0 to 1)
+    width=0.1,                 # Width of the bar
+    height=0.5,                # Height of the bar
+    title_font_size=27,
     label_font_size=27,
     color='black',
 )
@@ -55,8 +55,8 @@ sargs_glial = dict(
     vertical=True,             # Horizontal orientation
     position_x=0.84,           # Move left/right (0 to 1)
     position_y=0.27,           # Move up/down (0 to 1)
-    width=0.1,                # Width of the bar
-    height=0.50,               # Height of the bar
+    width=0.1,                 # Width of the bar
+    height=0.5,                # Height of the bar
     title_font_size=27,
     label_font_size=27,
     color='black',
@@ -77,6 +77,44 @@ z_M = 2206e-7
 
 # center point (c,c,c)
 c = 2500e-7
+
+def get_vw_average(mesh, ARRAY_NAME):
+
+    # 1. Convert points to cells if necessary
+    mesh = mesh.point_data_to_cell_data()
+
+    # 2. Compute geometry sizes
+    mesh = mesh.compute_cell_sizes()
+
+    field_data = mesh.cell_data[ARRAY_NAME]
+
+    # 3. Dynamic Fallback: Check if it's a 3D volume or a 2D surface area
+    if "Volume" in mesh.cell_data and np.sum(np.abs(mesh.cell_data["Volume"])) > 0:
+        # It's a 3D Solid mesh. Take absolute values to fix inverted cells!
+        sizes = np.abs(mesh.cell_data["Volume"])
+        size_type = "Volume-Weighted"
+    elif "Area" in mesh.cell_data and np.sum(np.abs(mesh.cell_data["Area"])) > 0:
+        # It's a 2D Surface/Shell mesh.
+        sizes = np.abs(mesh.cell_data["Area"])
+        size_type = "Area-Weighted"
+
+    # 4. Filter out any cells that have exactly 0 size to ensure no division by zero
+    valid_idx = sizes > 0
+    filtered_data = field_data[valid_idx]
+    filtered_sizes = sizes[valid_idx]
+
+    total_size = np.sum(filtered_sizes)
+
+    # 5. Compute the weighted average safely
+    if filtered_data.ndim > 1:
+        weighted_average = np.sum(filtered_data * filtered_sizes[:, None], axis=0) / total_size
+    else:
+        weighted_average = np.sum(filtered_data * filtered_sizes) / total_size
+
+    print(f"{size_type} Average of {ARRAY_NAME}: {weighted_average}")
+
+    return weighted_average
+
 
 def get_grid_mesh(finame, funame):
     # Read mesh from file
@@ -141,35 +179,60 @@ def get_grid_field(dir, finame, funame, time_index):
 
     return grid
 
-def plot_ECS_K(grid_ECS, i):
+def plot_ECS_K(fname, grid_ECS, grid_ECS_init, clim, text, i):
 
     # Define box marking region of interest
     roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
 
-    slice_plane_ECS = grid_ECS.slice(normal='x')
+    #slice_plane_ECS = grid_ECS.slice(normal='x')
+    #slice_plane_roi = roi_box.slice(normal='x')
+
+    # Then assign it back to a mesh to plot it
+    diff_array = grid_ECS.point_data["c_K_0"] - grid_ECS_init.point_data["c_K_0"]
+    grid_ECS["diff"] = diff_array
+
+    slice_plane_ECS = grid_ECS.clip(normal='x')
     slice_plane_roi = roi_box.slice(normal='x')
 
     # Make full 3D plot
     p = pyvista.Plotter(off_screen=True)
 
-    p.add_mesh(slice_plane_ECS, scalar_bar_args=sargs_ECS, cmap=cmap_ECS, clim=[3.1, 11])
-    p.add_mesh(slice_plane_roi, color="black", style="wireframe", line_width=3, show_edges=True)
+    p.add_mesh(slice_plane_ECS,
+               scalars="diff",
+               scalar_bar_args=sargs_ECS,
+               cmap=cmap_ECS,
+               #clim=clim
+               )
+
+    p.add_mesh(slice_plane_roi,
+               color="black",
+               style="wireframe",
+               line_width=3,
+               show_edges=True)
 
     # Fix camera position and zoom
     p.camera_position = 'yz'
 
     # add title to colorbar
     p.add_text(
-        r"$[K]_e (mM)$",
-        position=(0.83, 0.45),      # Right side, halfway up
+        r"$\Delta [\rm K]_e (mM)$",
+        position=(0.95, 0.44),     # Right side, halfway up
         orientation=-270,          # Rotate 90 degrees clockwise
-        font_size=11,
+        font_size=13,
+        color="black",
+        viewport=True              # Uses the 0-1 coordinate system
+    )
+
+    p.add_text(
+        text,
+        position=(0.45, 0.88),     # Right side, halfway up
+        font_size=15,
         color="black",
         viewport=True              # Uses the 0-1 coordinate system
     )
 
     # Save screenshot
-    p.screenshot(f"results/ECS_K_{i}.png", transparent_background=True)
+    p.screenshot(f"results/{fname}.png", transparent_background=True)
     p.close()
 
 def plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i):
@@ -220,7 +283,7 @@ def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, text, i):
         grid_glial,
         scalars="diff",
         scalar_bar_args=sargs_glial, \
-        cmap=cmap_glial,# clim=clim
+        cmap=cmap_glial, clim=clim
     )
 
     p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
@@ -261,56 +324,91 @@ index_3 = 200
 
 #dir = "baseline"
 #text = r"$\rm baseline$"
-#clim = [7.4, 7.82] # adjusted ECS
-
-#dir = "baseline"
-#text = r"$\rm baseline$"
-#clim = [6.65, 9.92] # adjusted ECS 7.43 - 7.82
+#clim = [6.88, 9.05] # adjusted ECS
 #fname = "astrocyte_potential_bs"
 
-dir = "ICS-tort-x5"
-text = r"$\rm \lambda_i \times 5$"
-clim = [6.65, 9.92] # adjusted ECS 6.88 - 9.05
-fname = "astrocyte_potential_I5"
+# ICS
+#------------------------------------#
 
-#dir = "ICS-tort-x7"
-#text = r"$\rm \lambda_i \times 7$"
-#clim = [6.65, 9.92] # adjusted ECS 6.65 - 9.92
-#fname = "astrocyte_potential_I7"
+#dir = "ICS-tort-x13"
+#text = r"$\rm \lambda_i \times 1.3$"
+#clim = [6.88, 9.05] # adjusted ECS
+#fname = "astrocyte_potential_I13"
 
-#dir = "ECS-tort-x5"
-#text = r"$\rm ECS \ \lambda \times 5$"
-#clim = [9.8, 13.02] # adjusted ECS
+#dir = "ICS-tort-x31"
+#text = r"$\rm \lambda_i \times 3.1$"
+#clim = [6.88, 9.05] # adjusted ECS
+#fname = "astrocyte_potential_I31"
 
 #dir = "ICS-tort-x5"
-#text = r"$\rm ICS \ \lambda \times 5$"
-#clim = [6.8, 9.05] # adjusted ECS
+#text = r"$\rm \lambda_i \times 4.4$"
+#clim = [6.88, 9.05] # adjusted ECS
+#fname = "astrocyte_potential_I44"
 
-#dir = "ECS-ICS-tort-5x"
-#text = r"$\rm ECS \ and \ ICS \ \lambda \times 5$"
-#clim = [7.7, 17.7] # adjusted ECS
+# ECS
+#------------------------------------#
 
-for time_index in [index_1, index_2, index_3]:
+dir = "baseline"
+clim = [7.16, 13.02] # adjusted ECS
+text = r"$\rm baseline$"
+#fname = "astrocyte_potential_bs_E"
+fname = "ECS_K_bs"
 
+#dir = "ECS-tort-x13"
+#text = r"$\rm \lambda_e \times 1.3$"
+#clim = [7.16, 13.02] # adjusted ECS
+##fname = "astrocyte_potential_E13"
+#fname = "ECS_K_E13"
+
+#dir = "ECS-tort-x31"
+#text = r"$\rm \lambda_e \times 3.1$"
+#clim = [7.16, 13.02] # adjusted ECS
+##fname = "astrocyte_potential_E31"
+#fname = "ECS_K_E31"
+
+#dir = "ECS-tort-x5"
+#text = r"$\rm \lambda_e \times 4.4$"
+#clim = [7.16, 13.02] # adjusted ECS
+#fname = "astrocyte_potential_E44"
+#fname = "ECS_K_E44"
+
+#for time_index in [index_1, index_2, index_3]:
+#for time_index in [index_1]:
+for time_index in range(200):
+
+    """
     fname_i = f"{fname}_{i}"
 
-    #grid_neuron = get_grid_field(dir, "results_sub_1", "c_K_1", time_index)
-    #grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
-    #grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_K_0", 0)
-
+    # -------- plot glial membrane potential ------------- "
     grid_glial = get_grid_field(dir, "results_mem_2", "phi_M_2", time_index)
     grid_glial_init = get_grid_field(dir, "results_mem_2", "phi_M_2", 0)
-
     # Remove small islands in plot
     ri_grid_glial = grid_glial.connectivity(extraction_mode='largest')
     ri_grid_glial_init = grid_glial_init.connectivity(extraction_mode='largest')
+    # Plot membrane potential
+    plot_astrocyte_potential(fname_i, ri_grid_glial, ri_grid_glial_init, clim, text, i)
+    """
 
+    # Calculate average
+    #ARRAY_NAME = "phi_M_2"
+    ARRAY_NAME = "c_K_0"
+    grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
+    bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
+    grid_ECS_roi = grid_ECS.clip_box(bounds)
+    avg_global_phi_M = get_vw_average(grid_ECS, ARRAY_NAME)
+    avg_roi_phi_M = get_vw_average(grid_ECS_roi, ARRAY_NAME)
+
+    # -------- plot ECS K+ ------------- "
+    #grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
+    #grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_K_0", 0)
+    #plot_ECS_K(fname_i, grid_ECS, grid_ECS_init, clim, text, i)
+
+    # -------- div ------------- "
+    #grid_neuron = get_grid_field(dir, "results_sub_1", "c_K_1", time_index)
     #grid_ECS_mesh = get_grid_mesh("results_sub_0", "c_K_0")
     #grid_neuron_mesh = get_grid_mesh("results_sub_1", "c_K_1")
     #grid_glial_mesh = get_grid_mesh("results_sub_2", "c_K_2")
 
     #plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i)
-    #plot_ECS_K(grid_ECS, i)
-    plot_astrocyte_potential(fname_i, ri_grid_glial, ri_grid_glial_init, clim, text, i)
 
     i += 1

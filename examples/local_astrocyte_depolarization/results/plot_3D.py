@@ -103,7 +103,7 @@ t_normalized = np.arange(stimuli_end * dt * save_frequency, Tstop, dt * save_fre
 
 ax1 = fig.add_subplot(2,3,1)
 plt.plot(t, K_ECS, linewidth=lw, color=pink)
-plt.ylabel(r"$c_{K_e}$ (mM)")
+plt.ylabel(r"$\rm c_{K_e}$ (mM)")
 plt.xlabel(r"time (ms)")
 
 ax1 = fig.add_subplot(2,3,2)
@@ -119,19 +119,19 @@ plt.xlabel(r"time (ms)")
 ax1 = fig.add_subplot(2,3,4)
 plt.plot(t, phi_M, linewidth=lw, color=pink)
 plt.axvline(x=102, color='red', linestyle='--', linewidth=lw*1.2)
-plt.ylabel(r"$\phi_M$ (mV)")
+plt.ylabel(r"$\rm\phi_M$ (mV)")
 plt.xlabel(r"time (ms)")
 
 ax1 = fig.add_subplot(2,3,5, xlim=[98, 305])
 plt.plot(t_normalized, phi_M_norm, linewidth=lw, color=pink)
 plt.plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw*1.2)
-plt.ylabel(r"normalized $\phi_M$")
+plt.ylabel(r"normalized $\rm\phi_M$")
 plt.yticks([0.0, 0.25, 0.5, 0.75, 1.0])
 plt.xlabel(r"time (ms)")
 
 ax1 = fig.add_subplot(2,3,6)
 plt.plot(t, length_constant, linewidth=lw, color=pink)
-plt.ylabel(r"Theoretical length constant ($\mu$m)")
+plt.ylabel(r"theoretical length constant ($\mu$m)")
 plt.xlabel(r"time (ms)")
 
 # make pretty

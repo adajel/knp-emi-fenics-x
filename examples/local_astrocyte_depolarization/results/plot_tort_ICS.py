@@ -72,7 +72,7 @@ sigma_i_I2 = read_me(fname)
 fname = f"{fdirs}/sigma_e_glial.txt"
 sigma_e_I2 = read_me(fname)
 
-fdirs = "ICS-tort-x5"
+fdirs = "ICS-tort-x44"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_I3 = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -230,7 +230,7 @@ axd['A'].plot(t, phi_M_I2, linewidth=lw, linestyle=ls_2, color=blue, label=r"$\l
 axd['A'].plot(t, phi_M_I1, linewidth=lw, linestyle=ls_3, color=blue_light, label=r'$\lambda_i \times 1.3$')
 axd['A'].plot(t, phi_M_bs, linewidth=lw*1.4, linestyle=ls_4, color=pink, label=r'baseline')
 axd['A'].axvline(x=102, color='red', linestyle='--', linewidth=lw*1.2)
-axd['A'].set_ylabel(r"$\phi_M$ (mV)")
+axd['A'].set_ylabel(r"$\rm \phi_M$ (mV)")
 axd['A'].set_xlabel(r"time (ms)")
 axd['A'].legend()
 
@@ -238,7 +238,7 @@ axd['B'].plot(t, K_ICS_I3, linewidth=lw, linestyle=ls_1, color=blue_dark)
 axd['B'].plot(t, K_ICS_I2, linewidth=lw, linestyle=ls_2, color=blue)
 axd['B'].plot(t, K_ICS_I1, linewidth=lw, linestyle=ls_3, color=blue_light)
 axd['B'].plot(t, K_ICS_bs, linewidth=lw*1.4, linestyle=ls_4, color=pink)
-axd['B'].set_ylabel(r"$c_{K_g}$ (mM)")
+axd['B'].set_ylabel(r"$\rm c_{K_g}$ (mM)")
 axd['B'].set_xlabel(r"time (ms)")
 
 axd['C'].plot(t_normalized, phi_M_norm_I3, linewidth=lw, linestyle=ls_1, color=blue_dark)
@@ -246,7 +246,7 @@ axd['C'].plot(t_normalized, phi_M_norm_I2, linewidth=lw, linestyle=ls_2, color=b
 axd['C'].plot(t_normalized, phi_M_norm_I1, linewidth=lw, linestyle=ls_3, color=blue_light)
 axd['C'].plot(t_normalized, phi_M_norm_bs, linewidth=lw*1.4, linestyle=ls_4, color=pink)
 axd['C'].plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw*1.2)
-axd['C'].set_ylabel(r"normalized $\phi_M$")
+axd['C'].set_ylabel(r"normalized $\rm \phi_M$")
 axd['C'].set_yticks([0.0, 0.25, 0.5, 0.75, 1.0])
 axd['C'].set_xticks([100, 150, 200, 250, 300])
 axd['C'].set_xlabel(r"time (ms)")
@@ -255,7 +255,7 @@ axd['D'].plot(t, length_constant_I3, linewidth=lw, linestyle=ls_1, color=blue_da
 axd['D'].plot(t, length_constant_I2, linewidth=lw, linestyle=ls_2, color=blue)
 axd['D'].plot(t, length_constant_I1, linewidth=lw, linestyle=ls_3, color=blue_light)
 axd['D'].plot(t, length_constant_bs, linewidth=lw*1.4, linestyle=ls_4, color=pink) 
-axd['D'].set_ylabel(r"Length constant theoretical ($\mu$m)")
+axd['D'].set_ylabel(r"theoretical length constant ($\mu$m)")
 axd['D'].set_xlabel(r"time (ms)")
 
 print("mean length constant I3:", np.mean(length_constant_I3))

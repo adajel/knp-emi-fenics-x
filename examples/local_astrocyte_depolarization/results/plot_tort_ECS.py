@@ -190,6 +190,11 @@ print("time constant I", indices_E1[0]*dt*save_frequency)
 print("time constant E", indices_E2[0]*dt*save_frequency)
 print("time constant E", indices_E3[0]*dt*save_frequency)
 
+# lambda e
+tc_E1 = indices_E1[0]*dt*save_frequency
+tc_E2 = indices_E2[0]*dt*save_frequency
+tc_E3 = indices_E3[0]*dt*save_frequency
+
 t_normalized = np.arange(stimuli_end * dt * save_frequency, Tstop, dt * save_frequency)
 
 alpha_i = 0.11
@@ -253,27 +258,27 @@ ls_4 = ':'
 
 fig, axd = plt.subplot_mosaic(layout, figsize=(15, 15), constrained_layout=True)
 
-axd['A'].plot(t, K_ECS_E3, linewidth=lw, linestyle=ls_1, color=blue_dark, label=r"$\lambda_e \times 4.4$")
-axd['A'].plot(t, K_ECS_E2, linewidth=lw, linestyle=ls_2, color=blue, label=r"$\lambda_e \times 3.1$")
-axd['A'].plot(t, K_ECS_E1, linewidth=lw, linestyle=ls_3, color=blue_light, label=r'$\lambda_e \times 1.3$')
+axd['A'].plot(t, K_ECS_E3, linewidth=lw, linestyle=ls_1, color=blue_dark,   label=r"$\lambda_e \times 4.4$")
+axd['A'].plot(t, K_ECS_E2, linewidth=lw, linestyle=ls_2, color=blue,        label=r"$\lambda_e \times 3.1$")
+axd['A'].plot(t, K_ECS_E1, linewidth=lw, linestyle=ls_3, color=blue_light,  label=r'$\lambda_e \times 1.3$')
 axd['A'].plot(t, K_ECS_bs, linewidth=lw*1.4, linestyle=ls_4, color=pink, label=r'baseline')
-axd['A'].set_ylabel(r"$[\rm K]_e$ (mM)")
+axd['A'].set_ylabel(r"$\rm [\rm K]_e$ (mM)")
 axd['A'].set_xlabel(r"time (ms)")
-axd['A'].legend()
 
-axd['B'].plot(t, phi_M_E3, linewidth=lw, linestyle=ls_1, color=blue_dark)
-axd['B'].plot(t, phi_M_E2, linewidth=lw, linestyle=ls_2, color=blue)
-axd['B'].plot(t, phi_M_E1, linewidth=lw, linestyle=ls_3, color=blue_light)
-axd['B'].plot(t, phi_M_bs, linewidth=lw, linestyle=ls_4, color=pink)
+axd['B'].plot(t, phi_M_E3, linewidth=lw, linestyle=ls_1, color=blue_dark, label=r"$\lambda_e \times 4.4$")
+axd['B'].plot(t, phi_M_E2, linewidth=lw, linestyle=ls_2, color=blue, label=r"$\lambda_e \times 3.1$")
+axd['B'].plot(t, phi_M_E1, linewidth=lw, linestyle=ls_3, color=blue_light, label=r'$\lambda_e \times 1.3$')
+axd['B'].plot(t, phi_M_bs, linewidth=lw, linestyle=ls_4, color=pink, label=r'baseline')
 axd['B'].axvline(x=102, color='red', linestyle='--', linewidth=lw*1.2)
-axd['B'].set_ylabel(r"$\phi_M$ (mV)")
+axd['B'].set_ylabel(r"$\rm\phi_M$ (mV)")
 axd['B'].set_xlabel(r"time (ms)")
+axd['B'].legend()
 
 axd['C'].plot(t, K_ICS_E3, linewidth=lw, linestyle=ls_1, color=blue_dark)
 axd['C'].plot(t, K_ICS_E2, linewidth=lw, linestyle=ls_2, color=blue)
 axd['C'].plot(t, K_ICS_E1, linewidth=lw, linestyle=ls_3, color=blue_light)
 axd['C'].plot(t, K_ICS_bs, linewidth=lw, linestyle=ls_4, color=pink)
-axd['C'].set_ylabel(r"$c_{K_g}$ (mM)")
+axd['C'].set_ylabel(r"$\rm c_{K_g}$ (mM)")
 axd['C'].set_xlabel(r"time (ms)")
 
 axd['D'].plot(t_normalized, phi_M_norm_E3, linewidth=lw, linestyle=ls_1, color=blue_dark)
@@ -281,7 +286,7 @@ axd['D'].plot(t_normalized, phi_M_norm_E2, linewidth=lw, linestyle=ls_2, color=b
 axd['D'].plot(t_normalized, phi_M_norm_E1, linewidth=lw, linestyle=ls_3, color=blue_light)
 axd['D'].plot(t_normalized, phi_M_norm_bs, linewidth=lw, linestyle=ls_4, color=pink)
 axd['D'].plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw*1.2)
-axd['D'].set_ylabel(r"normalized $\phi_M$")
+axd['D'].set_ylabel(r"normalized $\rm \phi_M$")
 axd['D'].set_yticks([0.0, 0.25, 0.5, 0.75, 1.0])
 axd['D'].set_xticks([100, 150, 200, 250, 300])
 axd['D'].set_xlabel(r"time (ms)")
@@ -378,7 +383,7 @@ sigma_i_I3 = read_me(fname)
 fname = f"{fdirs}/sigma_e_glial.txt"
 sigma_e_I3 = read_me(fname)
 
-fdirs = "ECS-tort-x13"
+fdirs = "ECS-ICS-tort-x13"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_EI1 = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -461,23 +466,23 @@ K_E_max_I1 = np.max(K_ECS_I1)
 K_E_max_I2 = np.max(K_ECS_I2)
 K_E_max_I3 = np.max(K_ECS_I3)
 # lambda e and i
-K_E_max_EI1 = np.max(K_ECS_I1)
-K_E_max_EI2 = np.max(K_ECS_I2)
-K_E_max_EI3 = np.max(K_ECS_I3)
+K_E_max_EI1 = np.max(K_ECS_EI1)
+K_E_max_EI2 = np.max(K_ECS_EI2)
+K_E_max_EI3 = np.max(K_ECS_EI3)
 
-phi_M_max_bs = np.max(phi_M_bs)
+phi_M_max_bs = np.max(phi_M_bs) - np.min(phi_M_bs)
 # lambda e
-phi_M_max_E1 = np.max(phi_M_E1)
-phi_M_max_E2 = np.max(phi_M_E2)
-phi_M_max_E3 = np.max(phi_M_E3)
+phi_M_max_E1 = np.max(phi_M_E1) - np.min(phi_M_E1)
+phi_M_max_E2 = np.max(phi_M_E2) - np.min(phi_M_E2)
+phi_M_max_E3 = np.max(phi_M_E3) - np.min(phi_M_E3)
 # lambda i
-phi_M_max_I1 = np.max(phi_M_I1)
-phi_M_max_I2 = np.max(phi_M_I2)
-phi_M_max_I3 = np.max(phi_M_I3)
+phi_M_max_I1 = np.max(phi_M_I1) - np.min(phi_M_I1)
+phi_M_max_I2 = np.max(phi_M_I2) - np.min(phi_M_I2)
+phi_M_max_I3 = np.max(phi_M_I3) - np.min(phi_M_I3)
 # lambda e and i
-phi_M_max_EI1 = np.max(phi_M_EI1)
-phi_M_max_EI2 = np.max(phi_M_EI2)
-phi_M_max_EI3 = np.max(phi_M_EI3)
+phi_M_max_EI1 = np.max(phi_M_EI1) - np.min(phi_M_EI1)
+phi_M_max_EI2 = np.max(phi_M_EI2) - np.min(phi_M_EI2)
+phi_M_max_EI3 = np.max(phi_M_EI3) - np.min(phi_M_EI3)
 
 lc_bs_mean = np.mean(length_constant_bs)
 # lambda i
@@ -513,11 +518,16 @@ indices_EI1 = [i for i, x in enumerate(phi_M_norm_EI1) if (x > 0.498 and x < 0.5
 indices_EI2 = [i for i, x in enumerate(phi_M_norm_EI2) if (x > 0.498 and x < 0.502)]
 indices_EI3 = [i for i, x in enumerate(phi_M_norm_EI3) if (x > 0.498 and x < 0.502)]
 
+print(indices_bs)
+print(indices_I1)
+print(indices_I2)
+print(indices_I3)
+print(indices_EI1)
+print(indices_EI2)
+print(indices_EI3)
+
+
 tc_bs = indices_bs[0]*dt*save_frequency
-# lambda e
-tc_E1 = indices_E1[0]*dt*save_frequency
-tc_E2 = indices_E2[0]*dt*save_frequency
-tc_E3 = indices_E3[0]*dt*save_frequency
 # lambda i
 tc_I1 = indices_I1[0]*dt*save_frequency
 tc_I2 = indices_I2[0]*dt*save_frequency
@@ -527,10 +537,20 @@ tc_EI1 = indices_EI1[0]*dt*save_frequency
 tc_EI2 = indices_EI2[0]*dt*save_frequency
 tc_EI3 = indices_EI3[0]*dt*save_frequency
 
-categories = [r'baseline',
-              r'$\times 1.3$',
-              r'$\times 3.1$',
-              r'$\times 4.4$']
+
+print("--------------------------------------")
+print(f"max depolarization bs: {phi_M_max_bs}")
+print(f"max depolarization E1: {phi_M_max_E1}")
+print(f"max depolarization E2: {phi_M_max_E2}")
+print(f"max depolarization E3: {phi_M_max_E3}")
+print("--------------------------------------")
+
+print("--------------------------------------")
+print(f"time cons bs: {tc_bs}")
+print(f"time cons E1: {tc_E1}")
+print(f"time cons E2: {tc_E2}")
+print(f"time cons E3: {tc_E3}")
+print("--------------------------------------")
 
 h1, h2, h3, h4 = [K_E_max_bs,
                   K_E_max_E1,
@@ -545,57 +565,80 @@ h1, h2, h3, h4 = [K_E_max_bs,
                   tc_E2,
                   tc_E3], \
                  [lc_bs_mean,
-                  lc_E1_mean,
-                  lc_E2_mean,
-                  lc_E3_mean]
+                  lc_EI1_mean,
+                  lc_EI2_mean,
+                  lc_EI3_mean]
 
 f1, f2, f3, f4 = [0, \
-                  K_E_max_EI1 - K_E_max_E1+2, \
-                  K_E_max_EI2 - K_E_max_E2+2, \
-                  K_E_max_EI3 - K_E_max_E3+2], \
+                  K_E_max_EI1 - K_E_max_E1, \
+                  K_E_max_EI2 - K_E_max_E2 + 2, \
+                  K_E_max_EI3 - K_E_max_E3 + 2], \
                  [0, \
-                  phi_M_max_EI1 - phi_M_max_E1+2,\
-                  phi_M_max_EI2 - phi_M_max_E2+2, \
-                  phi_M_max_EI3 - phi_M_max_E3+2], \
+                  phi_M_max_EI1 - phi_M_max_E1,\
+                  phi_M_max_EI2 - phi_M_max_E2 + 2, \
+                  phi_M_max_EI3 - phi_M_max_E3 + 2], \
                  [0,\
-                  tc_EI1 - tc_E1+2, \
-                  tc_EI2 - tc_E2+2, \
-                  tc_EI3 - tc_E3+2], \
+                  tc_EI1 - tc_E1, \
+                  tc_EI2 - tc_E2 + 2, \
+                  tc_EI3 - tc_E3 + 2], \
                  [0, \
-                  lc_EI1_mean - lc_E1_mean+2, \
-                  lc_EI2_mean - lc_E2_mean+2, \
-                  lc_EI3_mean - lc_E3_mean+2]
+                  lc_E1_mean - lc_EI1_mean, \
+                  lc_E2_mean - lc_EI2_mean + 2, \
+                  lc_E3_mean - lc_EI3_mean + 2]
 
 colors_h = [pink, blue_light, blue, blue_dark]
 colors_f = [pink, blue_light_t, blue_t, blue_dark_t]
 
+categories = [r'bs',
+              r'$\times 1.3$',
+              r'$\times 3.1$',
+              r'$\times 4.4$']
+
+print(lc_EI1_mean)
+print(lc_E1_mean)
+
+labels_h = [r'bs',
+            r'$\lambda_e \times 1.3$',
+            r'$\lambda_e \times 3.1$',
+            r'$\lambda_e \times 4.4$']
+labels_f = [r'bs',
+            r'$\lambda_e, \lambda_i \times 1.3$',
+            r'$\lambda_e, \lambda_i \times 3.1$',
+            r'$\lambda_e, \lambda_i \times 4.4$']
+
 # 2. Create Figure
-fig, axes = plt.subplots(nrows=1, ncols=4, figsize=(20, 6))
+fig, axes = plt.subplots(nrows=1, ncols=4, figsize=(15, 5))
+
+wi = 0.8
 
 # 3. Define each subplot explicitly
 # Top Left
-axes[0].bar(categories, h1, color=colors_h, edgecolor='black', width=0.8)
-axes[0].bar(categories, f1, color=colors_f, edgecolor='black', width=0.8, bottom=h1)
-axes[0].set_ylabel(r'$[\rm{K}^+]_e$ max (mM)')
-#axes[0].legend()
+axes[0].bar(categories, h1, color=colors_h, edgecolor='black', width=wi, label=labels_h)
+axes[0].bar(categories, f1, color=colors_f, edgecolor='black', width=wi, bottom=h1, label=labels_f)
+axes[0].set_ylabel(r'peak $\rm [\rm{K}^+]_e$ (mM)')
+axes[0].set_ylim([0, 75])
+axes[0].legend()
+
 
 # Top Right
-axes[1].bar(categories, h2, color=colors_h, edgecolor='black', width=0.8)
-axes[1].bar(categories, f2, color=colors_f, edgecolor='black', width=0.8, bottom=h2)
-axes[1].set_ylabel(r'$\phi_M$ max (mV)')
+axes[1].bar(categories, h2, color=colors_h, edgecolor='black', width=wi)
+axes[1].bar(categories, f2, color=colors_f, edgecolor='black', width=wi, bottom=h2)
+axes[1].set_ylabel(r'peak $\Delta \rm \phi_M$ (mV)')
 
 # Bottom Left
-axes[2].bar(categories, h3, color=colors_h, edgecolor='black', width=0.8)
-axes[2].bar(categories, f3, color=colors_f, edgecolor='black', width=0.8, bottom=h3)
-axes[2].set_ylabel(r"Time constant (ms)")
+axes[2].bar(categories, h3, color=colors_h, edgecolor='black', width=wi)
+axes[2].bar(categories, f3, color=colors_f, edgecolor='black', width=wi, bottom=h3)
+axes[2].set_ylabel(r"$\Delta \rm  \phi_M T_{1/2}$ (ms)")
 
 # Bottom Right
-axes[3].bar(categories, h4, color=colors_h, edgecolor='black', width=0.8)
-axes[3].bar(categories, f4, color=colors_f, edgecolor='black', width=0.8, bottom=h4)
-axes[3].set_ylabel(r"Mean length constant theoretical ($\mu$m)")
+axes[3].bar(categories, h4, color=colors_f, edgecolor='black', width=wi)
+axes[3].bar(categories, f4, color=colors_h, edgecolor='black', width=wi, bottom=h4)
+axes[3].set_ylabel(r"mean theoretical length constant ($\mu$m)")
+axes[3].set_ylim([0, 13])
 
 # 4. Final layout touch
 plt.tight_layout()
 # 4. Clean up layout to prevent labels from overlapping
 plt.savefig(f'tort_ECS_histrogram.png', format='png')
+plt.savefig(f'tort_ECS_histrogram.svg', format='svg')
 plt.close()
