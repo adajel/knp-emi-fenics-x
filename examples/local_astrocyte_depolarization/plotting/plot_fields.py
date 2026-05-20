@@ -67,9 +67,13 @@ cmap_glial = "plasma"
 #cmap_glial = "cool"
 
 # Region in which to apply the source term (cm)
-x_L = 2100e-7; x_U = 2900e-7
-y_L = 2100e-7; y_U = 2900e-7
-z_L = 2100e-7; z_U = 2500e-7
+#x_L = 2100e-7; x_U = 2900e-7
+#y_L = 2100e-7; y_U = 2900e-7
+#z_L = 2100e-7; z_U = 2500e-7
+
+x_L = 2000e-7; x_U = 3000e-7
+y_L = 2000e-7; y_U = 3000e-7
+z_L = 2100e-7; z_U = 2700e-7
 
 x_M = 2683e-7
 y_M = 2889e-7
@@ -372,9 +376,9 @@ fname = "ECS_K_bs"
 #fname = "astrocyte_potential_E44"
 #fname = "ECS_K_E44"
 
+# Make plots
 #for time_index in [index_1, index_2, index_3]:
-#for time_index in [index_1]:
-for time_index in range(200):
+for time_index in [index_1]:
 
     """
     fname_i = f"{fname}_{i}"
@@ -388,15 +392,6 @@ for time_index in range(200):
     # Plot membrane potential
     plot_astrocyte_potential(fname_i, ri_grid_glial, ri_grid_glial_init, clim, text, i)
     """
-
-    # Calculate average
-    #ARRAY_NAME = "phi_M_2"
-    ARRAY_NAME = "c_K_0"
-    grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
-    bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
-    grid_ECS_roi = grid_ECS.clip_box(bounds)
-    avg_global_phi_M = get_vw_average(grid_ECS, ARRAY_NAME)
-    avg_roi_phi_M = get_vw_average(grid_ECS_roi, ARRAY_NAME)
 
     # -------- plot ECS K+ ------------- "
     #grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
@@ -412,3 +407,37 @@ for time_index in range(200):
     #plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i)
 
     i += 1
+
+# Calculate averages
+for time_index in [index_1]:
+    # Calculate average
+
+    # ECS K+
+    ARRAY_NAME = "c_K_0"
+    grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
+    bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
+    grid_ECS_roi = grid_ECS.clip_box(bounds, invert=False)
+    avg_global_K_E = get_vw_average(grid_ECS, ARRAY_NAME)
+    avg_roi_K_E = get_vw_average(grid_ECS_roi, ARRAY_NAME)
+
+    # Plot the original (ghosted) and the slice
+    p = pyvista.Plotter(off_screen=True)
+    p.add_mesh(grid_ECS_roi)
+    p.screenshot(f"ECS_roi.png", transparent_background=True)
+    p.close()
+
+    # Mem pot glial
+    ARRAY_NAME = "phi_M_2"
+    grid_glial = get_grid_field(dir, "results_mem_2", "phi_M_2", time_index)
+    bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
+    grid_glial_roi = grid_glial.clip_box(bounds, invert=False)
+    avg_global_phi_M = get_vw_average(grid_glial, ARRAY_NAME)
+    avg_roi_phi_M = get_vw_average(grid_glial_roi, ARRAY_NAME)
+
+    # Plot the original (ghosted) and the slice
+    p = pyvista.Plotter(off_screen=True)
+    p.add_mesh(grid_glial_roi)
+    p.screenshot(f"glial_roi.png", transparent_background=True)
+    p.close()
+
+

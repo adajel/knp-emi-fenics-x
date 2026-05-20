@@ -10,7 +10,8 @@ c_ECS = "#4e5f70"
 c_neuron = "#16a085"
 c_glial = "#ff67ff"
 c_synapse_1 = "#00ff00"
-c_synapse_2 = "#e1fae1"
+#c_synapse_2 = "#e1fae1"
+c_synapse_2 = "#a0c991"
 c_point = "#ffff00"
 
 sargs = dict(
@@ -28,9 +29,13 @@ sargs = dict(
 )
 
 # Region in which to apply the source term (cm)
-x_L = 2100.0; x_U = 2900.0
-y_L = 2100.0; y_U = 2900.0
-z_L = 2100.0; z_U = 2500.0
+#x_L = 2100.0; x_U = 2900.0
+#y_L = 2100.0; y_U = 2900.0
+#z_L = 2100.0; z_U = 2500.0
+
+x_L = 2000; x_U = 3000
+y_L = 2000; y_U = 3000
+z_L = 2100; z_U = 2700
 
 x_M = 2683.0
 y_M = 2889.0
@@ -170,8 +175,8 @@ def plot_2D(x, origin, camera_position, grid_ECS, grid_neuron, grid_glial, grid_
 
 def plot_mesh_overview(grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2):
 
-    box_ECS = grid_ECS.clip_box(bounds=[0, 3000, 0, 3000, 0, 5000], invert=True)
-    box_neuron = grid_neuron.clip_box(bounds=[0, 3000, 0, 3000, 0, 5000], invert=True)
+    box_ECS = grid_ECS.clip_box(bounds=[0, 3200, 0, 3200, 0, 5000], invert=True)
+    box_neuron = grid_neuron.clip_box(bounds=[0, 3200, 0, 3200, 0, 5000], invert=True)
 
     roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
 
