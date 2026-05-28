@@ -27,7 +27,7 @@ def read_me(fname):
         return np.array(x)
 
 # get phi_M time
-fdirs = "baseline"
+fdirs = "../results/baseline"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -139,9 +139,10 @@ ax.axis('off')
 plt.tight_layout()
 
 # save figure to file
-plt.savefig(f'3D_time.svg', format='svg')
-plt.savefig(f'3D_time.png', format='png')
+plt.savefig(f'results/3D_new_roi.svg', format='svg')
+plt.savefig(f'results/3D_new_roi.png', format='png')
 
+"""
 fig = plt.figure(figsize=(20, 10))
 ax = plt.gca()
 
@@ -182,3 +183,4 @@ plt.tight_layout()
 # save figure to file
 plt.savefig(f'3D_space_constant.svg', format='svg')
 plt.savefig(f'3D_space_constant.png', format='png')
+"""

@@ -19,20 +19,18 @@ from dolfinx.fem.petsc import (
 
 from ufl import ln
 
-t = 0.0     # Start time (ms)
-
-#T = 0.05    # Final time (ms)
-#L = 5e-4    # cm
-#D_K = 1.96e-8       # diffusion coefficients K (cm²/ms)
-#sigma = 1.0         #
-
-T = 0.2        # final time (ms)
-L = 5e-4       # cm
-D_K = 2e-8     # diffusion coefficients K (cm²/ms)
-sigma = 1.0e-4 # sd
-
-num_steps = 10
+t = 0.0         # Start time (ms)
+T = 0.1         # final time (ms)
+num_steps = 4
 dt = T / num_steps  # time step size
+
+#L = 5e-4        # cm
+#D_K = 1.96e-8   # diffusion coefficients K (cm²/ms)
+#sigma = 1.0e-4  # sd
+
+L = 5e-4        # cm
+D_K = 1.96e-8   # diffusion coefficients K (cm²/ms)
+sigma = 1.0e-4  # sd
 
 nx, ny, nz = 50, 50, 50
 domain = mesh.create_box(

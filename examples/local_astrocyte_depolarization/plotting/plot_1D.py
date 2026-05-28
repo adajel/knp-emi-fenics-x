@@ -22,8 +22,6 @@ green_tt = "#057a6930"
 pink_t = '#e31be380'
 green_t = "#057a6980"
 
-
-
 # set font & text parameters
 font = {'family' : 'serif',
         'weight' : 'bold',
@@ -39,7 +37,7 @@ def read_me(fname):
         x = [float(line.split()[0]) for line in lines]
         return np.array(x)
 
-fdirs = "1D"
+fdirs = "../results/1D"
 fname = f"{fdirs}/phi_M.txt"
 phi_M_1D = read_me(fname)
 fname = f"{fdirs}/K_ECS.txt"
@@ -91,7 +89,7 @@ fname = f"{fdirs}/I_Kir_roi.txt"
 I_Kir_roi_1D = read_me(fname)
 
 # get phi_M time
-fdirs = "baseline"
+fdirs = "../results/baseline"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_3D = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -296,9 +294,10 @@ ax.axis('off')
 plt.tight_layout()
 
 # save figure to file
-plt.savefig(f'1D.svg', format='svg')
-plt.savefig(f'1D.png', format='png')
+plt.savefig(f'results/1D.svg', format='svg')
+plt.savefig(f'results/1D.png', format='png')
 
+"""
 # Make bar-plot with mean values
 
 K_stim_1D = np.mean(K_ECS_1D[:stimuli_end])
@@ -373,3 +372,4 @@ plt.tight_layout()
 plt.savefig(f'1D_histrogram.png', format='png')
 plt.savefig(f'1D_histrogram.svg', format='svg')
 plt.close()
+"""

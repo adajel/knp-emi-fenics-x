@@ -28,7 +28,7 @@ def read_me(fname):
         return np.array(x)
         #return x[:240]
 
-fdirs = "ICS-tort-x13"
+fdirs = "../results/ICS-tort-x13"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_I1 = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -50,7 +50,7 @@ sigma_i_I1 = read_me(fname)
 fname = f"{fdirs}/sigma_e_glial.txt"
 sigma_e_I1 = read_me(fname)
 
-fdirs = "ICS-tort-x31"
+fdirs = "../results/ICS-tort-x31"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_I2 = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -72,7 +72,7 @@ sigma_i_I2 = read_me(fname)
 fname = f"{fdirs}/sigma_e_glial.txt"
 sigma_e_I2 = read_me(fname)
 
-fdirs = "ICS-tort-x44"
+fdirs = "../results/ICS-tort-x44"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_I3 = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -95,7 +95,7 @@ fname = f"{fdirs}/sigma_e_glial.txt"
 sigma_e_I3 = read_me(fname)
 
 # get phi_M time
-fdirs = "baseline"
+fdirs = "../results/baseline"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_bs = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -297,5 +297,5 @@ print(max(length_constant_I3))
 plt.tight_layout()
 
 # save figure to file
-plt.savefig(f'tort_ICS.svg', format='svg')
-plt.savefig(f'tort_ICS.png', format='png')
+plt.savefig(f'results/tort_ICS.svg', format='svg')
+plt.savefig(f'results/tort_ICS.png', format='png')

@@ -33,7 +33,7 @@ def read_me(fname):
         return np.array(x)
         #return x[:240]
 
-fdirs = "ECS-tort-x13"
+fdirs = "../results/ECS-tort-x13"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_E1 = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -55,7 +55,7 @@ sigma_i_E1 = read_me(fname)
 fname = f"{fdirs}/sigma_e_glial.txt"
 sigma_e_E1 = read_me(fname)
 
-fdirs = "ECS-tort-x31"
+fdirs = "../results/ECS-tort-x31"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_E2 = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -77,7 +77,7 @@ sigma_i_E2 = read_me(fname)
 fname = f"{fdirs}/sigma_e_glial.txt"
 sigma_e_E2 = read_me(fname)
 
-fdirs = "ECS-tort-x5"
+fdirs = "../results/ECS-tort-x44"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_E3 = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -100,7 +100,7 @@ fname = f"{fdirs}/sigma_e_glial.txt"
 sigma_e_E3 = read_me(fname)
 
 # get phi_M time
-fdirs = "baseline"
+fdirs = "../results/baseline"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_bs = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -123,6 +123,90 @@ fname = f"{fdirs}/sigma_i_glial.txt"
 sigma_i_bs = read_me(fname)
 fname = f"{fdirs}/sigma_e_glial.txt"
 sigma_e_bs = read_me(fname)
+
+fdirs = "../results/ICS-tort-x13"
+fname = f"{fdirs}/phi_M_glial.txt"
+phi_M_I1 = read_me(fname)
+fname = f"{fdirs}/K_ECS_glial.txt"
+K_ECS_I1 = read_me(fname)
+fname = f"{fdirs}/K_ICS_glial.txt"
+K_ICS_I1 = read_me(fname)
+fname = f"{fdirs}/g_tot_glial.txt"
+g_tot_I1 = read_me(fname)
+fname = f"{fdirs}/sigma_i_glial.txt"
+sigma_i_I1 = read_me(fname)
+fname = f"{fdirs}/sigma_e_glial.txt"
+sigma_e_I1 = read_me(fname)
+
+fdirs = "../results/ICS-tort-x31"
+fname = f"{fdirs}/phi_M_glial.txt"
+phi_M_I2 = read_me(fname)
+fname = f"{fdirs}/K_ECS_glial.txt"
+K_ECS_I2 = read_me(fname)
+fname = f"{fdirs}/K_ICS_glial.txt"
+K_ICS_I2 = read_me(fname)
+fname = f"{fdirs}/g_tot_glial.txt"
+g_tot_I2 = read_me(fname)
+fname = f"{fdirs}/sigma_i_glial.txt"
+sigma_i_I2 = read_me(fname)
+fname = f"{fdirs}/sigma_e_glial.txt"
+sigma_e_I2 = read_me(fname)
+
+fdirs = "../results/ICS-tort-x44"
+fname = f"{fdirs}/phi_M_glial.txt"
+phi_M_I3 = read_me(fname)
+fname = f"{fdirs}/K_ECS_glial.txt"
+K_ECS_I3 = read_me(fname)
+fname = f"{fdirs}/K_ICS_glial.txt"
+K_ICS_I3 = read_me(fname)
+fname = f"{fdirs}/g_tot_glial.txt"
+g_tot_I3 = read_me(fname)
+fname = f"{fdirs}/sigma_i_glial.txt"
+sigma_i_I3 = read_me(fname)
+fname = f"{fdirs}/sigma_e_glial.txt"
+sigma_e_I3 = read_me(fname)
+
+fdirs = "../results/ECS-ICS-tort-x13"
+fname = f"{fdirs}/phi_M_glial.txt"
+phi_M_EI1 = read_me(fname)
+fname = f"{fdirs}/K_ECS_glial.txt"
+K_ECS_EI1 = read_me(fname)
+fname = f"{fdirs}/K_ICS_glial.txt"
+K_ICS_EI1 = read_me(fname)
+fname = f"{fdirs}/g_tot_glial.txt"
+g_tot_EI1 = read_me(fname)
+fname = f"{fdirs}/sigma_i_glial.txt"
+sigma_i_EI1 = read_me(fname)
+fname = f"{fdirs}/sigma_e_glial.txt"
+sigma_e_EI1 = read_me(fname)
+
+fdirs = "../results/ECS-ICS-tort-x31"
+fname = f"{fdirs}/phi_M_glial.txt"
+phi_M_EI2 = read_me(fname)
+fname = f"{fdirs}/K_ECS_glial.txt"
+K_ECS_EI2 = read_me(fname)
+fname = f"{fdirs}/K_ICS_glial.txt"
+K_ICS_EI2 = read_me(fname)
+fname = f"{fdirs}/g_tot_glial.txt"
+g_tot_EI2 = read_me(fname)
+fname = f"{fdirs}/sigma_i_glial.txt"
+sigma_i_EI2 = read_me(fname)
+fname = f"{fdirs}/sigma_e_glial.txt"
+sigma_e_EI2 = read_me(fname)
+
+fdirs = "../results/ECS-ICS-tort-x44"
+fname = f"{fdirs}/phi_M_glial.txt"
+phi_M_EI3 = read_me(fname)
+fname = f"{fdirs}/K_ECS_glial.txt"
+K_ECS_EI3 = read_me(fname)
+fname = f"{fdirs}/K_ICS_glial.txt"
+K_ICS_EI3 = read_me(fname)
+fname = f"{fdirs}/g_tot_glial.txt"
+g_tot_EI3 = read_me(fname)
+fname = f"{fdirs}/sigma_i_glial.txt"
+sigma_i_EI3 = read_me(fname)
+fname = f"{fdirs}/sigma_e_glial.txt"
+sigma_e_EI3 = read_me(fname)
 
 # time
 dt = 0.1
@@ -206,7 +290,7 @@ re_bs  = 1 / (sigma_e_bs * alpha_e)     # extracellular resistance k Ohm cm
 rm_bs = 1 / (g_tot_bs * gamma_m)        # membrane resistance k Ohm cm**3
 length_constant_bs = np.sqrt(rm_bs / (ri_bs + re_bs)) * 1.0e4  # cm
 
-rfdirs = "ECS-tort-x13"
+fdirs = "../results/ECS-tort-x13"
 fname = f"{fdirs}/phi_M_glial.txt"
 phi_M_I1 = read_me(fname)
 fname = f"{fdirs}/K_ECS_glial.txt"
@@ -242,188 +326,6 @@ ri_E3  = 1 / (sigma_i_E3 * alpha_i)     # intracellular resistance k Ohm cm
 re_E3  = 1 / (sigma_e_E3 * alpha_e)     # extracellular resistance k Ohm cm
 rm_E3 = 1 / (g_tot_E3 * gamma_m)        # membrane resistance k Ohm cm**3
 length_constant_E3 = np.sqrt(rm_E3 / (ri_E3 + re_E3))  * 1.0e4 # cm
-
-layout = [
-    ['A', 'A', 'A'],
-    ['B', 'B', 'B'],
-    ['C', 'D', 'E']
-]
-
-lw = 4
-
-ls_1 = '-'
-ls_2 = '--'
-ls_3 = '-.'
-ls_4 = ':'
-
-fig, axd = plt.subplot_mosaic(layout, figsize=(15, 15), constrained_layout=True)
-
-axd['A'].plot(t, K_ECS_E3, linewidth=lw, linestyle=ls_1, color=blue_dark,   label=r"$\lambda_e \times 4.4$")
-axd['A'].plot(t, K_ECS_E2, linewidth=lw, linestyle=ls_2, color=blue,        label=r"$\lambda_e \times 3.1$")
-axd['A'].plot(t, K_ECS_E1, linewidth=lw, linestyle=ls_3, color=blue_light,  label=r'$\lambda_e \times 1.3$')
-axd['A'].plot(t, K_ECS_bs, linewidth=lw*1.4, linestyle=ls_4, color=pink, label=r'baseline')
-axd['A'].set_ylabel(r"$\rm [\rm K]_e$ (mM)")
-axd['A'].set_xlabel(r"time (ms)")
-
-axd['B'].plot(t, phi_M_E3, linewidth=lw, linestyle=ls_1, color=blue_dark, label=r"$\lambda_e \times 4.4$")
-axd['B'].plot(t, phi_M_E2, linewidth=lw, linestyle=ls_2, color=blue, label=r"$\lambda_e \times 3.1$")
-axd['B'].plot(t, phi_M_E1, linewidth=lw, linestyle=ls_3, color=blue_light, label=r'$\lambda_e \times 1.3$')
-axd['B'].plot(t, phi_M_bs, linewidth=lw, linestyle=ls_4, color=pink, label=r'baseline')
-axd['B'].axvline(x=102, color='red', linestyle='--', linewidth=lw*1.2)
-axd['B'].set_ylabel(r"$\rm\phi_M$ (mV)")
-axd['B'].set_xlabel(r"time (ms)")
-axd['B'].legend()
-
-axd['C'].plot(t, K_ICS_E3, linewidth=lw, linestyle=ls_1, color=blue_dark)
-axd['C'].plot(t, K_ICS_E2, linewidth=lw, linestyle=ls_2, color=blue)
-axd['C'].plot(t, K_ICS_E1, linewidth=lw, linestyle=ls_3, color=blue_light)
-axd['C'].plot(t, K_ICS_bs, linewidth=lw, linestyle=ls_4, color=pink)
-axd['C'].set_ylabel(r"$\rm c_{K_g}$ (mM)")
-axd['C'].set_xlabel(r"time (ms)")
-
-axd['D'].plot(t_normalized, phi_M_norm_E3, linewidth=lw, linestyle=ls_1, color=blue_dark)
-axd['D'].plot(t_normalized, phi_M_norm_E2, linewidth=lw, linestyle=ls_2, color=blue)
-axd['D'].plot(t_normalized, phi_M_norm_E1, linewidth=lw, linestyle=ls_3, color=blue_light)
-axd['D'].plot(t_normalized, phi_M_norm_bs, linewidth=lw, linestyle=ls_4, color=pink)
-axd['D'].plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw*1.2)
-axd['D'].set_ylabel(r"normalized $\rm \phi_M$")
-axd['D'].set_yticks([0.0, 0.25, 0.5, 0.75, 1.0])
-axd['D'].set_xticks([100, 150, 200, 250, 300])
-axd['D'].set_xlabel(r"time (ms)")
-
-axd['E'].plot(t, length_constant_E3, linewidth=lw, linestyle=ls_1, color=blue_dark)
-axd['E'].plot(t, length_constant_E2, linewidth=lw, linestyle=ls_2, color=blue)
-axd['E'].plot(t, length_constant_E1, linewidth=lw, linestyle=ls_3, color=blue_light)
-axd['E'].plot(t, length_constant_bs, linewidth=lw, linestyle=ls_4, color=pink)
-axd['E'].set_ylabel(r"Length constant theoretical ($\mu$m)")
-axd['E'].set_xlabel(r"time (ms)")
-
-print("mean length constant E3:", np.mean(length_constant_E3))
-print("mean length constant E2:", np.mean(length_constant_E2))
-print("mean length constant E1:", np.mean(length_constant_E1))
-print("mean length constant bs:", np.mean(length_constant_bs))
-
-print("max constant E3:", np.max(length_constant_E3))
-print("max constant E2:", np.max(length_constant_E2))
-print("max constant E1:", np.max(length_constant_E1))
-print("max constant bs:", np.max(length_constant_bs))
-
-print("min constant E3:", np.min(length_constant_E3))
-print("min constant E2:", np.min(length_constant_E2))
-print("min constant E1:", np.min(length_constant_E1))
-print("min constant bs:", np.min(length_constant_bs))
-
-print("-------------------------------")
-
-print("max K ICS E3:", np.max(K_ICS_E3) - np.max(K_ICS_bs))
-print("max K ICS E2:", np.max(K_ICS_E2) - np.max(K_ICS_bs))
-print("max K ICS E1:", np.max(K_ICS_E1) - np.max(K_ICS_bs))
-
-print("-------------------------------")
-
-print("max K phi bs:", np.max(phi_M_bs))
-print("max K phi E1:", np.max(phi_M_E1))
-print("max K phi E2:", np.max(phi_M_E2))
-print("max K phi E3:", np.max(phi_M_E3))
-
-print("-------------------------------")
-
-print(max(length_constant_bs))
-print(max(length_constant_E1))
-print(max(length_constant_E2))
-print(max(length_constant_E3))
-
-# make pretty
-plt.tight_layout()
-
-# save figure to file
-plt.savefig(f'tort_ECS.svg', format='svg')
-plt.savefig(f'tort_ECS.png', format='png')
-
-
-fdirs = "ICS-tort-x13"
-fname = f"{fdirs}/phi_M_glial.txt"
-phi_M_I1 = read_me(fname)
-fname = f"{fdirs}/K_ECS_glial.txt"
-K_ECS_I1 = read_me(fname)
-fname = f"{fdirs}/K_ICS_glial.txt"
-K_ICS_I1 = read_me(fname)
-fname = f"{fdirs}/g_tot_glial.txt"
-g_tot_I1 = read_me(fname)
-fname = f"{fdirs}/sigma_i_glial.txt"
-sigma_i_I1 = read_me(fname)
-fname = f"{fdirs}/sigma_e_glial.txt"
-sigma_e_I1 = read_me(fname)
-
-fdirs = "ICS-tort-x31"
-fname = f"{fdirs}/phi_M_glial.txt"
-phi_M_I2 = read_me(fname)
-fname = f"{fdirs}/K_ECS_glial.txt"
-K_ECS_I2 = read_me(fname)
-fname = f"{fdirs}/K_ICS_glial.txt"
-K_ICS_I2 = read_me(fname)
-fname = f"{fdirs}/g_tot_glial.txt"
-g_tot_I2 = read_me(fname)
-fname = f"{fdirs}/sigma_i_glial.txt"
-sigma_i_I2 = read_me(fname)
-fname = f"{fdirs}/sigma_e_glial.txt"
-sigma_e_I2 = read_me(fname)
-
-fdirs = "ICS-tort-x5"
-fname = f"{fdirs}/phi_M_glial.txt"
-phi_M_I3 = read_me(fname)
-fname = f"{fdirs}/K_ECS_glial.txt"
-K_ECS_I3 = read_me(fname)
-fname = f"{fdirs}/K_ICS_glial.txt"
-K_ICS_I3 = read_me(fname)
-fname = f"{fdirs}/g_tot_glial.txt"
-g_tot_I3 = read_me(fname)
-fname = f"{fdirs}/sigma_i_glial.txt"
-sigma_i_I3 = read_me(fname)
-fname = f"{fdirs}/sigma_e_glial.txt"
-sigma_e_I3 = read_me(fname)
-
-fdirs = "ECS-ICS-tort-x13"
-fname = f"{fdirs}/phi_M_glial.txt"
-phi_M_EI1 = read_me(fname)
-fname = f"{fdirs}/K_ECS_glial.txt"
-K_ECS_EI1 = read_me(fname)
-fname = f"{fdirs}/K_ICS_glial.txt"
-K_ICS_EI1 = read_me(fname)
-fname = f"{fdirs}/g_tot_glial.txt"
-g_tot_EI1 = read_me(fname)
-fname = f"{fdirs}/sigma_i_glial.txt"
-sigma_i_EI1 = read_me(fname)
-fname = f"{fdirs}/sigma_e_glial.txt"
-sigma_e_EI1 = read_me(fname)
-
-fdirs = "ECS-tort-x31"
-fname = f"{fdirs}/phi_M_glial.txt"
-phi_M_EI2 = read_me(fname)
-fname = f"{fdirs}/K_ECS_glial.txt"
-K_ECS_EI2 = read_me(fname)
-fname = f"{fdirs}/K_ICS_glial.txt"
-K_ICS_EI2 = read_me(fname)
-fname = f"{fdirs}/g_tot_glial.txt"
-g_tot_EI2 = read_me(fname)
-fname = f"{fdirs}/sigma_i_glial.txt"
-sigma_i_EI2 = read_me(fname)
-fname = f"{fdirs}/sigma_e_glial.txt"
-sigma_e_EI2 = read_me(fname)
-
-fdirs = "ECS-tort-x5"
-fname = f"{fdirs}/phi_M_glial.txt"
-phi_M_EI3 = read_me(fname)
-fname = f"{fdirs}/K_ECS_glial.txt"
-K_ECS_EI3 = read_me(fname)
-fname = f"{fdirs}/K_ICS_glial.txt"
-K_ICS_EI3 = read_me(fname)
-fname = f"{fdirs}/g_tot_glial.txt"
-g_tot_EI3 = read_me(fname)
-fname = f"{fdirs}/sigma_i_glial.txt"
-sigma_i_EI3 = read_me(fname)
-fname = f"{fdirs}/sigma_e_glial.txt"
-sigma_e_EI3 = read_me(fname)
 
 ri_I1  = 1 / (sigma_i_I1 * alpha_i)     # intracellular resistance k Ohm cm
 re_I1  = 1 / (sigma_e_I1 * alpha_e)     # extracellular resistance k Ohm cm
@@ -538,6 +440,101 @@ tc_EI2 = indices_EI2[0]*dt*save_frequency
 tc_EI3 = indices_EI3[0]*dt*save_frequency
 
 
+
+layout = [
+    ['A', 'A', 'A'],
+    ['B', 'B', 'B'],
+    ['C', 'D', 'E']
+]
+
+lw = 4
+
+ls_1 = '-'
+ls_2 = '--'
+ls_3 = '-.'
+ls_4 = ':'
+
+fig, axd = plt.subplot_mosaic(layout, figsize=(15, 15), constrained_layout=True)
+
+axd['A'].plot(t, K_ECS_bs, linewidth=lw, linestyle=ls_1, color=pink, label=r'baseline')
+axd['A'].plot(t, K_ECS_E3, linewidth=lw, linestyle=ls_1, color=blue_dark, label=r"$\lambda_e \times 4.4$")
+axd['A'].plot(t, K_ECS_EI3, linewidth=lw, linestyle=ls_2, color=blue_dark_t, label=r"$\lambda_e \times 3.1$")
+axd['A'].set_ylabel(r"$\rm [\rm K]_e$ (mM)")
+axd['A'].set_xlabel(r"time (ms)")
+
+axd['B'].plot(t, phi_M_bs, linewidth=lw, linestyle=ls_1, color=pink, label=r'baseline')
+axd['B'].plot(t, phi_M_E3, linewidth=lw, linestyle=ls_1, color=blue_dark, label=r"$\lambda_e \times 4.4$")
+axd['B'].plot(t, phi_M_EI3, linewidth=lw, linestyle=ls_2, color=blue_dark_t, label=r'$\lambda_e, \lambda_i \times 4.4$')
+axd['B'].axvline(x=102, color='red', linestyle='--', linewidth=lw*1.2)
+axd['B'].set_ylabel(r"$\rm\phi_M$ (mV)")
+axd['B'].set_xlabel(r"time (ms)")
+axd['B'].legend()
+
+axd['C'].plot(t, K_ICS_bs, linewidth=lw, linestyle=ls_1, color=pink)
+axd['C'].plot(t, K_ICS_E3, linewidth=lw, linestyle=ls_1, color=blue_dark)
+axd['C'].plot(t, K_ICS_EI3, linewidth=lw, linestyle=ls_2, color=blue_dark_t)
+axd['C'].set_ylabel(r"$\rm c_{K_g}$ (mM)")
+axd['C'].set_xlabel(r"time (ms)")
+
+axd['D'].plot(t_normalized, phi_M_norm_bs, linewidth=lw, linestyle=ls_1, color=pink)
+axd['D'].plot(t_normalized, phi_M_norm_E3, linewidth=lw, linestyle=ls_2, color=blue_dark)
+axd['D'].plot(t_normalized, phi_M_norm_EI3, linewidth=lw, linestyle=ls_3, color=blue_dark_t)
+axd['D'].plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw*1.2)
+axd['D'].set_ylabel(r"normalized $\rm \phi_M$")
+axd['D'].set_yticks([0.0, 0.25, 0.5, 0.75, 1.0])
+axd['D'].set_xticks([100, 150, 200, 250, 300])
+axd['D'].set_xlabel(r"time (ms)")
+
+axd['E'].plot(t, length_constant_bs, linewidth=lw, linestyle=ls_1, color=pink)
+axd['E'].plot(t, length_constant_E3, linewidth=lw, linestyle=ls_1, color=blue_dark)
+axd['E'].plot(t, length_constant_EI3, linewidth=lw, linestyle=ls_2, color=blue_dark_t)
+axd['E'].set_ylabel(r"Length constant theoretical ($\mu$m)")
+axd['E'].set_xlabel(r"time (ms)")
+
+print("mean length constant E3:", np.mean(length_constant_E3))
+print("mean length constant E2:", np.mean(length_constant_E2))
+print("mean length constant E1:", np.mean(length_constant_E1))
+print("mean length constant bs:", np.mean(length_constant_bs))
+
+print("max constant E3:", np.max(length_constant_E3))
+print("max constant E2:", np.max(length_constant_E2))
+print("max constant E1:", np.max(length_constant_E1))
+print("max constant bs:", np.max(length_constant_bs))
+
+print("min constant E3:", np.min(length_constant_E3))
+print("min constant E2:", np.min(length_constant_E2))
+print("min constant E1:", np.min(length_constant_E1))
+print("min constant bs:", np.min(length_constant_bs))
+
+print("-------------------------------")
+
+print("max K ICS E3:", np.max(K_ICS_E3) - np.max(K_ICS_bs))
+print("max K ICS E2:", np.max(K_ICS_E2) - np.max(K_ICS_bs))
+print("max K ICS E1:", np.max(K_ICS_E1) - np.max(K_ICS_bs))
+
+print("-------------------------------")
+
+print("max K phi bs:", np.max(phi_M_bs))
+print("max K phi E1:", np.max(phi_M_E1))
+print("max K phi E2:", np.max(phi_M_E2))
+print("max K phi E3:", np.max(phi_M_E3))
+
+print("-------------------------------")
+
+print(max(length_constant_bs))
+print(max(length_constant_E1))
+print(max(length_constant_E2))
+print(max(length_constant_E3))
+
+# make pretty
+plt.tight_layout()
+
+# save figure to file
+plt.savefig(f'results/tort_ECS.svg', format='svg')
+plt.savefig(f'results/tort_ECS.png', format='png')
+
+
+
 print("--------------------------------------")
 print(f"max depolarization bs: {phi_M_max_bs}")
 print(f"max depolarization E1: {phi_M_max_E1}")
@@ -561,9 +558,9 @@ h1, h2, h3, h4 = [K_E_max_bs,
                  phi_M_max_E2,
                  phi_M_max_E3], \
                  [tc_bs,
-                  tc_E1,
-                  tc_E2,
-                  tc_E3], \
+                  tc_EI1,
+                  tc_EI2,
+                  tc_EI3], \
                  [lc_bs_mean,
                   lc_EI1_mean,
                   lc_EI2_mean,
@@ -571,20 +568,20 @@ h1, h2, h3, h4 = [K_E_max_bs,
 
 f1, f2, f3, f4 = [0, \
                   K_E_max_EI1 - K_E_max_E1, \
-                  K_E_max_EI2 - K_E_max_E2 + 2, \
-                  K_E_max_EI3 - K_E_max_E3 + 2], \
+                  K_E_max_EI2 - K_E_max_E2, \
+                  K_E_max_EI3 - K_E_max_E3], \
                  [0, \
                   phi_M_max_EI1 - phi_M_max_E1,\
-                  phi_M_max_EI2 - phi_M_max_E2 + 2, \
-                  phi_M_max_EI3 - phi_M_max_E3 + 2], \
+                  phi_M_max_EI2 - phi_M_max_E2, \
+                  phi_M_max_EI3 - phi_M_max_E3], \
                  [0,\
-                  tc_EI1 - tc_E1, \
-                  tc_EI2 - tc_E2 + 2, \
-                  tc_EI3 - tc_E3 + 2], \
+                  tc_E1 - tc_EI1, \
+                  tc_E2 - tc_EI2, \
+                  tc_E3 - tc_EI3], \
                  [0, \
                   lc_E1_mean - lc_EI1_mean, \
-                  lc_E2_mean - lc_EI2_mean + 2, \
-                  lc_E3_mean - lc_EI3_mean + 2]
+                  lc_E2_mean - lc_EI2_mean, \
+                  lc_E3_mean - lc_EI3_mean]
 
 colors_h = [pink, blue_light, blue, blue_dark]
 colors_f = [pink, blue_light_t, blue_t, blue_dark_t]
@@ -616,9 +613,8 @@ wi = 0.8
 axes[0].bar(categories, h1, color=colors_h, edgecolor='black', width=wi, label=labels_h)
 axes[0].bar(categories, f1, color=colors_f, edgecolor='black', width=wi, bottom=h1, label=labels_f)
 axes[0].set_ylabel(r'peak $\rm [\rm{K}^+]_e$ (mM)')
-axes[0].set_ylim([0, 75])
+axes[0].set_ylim([0, 65])
 axes[0].legend()
-
 
 # Top Right
 axes[1].bar(categories, h2, color=colors_h, edgecolor='black', width=wi)
@@ -629,6 +625,7 @@ axes[1].set_ylabel(r'peak $\Delta \rm \phi_M$ (mV)')
 axes[2].bar(categories, h3, color=colors_h, edgecolor='black', width=wi)
 axes[2].bar(categories, f3, color=colors_f, edgecolor='black', width=wi, bottom=h3)
 axes[2].set_ylabel(r"$\Delta \rm  \phi_M T_{1/2}$ (ms)")
+axes[2].set_ylim([0, 120])
 
 # Bottom Right
 axes[3].bar(categories, h4, color=colors_f, edgecolor='black', width=wi)
@@ -639,6 +636,6 @@ axes[3].set_ylim([0, 13])
 # 4. Final layout touch
 plt.tight_layout()
 # 4. Clean up layout to prevent labels from overlapping
-plt.savefig(f'tort_ECS_histrogram.png', format='png')
-plt.savefig(f'tort_ECS_histrogram.svg', format='svg')
+plt.savefig(f'results/tort_ECS_histrogram.png', format='png')
+plt.savefig(f'results/tort_ECS_histrogram.svg', format='svg')
 plt.close()

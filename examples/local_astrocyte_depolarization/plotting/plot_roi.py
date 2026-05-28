@@ -132,7 +132,7 @@ def plot_2D_slice(x, origin, camera_position, grid_ECS, grid_neuron, \
     p.add_mesh(slice_roi_box, color="black", style="wireframe", line_width=5, label="ROI")
 
     p.add_text(
-        "ECS local width (nm)",
+        "Local width (nm)",
         position=position, # Adjust X and Y as needed
         orientation=-90,       # Rotate text 90 degrees
         font_size=14,
@@ -213,7 +213,7 @@ def plot_ECS_width(x, origin, camera_position, grid_ECS, grid_neuron, \
             label="ROI", show_edges=True)
 
     p.add_text(
-        "Local width glia (nm)",
+        "Local width ECS (nm)",
         position=position, # Adjust X and Y as needed
         orientation=-90,       # Rotate text 90 degrees
         font_size=14,
@@ -274,7 +274,7 @@ def plot_glial_width(x, origin, camera_position, grid_ECS, grid_neuron, \
             label="ROI", show_edges=True)
 
     p.add_text(
-        "Local width ECS (nm)",
+        "Local width glial (nm)",
         position=position, # Adjust X and Y as needed
         orientation=-90,   # Rotate text 90 degrees
         font_size=14,
