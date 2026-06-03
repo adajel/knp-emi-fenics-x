@@ -36,23 +36,24 @@ bars = ax.bar(labels, values, color=colors)
 for bar, pct in zip(bars, percentages):
     height = bar.get_height()
     ax.text(bar.get_x() + bar.get_width()/2, height + 2, pct, 
-            ha='center', va='bottom', fontsize=14)
+            ha='center', va='bottom', fontsize=16)
 
 # --- Styling ---
-ax.set_ylabel(r'surface area ($\mu \rm{m}^2$)', fontsize=16)
+ax.set_ylabel(r'surface area ($\mu \rm{m}^2$)', fontsize=20)
 ax.set_ylim(0, 80)
 
 # Remove top and right spines
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
+ax.spines['left'].set_visible(False)
 
 # Customize grid (horizontal lines only)
 ax.yaxis.grid(True, color='black', linewidth=1.5)
 ax.set_axisbelow(False) # Keep grid lines on top of bars
 
 # Formatting ticks
-plt.xticks(rotation=30, fontsize=14)
-plt.yticks([200, 400, 600, 800, 1000], fontsize=12)
+plt.xticks(rotation=30, fontsize=15)
+plt.yticks([200, 400, 600, 800, 1000], fontsize=15)
 ax.tick_params(direction='out', length=10, width=2)
 
 plt.tight_layout()

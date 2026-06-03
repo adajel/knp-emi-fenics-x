@@ -11,26 +11,7 @@ c_neuron = "#16a085"
 c_glial = "#ff67ff"
 c_synapse_1 = "#00ff00"
 c_synapse_2 = "#e1fae1"
-c_point = "#ffff00"
-
-sargs = dict(
-    title=r"$\rm [Na]_e$",
-    n_labels=3,                # Number of labels
-    fmt="%.2f",                # Decimal formatting
-    font_family="arial",
-    vertical=True,            # Horizontal orientation
-    position_x=0.8,           # Move left/right (0 to 1)
-    position_y=0.25,           # Move up/down (0 to 1)
-    width=0.1,                 # Width of the bar
-    height=0.6,                 # Height of the bar
-    title_font_size=50,
-    label_font_size=50,
-)
-
-c_ECS = "#4e5f70"
-c_neuron = "#16a085"
-c_glial = "#ff67ff"
-c_point = "#00ff00"
+c_point = "#FF0000"
 
 sargs_ECS = dict(
     title=" ",
@@ -65,8 +46,6 @@ sargs_glial = dict(
     shadow=True,
 )
 
-#cmap_ECS = "viridis"
-#cmap_ECS = "bmw"
 cmap_ECS = "kgy"
 cmap_glial = "plasma"
 
@@ -219,7 +198,7 @@ def plot_ECS_and_glial(fname, grid_ECS, grid_ECS_init, grid_glial, grid_glial_in
         r"$\Delta \phi_M \rm (mV)$",
         position=(0.98, 0.44),     # Right side, halfway up
         orientation=-270,           # Rotate 90 degrees clockwise
-        font_size=13,
+        font_size=14,
         color="black",
         viewport=True              # Uses the 0-1 coordinate system
     )
@@ -264,6 +243,8 @@ def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, custom_la
     # Then assign it back to a mesh to plot it
     diff_array = grid_glial.point_data["phi_M_2"] - grid_glial_init.point_data["phi_M_2"]
     grid_glial["diff"] = diff_array
+
+    roi_point = pyvista.PolyData([x_M, y_M, z_M])
 
     # Plot the original (ghosted) and the slice
     p = pyvista.Plotter(off_screen=True)
@@ -329,6 +310,11 @@ def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, custom_la
     p.add_mesh(roi_box, color="black", style="wireframe", line_width=5,
             label="ROI", show_edges=True)
 
+    p.add_mesh(roi_point,
+               color=c_point,
+               point_size=60, 
+               render_points_as_spheres=True)
+
     # Fix camera position and zoom
     p.camera_position = 'xy'
     p.camera.azimuth += 30
@@ -377,7 +363,7 @@ def plot_ECS_concentration(ion, x, position_bar, position_text, origin, camera_p
 
     p.add_mesh(slice_roi_box, color="black", style="wireframe", line_width=5, label="ROI")
 
-    title = r"$[$" + f"{ion}" + r"$]_E$ (mM)"
+    title = r"$[$" + f"{ion}" + r"$]_{\rm e}$ (mM)"
 
     p.add_text(
         title,
@@ -406,7 +392,7 @@ def plot_ECS_concentration(ion, x, position_bar, position_text, origin, camera_p
         vertical=True,
         position_x=position_x, 
         position_y=position_y,
-        height=0.3,
+        height=0.5,
         n_labels=0,
         width=0.1,
         label_font_size=25,
@@ -552,7 +538,7 @@ for time_index in [index_1, index_3]:
 grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
 grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_K_0", 0)
 custom_labels = {5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "10", 11: "11"}
-cmap_ECS = "kgy"
+cmap_ECS = "kbc"
 clim_K = [4, 11]
 position_bar=[0.15, 0.25]
 position_text=(0.2, 0.60)
@@ -562,7 +548,7 @@ plot_ECS_concentration('K', 'x', position_bar, position_text, [x_M, c, c], "yz",
 grid_ECS = get_grid_field(dir, "results_sub_0", "c_Na_0", time_index)
 grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_Na_0", 0)
 custom_labels = {135: "135", 137: "137", 139: "139", 141: "141", 143: "143", 144: "144"}
-cmap_ECS = "kbc"
+cmap_ECS = "kgy"
 clim_Na = [135, 143]
 position_bar=[0.82, 0.25]
 position_text=(0.87, 0.60)

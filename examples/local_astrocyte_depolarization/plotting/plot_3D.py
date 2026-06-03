@@ -89,6 +89,22 @@ length_constant = np.sqrt(rm / (ri + re)) * 1.0e4 # convert to cm
 
 lw = 4
 
+fig = plt.figure(figsize=(5, 5))
+ax = plt.gca()
+
+ax1 = fig.add_subplot(1,1,1)
+plt.plot(t, K_ECS, linewidth=lw, color=blue_dark)
+plt.ylabel(r"$\rm c_{K_e}$ (mM)")
+plt.xlabel(r"time (ms)")
+
+# make pretty
+ax.axis('off')
+plt.tight_layout()
+
+# save figure to file
+plt.savefig(f'results/3D_new_roi_ECS_K.svg', format='svg')
+plt.savefig(f'results/3D_new_roi_ECS_K.png', format='png')
+
 fig = plt.figure(figsize=(15, 10))
 ax = plt.gca()
 
@@ -117,21 +133,21 @@ plt.plot(t, I_Kir, linewidth=lw, color=pink)
 plt.xlabel(r"time (ms)")
 
 ax1 = fig.add_subplot(2,3,4)
+plt.ylabel(r"$\rm c_{K_i}$ (mM)")
+plt.plot(t, K_ICS, linewidth=lw, color=pink)
+plt.xlabel(r"time (ms)")
+
+ax1 = fig.add_subplot(2,3,5)
 plt.plot(t, phi_M, linewidth=lw, color=pink)
 plt.axvline(x=102, color='red', linestyle='--', linewidth=lw*1.2)
 plt.ylabel(r"$\rm\phi_M$ (mV)")
 plt.xlabel(r"time (ms)")
 
-ax1 = fig.add_subplot(2,3,5, xlim=[98, 305])
+ax1 = fig.add_subplot(2,3,6, xlim=[98, 305])
 plt.plot(t_normalized, phi_M_norm, linewidth=lw, color=pink)
 plt.plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw*1.2)
 plt.ylabel(r"normalized $\rm\phi_M$")
 plt.yticks([0.0, 0.25, 0.5, 0.75, 1.0])
-plt.xlabel(r"time (ms)")
-
-ax1 = fig.add_subplot(2,3,6)
-plt.plot(t, length_constant, linewidth=lw, color=pink)
-plt.ylabel(r"theoretical length constant ($\mu$m)")
 plt.xlabel(r"time (ms)")
 
 # make pretty
