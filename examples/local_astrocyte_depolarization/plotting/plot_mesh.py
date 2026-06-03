@@ -191,25 +191,7 @@ def plot_ECS(x, origin, grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_
     p.close()
 
 
-def plot_glial(x, origin, grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2):
-
-    p = pyvista.Plotter(off_screen=True)
-
-    p.add_mesh(grid_glial, color=c_glial)
-    roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
-    p.add_mesh(roi_box, color="black", style="wireframe", line_width=5, label="ROI")
-
-    # Fix camera position and zoom
-    p.camera_position = 'yz'
-    p.camera.azimuth += 225
-    p.camera.elevation += 15
-    p.reset_camera()
-
-    # Save screenshot
-    p.screenshot(f"results/mesh_glial.png", transparent_background=True)
-    p.close()
-
-def plot_synapse(x, origin, grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2):
+def plot_synapse_and_astrocyte(x, origin, grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2):
 
     # Plot the original (ghosted) and the slice
     p = pyvista.Plotter(off_screen=True)
@@ -227,7 +209,7 @@ def plot_synapse(x, origin, grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_
     p.reset_camera()
 
     # Save screenshot
-    p.screenshot(f"results/mesh_synapse.png", transparent_background=True)
+    p.screenshot(f"results/mesh_synapse_and_astrocyte.png", transparent_background=True)
     p.close()
 
 def plot_neurons(x, origin, grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2):
@@ -252,9 +234,6 @@ def plot_neurons(x, origin, grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_
 
 def plot_mesh_overview(x, origin, grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2):
 
-    #box_ECS = grid_ECS.clip_box(bounds=[0, 3200, 0, 3200, 0, 5000], invert=True)
-    #box_neuron = grid_neuron.clip_box(bounds=[0, 3200, 0, 3200, 0, 5000], invert=True)
-
     box_ECS = grid_ECS.clip(normal=x, origin=origin, invert=False)
     box_neuron = grid_neuron.clip(normal=x, origin=origin, invert=False)
 
@@ -266,8 +245,6 @@ def plot_mesh_overview(x, origin, grid_ECS, grid_neuron, grid_glial, grid_syn_1,
     p.add_mesh(box_ECS, scalar_bar_args=sargs, color=c_ECS, label="ECS")
 
     p.add_mesh(grid_glial, scalar_bar_args=sargs, color=c_glial, label="glial")
-    #p.add_mesh(grid_syn_1, scalar_bar_args=sargs, opacity=0.75, color=c_synapse_1, label="post synapse")
-    #p.add_mesh(grid_syn_2, scalar_bar_args=sargs, opacity=0.75, color=c_synapse_2, label="pre synapse")
     p.add_mesh(grid_syn_1, scalar_bar_args=sargs, color=c_synapse_1, label="post synapse")
     p.add_mesh(grid_syn_2, scalar_bar_args=sargs, color=c_synapse_2, label="pre synapse")
     p.add_mesh(roi_box, color="black", style="wireframe", line_width=5, label="ROI")
@@ -279,7 +256,6 @@ def plot_mesh_overview(x, origin, grid_ECS, grid_neuron, grid_glial, grid_syn_1,
     p.reset_camera()
 
     legend = p.add_legend(size=(0.15, 0.15), face='circle', loc='upper right')
-    # Access the underlying VTK properties for deeper control
     legend.GetEntryTextProperty().SetFontSize(15)
     legend.GetEntryTextProperty().BoldOn()  # Force bolding
     legend.GetEntryTextProperty().SetFontFamilyToCourier()
@@ -299,9 +275,8 @@ grid_syn_2 = get_grid("results_sub_4", "c_K_4", time)
 #plot_2D('y', [c, y_M, c], "xz", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
 #plot_2D('z', [c, c, z_M], "xy", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
 
-#plot_mesh_overview('x', [x_M, c, c], grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
+# Plot meshes for geometry figure in paper
 plot_mesh_overview('y', [c, x_M, c], grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
 plot_ECS('y', [c, x_M, c], grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
-plot_glial('y', [c, x_M, c], grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
-plot_synapse('y', [c, x_M, c], grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
+plot_synapse_and_astrocyte('y', [c, x_M, c], grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
 plot_neurons('y', [c, x_M, c], grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
