@@ -49,17 +49,20 @@ sargs_ECS = dict(
 
 sargs_glial = dict(
     title=" ",
-    n_labels=6,                # Number of labels
-    fmt="%.2f",                # Decimal formatting
+    #n_labels=6,                # Number of labels
+    #fmt="%.2f",                # Decimal formatting
+    n_labels=0,                # Number of labels
+    fmt="%.0f",                # Decimal formatting
     font_family="arial",
     vertical=True,             # Horizontal orientation
-    position_x=0.84,           # Move left/right (0 to 1)
+    position_x=0.86,           # Move left/right (0 to 1)
     position_y=0.27,           # Move up/down (0 to 1)
     width=0.1,                 # Width of the bar
     height=0.5,                # Height of the bar
     title_font_size=27,
     label_font_size=27,
     color='black',
+    shadow=True,
 )
 
 #cmap_ECS = "viridis"
@@ -188,85 +191,6 @@ def get_grid_field(dir, finame, funame, time_index):
 
     return grid
 
-def plot_ECS_K(fname, grid_ECS, grid_ECS_init, clim, text, i):
-
-    slice_plane_ECS = grid_ECS.slice(normal='x', origin=[x_M, y_M, z_M])
-    slice_plane_roi = roi_box.slice(normal='x', origin=[x_M, y_M, z_M])
-
-    # Then assign it back to a mesh to plot it
-    diff_array = grid_ECS.point_data["c_K_0"] - grid_ECS_init.point_data["c_K_0"]
-    grid_ECS["diff"] = diff_array
-
-    slice_plane_ECS = grid_ECS.clip(normal='x')
-    slice_plane_roi = roi_box.slice(normal='x')
-
-    # Make full 3D plot
-    p = pyvista.Plotter(off_screen=True)
-
-    p.add_mesh(slice_plane_ECS,
-               scalars="diff",
-               scalar_bar_args=sargs_ECS,
-               cmap=cmap_ECS,
-               clim=clim
-               )
-
-    #p.add_mesh(roi_point, color=c_point, point_size=10, render_points_as_spheres=True)
-
-    p.add_mesh(slice_plane_roi,
-               color="black",
-               style="wireframe",
-               line_width=3,
-               show_edges=True)
-
-    # Fix camera position and zoom
-    p.camera_position = 'yz'
-
-    # add title to colorbar
-    p.add_text(
-        r"$\Delta [\rm K]_e (mM)$",
-        position=(0.95, 0.44),     # Right side, halfway up
-        orientation=-270,          # Rotate 90 degrees clockwise
-        font_size=13,
-        color="black",
-        viewport=True              # Uses the 0-1 coordinate system
-    )
-
-    p.add_text(
-        text,
-        position=(0.45, 0.88),     # Right side, halfway up
-        font_size=15,
-        color="black",
-        viewport=True              # Uses the 0-1 coordinate system
-    )
-
-    p.save_graphic(f"results/{fname}.svg")
-    p.close()
-
-    """
-    # PLot glial potential in roi
-    #grid_ECS_roi = grid_ECS.clip_box(bounds=roi_bounds, invert=False)
-    grid_ECS_roi = slice_plane_ECS.clip_box(bounds=roi_bounds, invert=False)
-
-    p = pyvista.Plotter(off_screen=True)
-    p.add_mesh(
-        grid_ECS_roi,
-        scalars="diff",
-        scalar_bar_args=sargs_ECS, \
-        cmap=cmap_ECS, #clim=clim
-    )
-    p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
-    p.add_mesh(roi_point, color=c_point, point_size=20, render_points_as_spheres=True)
-    # Fix camera position and zoom
-    p.camera_position = 'xz'
-    p.camera.azimuth += 40
-    p.camera.elevation += 200
-    # Save screenshot
-    # This strips out the solid canvas layer before exporting
-    p.save_graphic(f"results/{fname}_roi.svg")
-    p.close()
-    """
-
-
 def plot_ECS_and_glial(fname, grid_ECS, grid_ECS_init, grid_glial, grid_glial_init, clim, text, i):
 
     #slice_plane_ECS = grid_ECS.slice(normal='x')
@@ -286,7 +210,7 @@ def plot_ECS_and_glial(fname, grid_ECS, grid_ECS_init, grid_glial, grid_glial_in
         grid_glial,
         scalars="diff",
         scalar_bar_args=sargs_glial, \
-        cmap=cmap_glial, #clim=clim
+        cmap=cmap_glial, clim=clim
     )
     p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
 
@@ -316,104 +240,7 @@ def plot_ECS_and_glial(fname, grid_ECS, grid_ECS_init, grid_glial, grid_glial_in
     p.screenshot(f"results/{fname}.png", transparent_background=True)
     p.close()
 
-    # PLot glial potential in roi
-    grid_glial_roi = grid_glial.clip_box(bounds=roi_bounds, invert=False)
-    p = pyvista.Plotter(off_screen=True)
-    p.add_mesh(
-        grid_glial_roi,
-        scalars="diff",
-        scalar_bar_args=sargs_glial, \
-        cmap=cmap_glial, #clim=clim
-    )
-    p.add_mesh(roi_point, color=c_point, point_size=10, render_points_as_spheres=True)
-    # Fix camera position and zoom
-    p.camera_position = 'xy'
-    p.camera.azimuth += 30
-    p.camera.elevation += 180
-    # Save screenshot
-
-    p.screenshot(f"results/{fname}_roi.png", transparent_background=True)
-    p.close()
-
-
-
-def plot_astrocyte_potential_ECS_embedding(grid_ECS, grid_neuron, grid_glial, i):
-
-    box_ECS = grid_ECS.clip_box(bounds=[0, 3000e-7, 0, 3000e-7, 0, 5000e-7], invert=True)
-    box_neuron = grid_neuron.clip_box(bounds=[0, 3000e-7, 0, 3000e-7, 0, 5000e-7], invert=True)
-
-    # Plot the original (ghosted) and the slice
-    p = pyvista.Plotter(off_screen=True)
-    p.add_mesh(box_neuron, color=c_neuron)
-    p.add_mesh(box_ECS, scalar_bar_args=sargs, color=c_ECS)
-    p.add_mesh(grid_glial, scalar_bar_args=sargs_glial, cmap=cmap_glial, clim=[-81, -80.62467193603516])
-
-    p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
-    #p.add_mesh(roi_point, color=c_point, point_size=10, render_points_as_spheres=True)
-
-    # add title to colorbar
-    p.add_text(
-        r"$\phi_M (mV)$",
-        position=(0.83, 0.45),      # Right side, halfway up
-        orientation=-270,           # Rotate 90 degrees clockwise
-        font_size=13,
-        color="black",
-        viewport=True               # Uses the 0-1 coordinate system
-    )
-
-    # Fix camera position and zoom
-    p.camera_position = 'yz'
-    p.camera.azimuth += 225
-    p.camera.elevation += 15
-    p.reset_camera()
-
-    # Save screenshot
-    p.screenshot(f"results/astrocyte_potential_ECS_embedding_{i}.png", transparent_background=True)
-    p.close()
-
-def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, text, i):
-
-    # Then assign it back to a mesh to plot it
-    diff_array = grid_glial.point_data["phi_M_2"] - grid_glial_init.point_data["phi_M_2"]
-    grid_glial["diff"] = diff_array
-
-    # Plot the original (ghosted) and the slice
-    p = pyvista.Plotter(off_screen=True)
-    p.add_mesh(
-        grid_glial,
-        scalars="diff",
-        scalar_bar_args=sargs_glial, \
-        cmap=cmap_glial, #clim=clim
-    )
-    p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
-
-    # add title to colorbar
-    p.add_text(
-        r"$\Delta \phi_M \rm (mV)$",
-        position=(0.98, 0.44),     # Right side, halfway up
-        orientation=-270,           # Rotate 90 degrees clockwise
-        font_size=13,
-        color="black",
-        viewport=True              # Uses the 0-1 coordinate system
-    )
-    # add title to colorbar
-    p.add_text(
-        text,
-        position=(0.5, 0.84),      # Right side, halfway up
-        font_size=15,
-        color="black",
-        viewport=True               # Uses the 0-1 coordinate system
-    )
-
-    # Fix camera position and zoom
-    p.camera_position = 'xy'
-    p.camera.azimuth += 30
-    p.camera.elevation += 180
-    # Save screenshot
-    p.screenshot(f"results/{fname}.png", transparent_background=True)
-    p.close()
-
-    # PLot glial potential in roi
+    # Plot glial potential in roi
     grid_glial_roi = grid_glial.clip_box(bounds=roi_bounds, invert=False)
     p = pyvista.Plotter(off_screen=True)
     p.add_mesh(
@@ -432,103 +259,92 @@ def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, text, i):
     p.screenshot(f"results/{fname}_roi.png", transparent_background=True)
     p.close()
 
-
-def plot_3D(x, origin, camera_position, grid_glial, grid_glial_init, i):
+def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, custom_labels, text, i):
 
     # Then assign it back to a mesh to plot it
     diff_array = grid_glial.point_data["phi_M_2"] - grid_glial_init.point_data["phi_M_2"]
     grid_glial["diff"] = diff_array
 
-    clim = [8, 16]
-
-    # Make plot zoom in glial
+    # Plot the original (ghosted) and the slice
     p = pyvista.Plotter(off_screen=True)
 
-    custom_labels = {
-        8: "8",
-        10: "10",
-        12: "12",
-        14: "14",
-        16: "16",
-    }
 
-    position_x=0.85
-    position_y=0.25
-    position=(0.9, 0.57)
-
-    sargs = dict(
-        title="",
-        vertical=True,
-        position_x=position_x,
-        position_y=position_y,
-        height=0.5,
-        n_labels=0,
-        width=0.1,
-        label_font_size=25,
-        shadow=True,
-        fmt="%.0f", # Decimal formatting
+    p.add_mesh(
+        grid_glial,
+        scalars="diff",
+        scalar_bar_args=sargs_glial, \
+        cmap=cmap_glial,
+        clim=clim,
+        annotations=custom_labels,
     )
 
-    p.add_mesh(grid_glial,
-               scalars="diff",
-               cmap="inferno",
-               scalar_bar_args=sargs,
-               annotations=custom_labels, 
-               clim=clim)
+    p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
 
-    p.add_mesh(roi_box, color="black", style="wireframe", line_width=5,
-            label="ROI", show_edges=True)
-
+    # add title to colorbar
     p.add_text(
-        r"$\phi_M$ (mV)",
-        position=position, # Adjust X and Y as needed
-        orientation=-90,   # Rotate text 90 degrees
+        r"$\Delta \phi_M \rm (mV)$",
+        position=(0.91, 0.58),     # Right side, halfway up
         font_size=14,
-        viewport=True
+        color="black",
+        viewport=True,              # Uses the 0-1 coordinate system
+        orientation=-90,            # Rotate text 90 degrees
+    )
+    # add title to colorbar
+    p.add_text(
+        text,
+        position=(0.5, 0.84),       # Right side, halfway up
+        font_size=15,
+        color="black",
+        viewport=True,              # Uses the 0-1 coordinate system
+        orientation=-90,            # Rotate text 90 degrees
     )
 
     # Fix camera position and zoom
-    p.camera_position = 'yz'
-    p.camera.azimuth += 225
-    p.camera.elevation += 15
-    p.reset_camera()
+    p.camera_position = 'xy'
+    p.camera.azimuth += 30
+    p.camera.elevation += 180
+
+    # Fix camera position and zoom
+    #p.camera_position = 'yz'
+    #p.camera.azimuth += 225
+    #p.camera.elevation += 15
+    #p.reset_camera()
 
     # Save screenshot
-    p.screenshot(f"results/glial_{i}.png", transparent_background=True)
+    p.screenshot(f"results/{fname}.png", transparent_background=True)
     p.close()
 
-    clipped_glial = grid_glial.clip_box(bounds=roi_bounds, invert=False)
-
-    # Make plot zoom in glial
+    # PLot glial potential in roi
+    grid_glial_roi = grid_glial.clip_box(bounds=roi_bounds, invert=False)
     p = pyvista.Plotter(off_screen=True)
 
-    p.add_mesh(clipped_glial,
-               scalars="diff",
-               cmap="inferno",
-               scalar_bar_args=sargs,
-               annotations=custom_labels,
-               clim=clim,
-               show_scalar_bar=False,
-               )
-
+    p.add_mesh(
+        grid_glial_roi,
+        scalars="diff",
+        scalar_bar_args=sargs_glial,
+        cmap=cmap_glial,
+        clim=clim,
+        show_scalar_bar=False,
+    )
     p.add_mesh(roi_box, color="black", style="wireframe", line_width=5,
             label="ROI", show_edges=True)
 
-    roi_point = pyvista.PolyData([x_M, y_M, z_M])
-    p.add_mesh(roi_point, color=c_point, point_size=30, render_points_as_spheres=True)
+    # Fix camera position and zoom
+    p.camera_position = 'xy'
+    p.camera.azimuth += 30
+    p.camera.elevation += 180
+    # Save screenshot
 
     # Fix camera position and zoom
-    p.camera_position = 'yz'
-    p.camera.azimuth += 140 + 90 + 90
-    p.camera.elevation += 20
-    p.reset_camera()
+    #p.camera_position = 'yz'
+    #p.camera.azimuth += 225
+    #p.camera.elevation += 15
+    #p.reset_camera()
 
-    # Save screenshot
-    p.screenshot(f"results/glial_roi_{i}.png", transparent_background=True)
+    p.screenshot(f"results/{fname}_roi.png", transparent_background=True)
     p.close()
 
-
-def plot_2D(ion, x, position_bar, position_text, origin, camera_position,
+def plot_ECS_concentration(ion, x, position_bar, position_text, origin, camera_position,
         grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim):
 
     slice_plane_ECS = grid_ECS.slice(normal=x, origin=origin)
@@ -543,7 +359,7 @@ def plot_2D(ion, x, position_bar, position_text, origin, camera_position,
     sargs = dict(
         title="",
         vertical=True,
-        position_x=position_x, 
+        position_x=position_x,
         position_y=position_y,
         height=0.5,
         n_labels=0,
@@ -613,13 +429,14 @@ def plot_2D(ion, x, position_bar, position_text, origin, camera_position,
     p.camera_position = camera_position
 
     # 4. Save the screenshot
-    p.screenshot(f"results/2D_ECS_{ion}_roi_{x}.png", transparent_background=True)
+    p.screenshot(f"results/ECS_{ion}_roi_{x}.png", transparent_background=True)
     p.close()
  
-#dir = "baseline"
-#text = r"$\rm baseline$"
-#clim = [6.88, 9.05] # adjusted ECS
-#fname = "astrocyte_potential_bs"
+dir = "baseline"
+text = r""
+clim = [7.38, 7.82] # adjusted ECS
+custom_labels = {7.4:"7.4", 7.5:"7.5", 7.6:"7.6", 7.7:"7.7", 7.8:"7.8"}
+fname = "astrocyte_potential_bs"
 
 # ICS
 #------------------------------------#
@@ -672,15 +489,15 @@ def plot_2D(ion, x, position_bar, position_text, origin, camera_position,
 #clim = [7.66, 10.54] # adjusted ECS
 #fname = "astrocyte_potential_EI31"
 
-dir = "ECS-tort-x44"
-text = r"$\rm \lambda_e \times 4.4$"
-clim = [7.43, 12.89] # adjusted ECS
-fname = "astrocyte_potential_E44"
-
-dir = "ECS-ICS-tort-x44"
-text = r"$\rm \lambda_e, \lambda_i \times 4.4$"
-clim = [7.43, 15.89] # adjusted ECS
-fname = "astrocyte_potential_EI44"
+#dir = "ECS-tort-x44"
+#text = r"$\rm \lambda_e \times 4.4$"
+#clim = [7.43, 12.89] # adjusted ECS
+#fname = "astrocyte_potential_E44"
+#
+#dir = "ECS-ICS-tort-x44"
+#text = r"$\rm \lambda_e, \lambda_i \times 4.4$"
+#clim = [7.43, 15.89] # adjusted ECS
+#fname = "astrocyte_potential_EI44"
 
 #dir = "baseline"
 #text = r"$\rm baseline$"
@@ -710,7 +527,7 @@ for time_index in [index_1, index_3]:
     ri_grid_glial = grid_glial.connectivity(extraction_mode='largest')
     ri_grid_glial_init = grid_glial_init.connectivity(extraction_mode='largest')
     # Plot membrane potential
-    plot_astrocyte_potential(fname_i, ri_grid_glial, ri_grid_glial_init, clim, text, i)
+    plot_astrocyte_potential(fname_i, ri_grid_glial, ri_grid_glial_init, clim, custom_labels, text, i)
 
     """
     # -------- plot ECS K+ ------------- "
@@ -731,9 +548,7 @@ for time_index in [index_1, index_3]:
 
     i += 1
 
-    dir = "baseline"
-    plot_3D('z', [c, c, x_M], 'xy', ri_grid_glial, ri_grid_glial_init, i)
-
+# Plot ECS K field
 grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
 grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_K_0", 0)
 custom_labels = {5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "10", 11: "11"}
@@ -741,9 +556,9 @@ cmap_ECS = "kgy"
 clim_K = [4, 11]
 position_bar=[0.15, 0.25]
 position_text=(0.2, 0.60)
+plot_ECS_concentration('K', 'x', position_bar, position_text, [x_M, c, c], "yz", grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim_K)
 
-plot_2D('K', 'x', position_bar, position_text, [x_M, c, c], "yz", grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim_K)
-
+# Plot ECS Na field
 grid_ECS = get_grid_field(dir, "results_sub_0", "c_Na_0", time_index)
 grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_Na_0", 0)
 custom_labels = {135: "135", 137: "137", 139: "139", 141: "141", 143: "143", 144: "144"}
@@ -751,9 +566,7 @@ cmap_ECS = "kbc"
 clim_Na = [135, 143]
 position_bar=[0.82, 0.25]
 position_text=(0.87, 0.60)
-
-plot_2D('Na', 'x', position_bar, position_text, [x_M, c, c], "yz", grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim_Na)
-
+plot_ECS_concentration('Na', 'x', position_bar, position_text, [x_M, c, c], "yz", grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim_Na)
 
 """
 # Calculate averages
