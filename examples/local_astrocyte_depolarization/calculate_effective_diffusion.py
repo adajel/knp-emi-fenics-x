@@ -19,14 +19,10 @@ from dolfinx.fem.petsc import (
 
 from ufl import ln
 
-t = 0.0         # Start time (ms)
-T = 0.1         # final time (ms)
+t = 0.0             # Start time (ms)
+T = 0.1             # final time (ms)
 num_steps = 4
 dt = T / num_steps  # time step size
-
-#L = 5e-4        # cm
-#D_K = 1.96e-8   # diffusion coefficients K (cm²/ms)
-#sigma = 1.0e-4  # sd
 
 L = 5e-4        # cm
 D_K = 1.96e-8   # diffusion coefficients K (cm²/ms)

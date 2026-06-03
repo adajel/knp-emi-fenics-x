@@ -370,6 +370,11 @@ def plot_3D_concentration(fname_in, fname_out, dt, Tstop, x, tag, \
         f_g_tot.write("%.10f \n" % p)
     f_g_tot.close()
 
+    f_g_Kir = open(f'results/{fname_in}/g_Kir_{fname_out}.txt', "w")
+    for p in g_Kir:
+        f_g_Kir.write("%.10f \n" % p)
+    f_g_Kir.close()
+
     f_sigma_i = open(f'results/{fname_in}/sigma_i_{fname_out}.txt', "w")
     for p in sigma_i:
         f_sigma_i.write("%.10f \n" % p)
