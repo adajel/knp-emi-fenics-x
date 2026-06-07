@@ -277,7 +277,6 @@ def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, custom_la
         font_size=15,
         color="black",
         viewport=True,              # Uses the 0-1 coordinate system
-        orientation=-90,            # Rotate text 90 degrees
     )
 
     # Fix camera position and zoom
@@ -417,29 +416,34 @@ def plot_ECS_concentration(ion, x, position_bar, position_text, origin, camera_p
     # 4. Save the screenshot
     p.screenshot(f"results/ECS_{ion}_roi_{x}.png", transparent_background=True)
     p.close()
- 
-dir = "baseline"
-text = r""
-clim = [7.38, 7.82] # adjusted ECS
-custom_labels = {7.4:"7.4", 7.5:"7.5", 7.6:"7.6", 7.7:"7.7", 7.8:"7.8"}
-fname = "astrocyte_potential_bs"
 
-# ICS
+# Baseline 3D
 #------------------------------------#
+#dir = "baseline"
+#text = r""
+#clim = [7.38, 7.82] # adjusted ECS
+#custom_labels = {7.4:"7.4", 7.5:"7.5", 7.6:"7.6", 7.7:"7.7", 7.8:"7.8"}
+#fname = "astrocyte_potential_bs"
+
+# ICS tort up
+#------------------------------------#
+clim = [6.88, 9.05]
+custom_labels = {6.9:"6.9", 7.2:"7.2", 7.5:"7.5", 7.8:"7.8", 8.1:"8.1", 8.4:"8.4", 8.7:"8.7", 9.0:"9.0"}
+
+dir = "baseline"
+text = r"$\rm baseline$"
+fname = "astrocyte_potential_I_bs"
 
 #dir = "ICS-tort-x13"
 #text = r"$\rm \lambda_i \times 1.3$"
-#clim = [6.88, 9.05] # adjusted ECS
 #fname = "astrocyte_potential_I13"
 
 #dir = "ICS-tort-x31"
 #text = r"$\rm \lambda_i \times 3.1$"
-#clim = [6.88, 9.05] # adjusted ECS
 #fname = "astrocyte_potential_I31"
 
 #dir = "ICS-tort-x5"
 #text = r"$\rm \lambda_i \times 4.4$"
-#clim = [6.88, 9.05] # adjusted ECS
 #fname = "astrocyte_potential_I44"
 
 # ECS
