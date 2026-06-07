@@ -13,12 +13,22 @@ colors_p3 = [astro_colors[2], neuron_colors[2]]
 # --- Data ---
 labels = ['astro', 'neuron']
 
-pillar_1 = [4.9, 8.8]
-pillar_2 = [5.3, 7.6]
-pillar_3 = [3.5, 6.50]
+pillar_1 = [12.78, 8.9]     # D1
+pillar_2 = [10.42, 10.81]   # D2
+pillar_3 = [11.38, 10.2]    # D3
+
+# D1
+#surface_to_vol_astro 12.775456176586024
+#surface_to_vol_neuro 8.90704728661668
+# D2
+# surface_to_vol_astro 10.418836655591607
+#surface_to_vol_neuro 10.808209702225767
+# D3
+#surface_to_vol_astro 11.376386903203768
+#surface_to_vol_neuro 10.181949811569377
 
 # --- Spacing Controls ---
-group_spacing = 0.75  # Lower this number to bring the 3 categories closer together
+group_spacing = 0.7   # Lower this number to bring the 3 categories closer together
 width = 0.22          # Width of each individual bar
 
 # Calculate center positions for each category group
@@ -78,7 +88,7 @@ ax.yaxis.grid(True, color='black', linewidth=1.5)
 ax.set_axisbelow(False) 
 
 # Formatting ticks
-plt.yticks([2, 4, 6, 8, 10], fontsize=15)
+plt.yticks([4, 8, 12, 16], fontsize=15)
 ax.tick_params(direction='out', length=10, width=2)
 
 plt.tight_layout()
