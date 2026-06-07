@@ -1,0 +1,24 @@
+name : "synapse_D1"
+raw:
+  cloudpath : "precomputed://gs://iarpa_microns/minnie/minnie65/seg_m1300"
+  position : "162258-200928-20530"
+  mip : 1       # 2 is 40x40 lower mip levels, higher resolution (the datasets comes with different levels of resolution and we can choose a fine or a coarse one)
+  size : 6000
+processing:
+  dx : 20 # (mip 2 in maybe 40x40). Try increasing!
+  operation :
+    - "ncells ncells=100 keep_cell_labels='[864691135526708827, 864691136144674612, 864691136298097435]'"
+    - "removeislands minsize=5000"
+    - "dilate radius=2"
+    - "smooth iterations=3 radius=2" # increasing radius, iterations does not do much
+    - "smooth iterations=2 radius=1 labels='[864691137020428398]'"
+    - "smooth iterations=2 radius=1 labels='[864691136144674612]'"
+    - "smooth iterations=2 radius=1 labels='[864691135384117978]'"
+    - "erode radius=2"
+    - "removeislands minsize=5000"
+meshing:
+    envelopsize : 16
+
+# presyn: 864691137020428398  # tag 6
+# postsyn: 864691136144674612 # tag 70
+# astro: 864691135384117978   # tag 3
