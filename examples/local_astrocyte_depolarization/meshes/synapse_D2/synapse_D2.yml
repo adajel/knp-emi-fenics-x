@@ -14,11 +14,11 @@ processing:
     - "smooth iterations=2 radius=1 labels='[864691135509288969]'"
     - "smooth iterations=2 radius=1 labels='[864691136144674612]'"
     - "smooth iterations=2 radius=1 labels='[864691135610629775]'"
-    - "erode radius=2"
+    - "erode radius=1"
     - "removeislands minsize=5000"
 meshing:
     envelopsize : 16
 
 # s2: 864691135509288969 # 4
-# s2: 864691136144674612 # 70
+# s2: 864691136144674612 # 68
 # as: 864691135610629775 # 3

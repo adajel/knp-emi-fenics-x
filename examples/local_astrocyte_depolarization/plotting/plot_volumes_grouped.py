@@ -14,31 +14,9 @@ colors_p3 = [ecs_colors[2], astro_colors[2], neuron_colors[2]]
 # --- Data ---
 labels = ['ECS', 'astro', 'neuron']
 
-pillar_1 = [26.9, 9.7, 63.4]        # D1
-pillar_2 = [28.10, 15.40, 66.20]    # D2
-pillar_3 = [30.8, 13.6,  55.7]     # D3
-
-# D1
-#surface_to_vol_astro 12.775456176586024
-#surface_to_vol_neuro 8.90704728661668
-#ECS vol share 26.898217772568287
-#glial vol share 5.184411242063624
-#neuorn vol share 63.43083494080318
-
-# D2
-# surface_to_vol_astro 10.418836655591607
-#surface_to_vol_neuro 10.808209702225767
-#ECS vol share 30.819734265323373
-#glial vol share 13.55796514028478
-#neuorn vol share 55.62230059439185
-
-# D3
-#surface_to_vol_astro 11.376386903203768
-#surface_to_vol_neuro 10.181949811569377
-#ECS vol share 28.867387361535673
-#glial vol share 11.355164532107443
-#neuorn vol share 59.77744810635689
-
+pillar_1 = [16.5, 11.6, 71.8]        # D1
+pillar_2 = [19.1, 15.6, 65.2]    # D2
+pillar_3 = [18.3, 13.7,  68]     # D3
 
 # --- Spacing Controls ---
 group_spacing = 0.70  # Lower this number to bring the 3 categories closer together

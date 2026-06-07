@@ -1,12 +1,12 @@
 import yaml
-filename = "results/synapse_D1/meshes/meshstatistic.yml"
+filename = "meshes/meshstatistic.yml"
 
 with open(filename) as meshstats:
     ms = yaml.load(meshstats, Loader=yaml.UnsafeLoader)
     print(ms['ecs_share'])
     print("\n")
 
-    print("surface_to_vol_astro", sum(ms['cell_surface'][1:2])/sum(ms['cell_volume'][1:2])*1000)
+    print("surface_to_vol_astro", (ms['cell_surface'][1])/(ms['cell_volume'][1])*1000)
     print("surface_to_vol_neuro", (ms['cell_surface'][0] + sum(ms['cell_surface'][3:]))/ \
                                   (ms['cell_volume'][0] + sum(ms['cell_volume'][3:]))*1000)
 

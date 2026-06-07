@@ -24,8 +24,8 @@ def remap_tags(old_meshtags, mesh_object):
     # Astrocyte
     new_values[old_values == 2] = 2
     # Pre and post synaptic neurons
-    #new_values[old_values == 34] = 3
-    #new_values[old_values == 48] = 4
+    new_values[old_values == 34] = 3
+    new_values[old_values == 45] = 4
 
     dim = mesh_object.topology.dim
     return dolfinx.mesh.meshtags(mesh_object, dim, indices, new_values)

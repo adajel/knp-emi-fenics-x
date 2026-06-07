@@ -14,11 +14,11 @@ processing:
     - "smooth iterations=2 radius=1 labels='[864691137020428398]'"
     - "smooth iterations=2 radius=1 labels='[864691136144674612]'"
     - "smooth iterations=2 radius=1 labels='[864691135384117978]'"
-    - "erode radius=2"
+    - "erode radius=1"
     - "removeislands minsize=5000"
 meshing:
     envelopsize : 16
 
 # presyn: 864691137020428398  # tag 6
-# postsyn: 864691136144674612 # tag 70
+# postsyn: 864691136144674612 # tag 71
 # astro: 864691135384117978   # tag 3
