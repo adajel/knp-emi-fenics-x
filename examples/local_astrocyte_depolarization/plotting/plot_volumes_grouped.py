@@ -27,7 +27,7 @@ x = np.arange(len(labels)) * group_spacing
 
 # --- Create Plot ---
 # Reduced figure width from 10 to 7.5 to match the tighter grouping
-fig, ax = plt.subplots(figsize=(7.5, 6))
+fig, ax = plt.subplots(figsize=(7.5, 5))
 
 # Plot the three pillars
 rects1 = ax.bar(x - width, pillar_1, width, color=colors_p1)
@@ -47,11 +47,11 @@ def add_labels(rects):
 
         ax.text(
             rect.get_x() + rect.get_width()/2, 
-            height + 2.0,       # Slightly increased padding above the bar
+            height + 1.0,       # Slightly increased padding above the bar
             label_text, 
             ha='center', 
             va='bottom', 
-            fontsize=15,        # Slightly smaller to fit clustered layout
+            fontsize=18,        # Slightly smaller to fit clustered layout
             #fontweight='bold',  # Made text bold
             color='#2c3e50'     # Clean dark slate color instead of default black
         )
@@ -79,7 +79,7 @@ ax.yaxis.grid(True, color='black', linewidth=1.5)
 ax.set_axisbelow(False) 
 
 # Formatting ticks
-plt.yticks([20, 40, 60, 80], fontsize=15)
+plt.yticks([25, 50, 75], fontsize=15)
 ax.tick_params(direction='out', length=10, width=2)
 
 plt.tight_layout()

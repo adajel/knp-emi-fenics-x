@@ -1,5 +1,4 @@
 import matplotlib as mpl
-import pyvista
 import ufl
 import numpy as np
 
@@ -7,8 +6,6 @@ from petsc4py import PETSc
 from mpi4py import MPI
 
 from dolfinx import fem, mesh, io, plot
-from dolfinx.fem import assemble_scalar
-
 from dolfinx.fem.petsc import (
     assemble_vector,
     assemble_matrix,
@@ -17,16 +14,15 @@ from dolfinx.fem.petsc import (
     set_bc,
 )
 
-from ufl import ln
-
-t = 0.0             # Start time (ms)
-T = 0.1             # final time (ms)
+t = 0.0  # Start time (ms)
+T = 0.1  # Final time (ms)
 num_steps = 4
 dt = T / num_steps  # time step size
 
-L = 5e-4        # cm
-D_K = 1.96e-8   # diffusion coefficients K (cm²/ms)
-sigma = 1.0e-4  # sd
+#L = 5e-4       # cm
+L = 10e-4       # cm
+D_K = 1.98e-8  # cm^2/ms
+sigma = 1.0e-4 # standard deviation cm
 
 nx, ny, nz = 50, 50, 50
 domain = mesh.create_box(
@@ -35,10 +31,11 @@ domain = mesh.create_box(
     [nx, ny, nz],
     mesh.CellType.tetrahedron,
 )
+
 V = fem.functionspace(domain, ("Lagrange", 1))
 
 def initial_condition(x, a=5, sigma=sigma):
-    return a*np.exp(-a * (x[0] ** 2 + x[1] ** 2 + x[2] ** 2)/(2*sigma*sigma))
+    return a * np.exp(-a * (x[0] ** 2 + x[1] ** 2 + x[2] ** 2)/(2*sigma*sigma))
 
 u_n = fem.Function(V)
 u_n.name = "u_n"
@@ -65,7 +62,6 @@ u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 f = fem.Constant(domain, PETSc.ScalarType(0))
 a = u * v * ufl.dx + dt * D_K * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
 L = (u_n + dt * f) * v * ufl.dx
-
 bilinear_form = fem.form(a)
 linear_form = fem.form(L)
 
@@ -78,24 +74,15 @@ solver.setOperators(A)
 solver.setType(PETSc.KSP.Type.PREONLY)
 solver.getPC().setType(PETSc.PC.Type.LU)
 
-# =============================================================================
-# 4. Define MSD Observables
-# =============================================================================
+# Define (mean squared displacement) observables
 x_coord = ufl.SpatialCoordinate(domain)
 r_sq = x_coord[0]**2 + x_coord[1]**2 + x_coord[2]**2
-
 # Forms to calculate total mass and variance over the domain
 mass_form = fem.form(u_n * ufl.dx)
 msd_form = fem.form(r_sq * u_n * ufl.dx)
-
+# lists for time and mean squared displacement
 time_list = []
 msd_list = []
-
-#time_history = []
-#variance_history = []
-#
-#x_coord = ufl.SpatialCoordinate(domain)
-#r_sq_expr = x_coord[0]**2 + x_coord[1]**2 + x_coord[2]**2
 
 for i in range(num_steps):
     t += dt
@@ -120,12 +107,11 @@ for i in range(num_steps):
     # Write solution to file
     xdmf.write_function(uh, t)
 
-    # Mean Squared Displacement: the unnormalized spatial variance of your
-    # spreading Gaussian profile integrated across the entire 3D mesh.
+    # Calculate mean squared displacement (the unnormalized spatial variance of your
+    # spreading Gaussian profile integrated across the entire 3D mesh).
     total_mass = fem.assemble_scalar(mass_form)
     raw_msd = fem.assemble_scalar(msd_form)
     normalized_msd = raw_msd / total_mass
-
     time_list.append(t)
     msd_list.append(normalized_msd)
 
