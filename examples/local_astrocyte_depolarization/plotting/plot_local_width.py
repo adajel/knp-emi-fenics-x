@@ -74,6 +74,38 @@ def get_grid(finame, funame, time):
 
     return grid
 
+def print_vw_avg(mesh, box_bounds=None):
+
+    scalar_name = 'local_width'
+
+    # Apply box clip if bounds are provided
+    if box_bounds is not None:
+        working_mesh = mesh.clip_box(bounds=box_bounds, invert=False)
+    else:
+        working_mesh = mesh.copy()
+
+    # Ensure data is mapped onto cells (elements) for volume weighting
+    if scalar_name in working_mesh.point_data:
+        working_mesh = working_mesh.point_data_to_cell_data()
+
+    # Compute cell sizes explicitly
+    mesh_with_sizes = working_mesh.compute_cell_sizes()
+
+    # Extract arrays and enforce positive volumes using np.abs()
+    volumes = np.abs(mesh_with_sizes.cell_data['Volume'])
+    scalars = mesh_with_sizes.cell_data[scalar_name]
+
+    # Final math
+    true_total_volume = np.sum(volumes)
+    true_spatial_average = np.sum(scalars * volumes) / true_total_volume
+
+    print("------")
+    print(f"Calculated Volume : {true_total_volume:.4f}")
+    print(f"Spatial Average   : {true_spatial_average:.4f}")
+
+    return
+
+
 def plot_ECS_width(x, clim, origin, camera_position, grid_syn_1, grid_syn_2, grid_ECS_width):
 
     slice_plane_ECS_width = grid_ECS_width.slice(normal=x, origin=origin)
@@ -311,3 +343,8 @@ plot_glial_width('z', clim, [c, c, z_M], "xy", grid_glial_width)
 
 # Make plot of glial cell in ROI with point
 plot_roi_with_point('x', [x_M, c, c], "xy", grid_glial)
+
+print_vw_avg(grid_glial_width)
+print_vw_avg(grid_glial_width, roi_bounds)
+print_vw_avg(grid_ECS_width)
+print_vw_avg(grid_ECS_width, roi_bounds)

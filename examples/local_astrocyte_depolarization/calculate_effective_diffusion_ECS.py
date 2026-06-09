@@ -1,5 +1,4 @@
 import matplotlib as mpl
-import pyvista
 import ufl
 import numpy as np
 
@@ -7,8 +6,6 @@ from petsc4py import PETSc
 from mpi4py import MPI
 
 from dolfinx import fem, mesh, io, plot
-from dolfinx.fem import assemble_scalar
-
 from dolfinx.fem.petsc import (
     assemble_vector,
     assemble_matrix,
@@ -17,29 +14,52 @@ from dolfinx.fem.petsc import (
     set_bc,
 )
 
-from ufl import ln
+def read_mesh(mesh_file):
 
-t = 0.0     # Start time (s)
-T = 0.1     # Final time (s)
-L = 5       # um
+    # Set ghost mode
+    ghost_mode = dolfinx.mesh.GhostMode.shared_facet
 
-num_steps = 5
+    with dolfinx.io.XDMFFile(comm, mesh_file, 'r') as xdmf:
+        # Read mesh and cell tags
+        mesh = xdmf.read_mesh(ghost_mode=ghost_mode)
+        ct = xdmf.read_meshtags(mesh, name='cell_marker')
+
+        # Create facet entities, facet-to-cell connectivity and cell-to-cell connectivity
+        mesh.topology.create_entities(mesh.topology.dim-1)
+        mesh.topology.create_connectivity(mesh.topology.dim-1, mesh.topology.dim)
+        mesh.topology.create_connectivity(mesh.topology.dim, mesh.topology.dim)
+
+        # Read facets
+        ft = xdmf.read_meshtags(mesh, name='facet_marker')
+
+    xdmf.close()
+
+    return mesh, ct, ft
+
+
+mesh_file = config['mesh_file'] # path to mesh file
+fname = config["fname"]         # directory for saving results
+
+print(f'{bcolors.OKBLUE}Reading mesh from {mesh_file} ...')
+mesh, ct, ft = read_mesh(mesh_file)
+print(f'mesh read. ms{bcolors.ENDC}')
+
+domian, _, _, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
+
+t = 0.0  # Start time (ms)
+T = 0.1  # Final time (ms)
+num_steps = 4
 dt = T / num_steps  # time step size
 
-D_K = 1.5   # um²/s
-sigma = 1.0 # um
+#L = 5e-4       # cm
+L = 10e-4       # cm
+D_K = 1.98e-8  # cm^2/ms
+sigma = 1.0e-4 # standard deviation cm
 
-nx, ny, nz = 50, 50, 50
-domain = mesh.create_box(
-    MPI.COMM_WORLD,
-    [np.array([-L/2, -L/2, -L/2]), np.array([L/2, L/2, L/2])],
-    [nx, ny, nz],
-    mesh.CellType.tetrahedron,
-)
 V = fem.functionspace(domain, ("Lagrange", 1))
 
 def initial_condition(x, a=5, sigma=sigma):
-    return a*np.exp(-a * (x[0] ** 2 + x[1] ** 2 + x[2] ** 2)/(2*sigma*sigma))
+    return a * np.exp(-a * (x[0] ** 2 + x[1] ** 2 + x[2] ** 2)/(2*sigma*sigma))
 
 u_n = fem.Function(V)
 u_n.name = "u_n"
@@ -54,8 +74,7 @@ bc = fem.dirichletbc(
     PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V
 )
 
-xdmf = io.XDMFFile(domain.comm, "diffusion_D01.xdmf", "w")
-#xdmf = io.XDMFFile(domain.comm, "diffusion_D1.xdmf", "w")
+xdmf = io.XDMFFile(domain.comm, "diffusion_ECS.xdmf", "w")
 xdmf.write_mesh(domain)
 
 uh = fem.Function(V)
@@ -67,7 +86,6 @@ u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 f = fem.Constant(domain, PETSc.ScalarType(0))
 a = u * v * ufl.dx + dt * D_K * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
 L = (u_n + dt * f) * v * ufl.dx
-
 bilinear_form = fem.form(a)
 linear_form = fem.form(L)
 
@@ -80,24 +98,15 @@ solver.setOperators(A)
 solver.setType(PETSc.KSP.Type.PREONLY)
 solver.getPC().setType(PETSc.PC.Type.LU)
 
-# =============================================================================
-# 4. Define MSD Observables
-# =============================================================================
+# Define (mean squared displacement) observables
 x_coord = ufl.SpatialCoordinate(domain)
 r_sq = x_coord[0]**2 + x_coord[1]**2 + x_coord[2]**2
-
 # Forms to calculate total mass and variance over the domain
 mass_form = fem.form(u_n * ufl.dx)
 msd_form = fem.form(r_sq * u_n * ufl.dx)
-
+# lists for time and mean squared displacement
 time_list = []
 msd_list = []
-
-#time_history = []
-#variance_history = []
-#
-#x_coord = ufl.SpatialCoordinate(domain)
-#r_sq_expr = x_coord[0]**2 + x_coord[1]**2 + x_coord[2]**2
 
 for i in range(num_steps):
     t += dt
@@ -122,11 +131,11 @@ for i in range(num_steps):
     # Write solution to file
     xdmf.write_function(uh, t)
 
-    # calculate 
+    # Calculate mean squared displacement (the unnormalized spatial variance of your
+    # spreading Gaussian profile integrated across the entire 3D mesh).
     total_mass = fem.assemble_scalar(mass_form)
     raw_msd = fem.assemble_scalar(msd_form)
     normalized_msd = raw_msd / total_mass
-
     time_list.append(t)
     msd_list.append(normalized_msd)
 
@@ -143,7 +152,7 @@ slope, intercept = np.polyfit(6 * time_list[1:], msd_list[1:], 1)
 D_eff = slope
 
 print("\n" + "="*30)
-print(f"True Input D:       {D_K:.4f}")
-print(f"Calculated D_eff:   {D_eff:.4f}")
+print(f"True Input D:       {D_K:e}")
+print(f"Calculated D_eff:   {D_eff:e}")
 print(f"Relative Error:     {abs(D_eff - D_K)/D_K * 100:.2f}%")
 print("="*30)

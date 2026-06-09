@@ -36,12 +36,30 @@ def compute_local_width(mesh, ecs_id, labelname="label", width_bins=None):
             ecs["local_width"] = np.maximum(ecs["local_width"],  2*ri*(current_dist<ri))
     return ecs
 
-mesh = meshio.read("../meshes/mesh_size_5000/mesh.xdmf")
-meshio.write("mesh.vtk", mesh)
-grid = pv.read("mesh.vtk")
+#mesh = meshio.read("../meshes/mesh_size_5000/mesh.xdmf")
+#meshio.write("mesh.vtk", mesh)
+#grid = pv.read("mesh.vtk")
+#
+#ecs = compute_local_width(grid, ecs_id=1).cell_data_to_point_data(pass_cell_data=True)
+#ecs.save("ecs.vtk")
+#
+#ecs = compute_local_width(grid, ecs_id=100).cell_data_to_point_data(pass_cell_data=True)
+#ecs.save("glial.vtk")
 
-ecs = compute_local_width(grid, ecs_id=1).cell_data_to_point_data(pass_cell_data=True)
-ecs.save("ecs.vtk")
+for dname, glial_id in zip(['D1', 'D2', 'D3'], [3, 3, 2]):
+    mesh = meshio.read(f"../meshes/synapse_{dname}/meshes/mesh.xdmf")
+    meshio.write("mesh.vtk", mesh)
+    grid = pv.read("mesh.vtk")
 
-ecs = compute_local_width(grid, ecs_id=100).cell_data_to_point_data(pass_cell_data=True)
-ecs.save("glial.vtk")
+    print("Available Cell Arrays :", mesh.cell_data.keys())
+
+    ecs_id = 1
+    labelname="label"
+    grid.cell_data['label'] = [array.astype(np.int64) for array in grid.cell_data['label']]
+    ecs = grid.extract_cells(np.isin(mesh.cell_data[labelname], ecs_id))
+    exit(0)
+
+    ecs = compute_local_width(grid, ecs_id=1).cell_data_to_point_data(pass_cell_data=True)
+    ecs.save(f"ecs_{dname}.vtk")
+    glial = compute_local_width(grid, ecs_id=glial_id).cell_data_to_point_data(pass_cell_data=True)
+    glial.save(f"glial_{dname}.vtk")
