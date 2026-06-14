@@ -66,7 +66,6 @@ u_n = fem.Function(V)
 u_n.name = "u_n"
 u_n.interpolate(initial_condition)
 
-"""
 # Create boundary condition
 fdim = domain.topology.dim - 1
 boundary_facets = mesh.locate_entities_boundary(
@@ -75,7 +74,6 @@ boundary_facets = mesh.locate_entities_boundary(
 bc = fem.dirichletbc(
     PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V
 )
-"""
 
 xdmf = io.XDMFFile(domain.comm, "diffusion.xdmf", "w")
 xdmf.write_mesh(domain)
@@ -93,7 +91,7 @@ L = (u_n + dt * f) * v * ufl.dx
 bilinear_form = fem.form(a)
 linear_form = fem.form(L)
 
-A = assemble_matrix(bilinear_form)#, bcs=[bc])
+A = assemble_matrix(bilinear_form, bcs=[bc])
 A.assemble()
 b = create_vector(fem.extract_function_spaces(linear_form))
 
@@ -122,12 +120,10 @@ for i in range(num_steps):
         loc_b.set(0)
     assemble_vector(b, linear_form)
 
-    """
     # Apply Dirichlet boundary condition to the vector
     apply_lifting(b, [bilinear_form], [[bc]])
     b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
     set_bc(b, [bc])
-    """
 
     # Solve linear problem
     solver.solve(b, uh.x.petsc_vec)

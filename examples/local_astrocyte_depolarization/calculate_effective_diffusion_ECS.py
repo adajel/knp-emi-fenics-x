@@ -1,4 +1,4 @@
-import matplotlib as mpl
+import matplotlib.pyplot as plt
 import ufl
 import numpy as np
 
@@ -17,6 +17,27 @@ from dolfinx.fem.petsc import (
 )
 
 comm = MPI.COMM_WORLD
+
+# Define your box size (using your rescaled L = 5.0 um)
+box_L = 5.0
+atol = 1e-6  # Absolute tolerance to catch boundary nodes smoothly
+
+# 2. Define the geometric boundary locator
+def cube_boundary_locator(x):
+    # x[0] is X, x[1] is Y, x[2] is Z
+    on_x0 = np.isclose(x[0], 0.0, atol=atol)
+    on_xL = np.isclose(x[0], box_L,   atol=atol)
+
+    on_y0 = np.isclose(x[1], 0.0, atol=atol)
+    on_yL = np.isclose(x[1], box_L,   atol=atol)
+
+    on_z0 = np.isclose(x[2], 0.0, atol=atol)
+    on_zL = np.isclose(x[2], box_L,   atol=atol)
+
+    # A facet is on the cube boundary if it satisfies ANY of these conditions
+    return on_x0 | on_xL | on_y0 | on_yL | on_z0 | on_zL
+
+
 
 def read_mesh(mesh_file):
 
@@ -66,10 +87,8 @@ x_c, y_c, z_c = 2500e-7, 2500e-7, 2500e-7
 """
 
 # Scales units
-t = 0.0         # Start time (ms)
-#dt = 0.005     # Stable time step size (ms)
-dt = 0.0001     # Stable time step size (ms)
-#dt = 0.00005    # Stable time step size (ms)
+t = 0.0        # Start time (ms)
+dt = 0.005     # Stable time step size (ms)
 T = 0.1
 
 num_steps = int(T/dt)
@@ -89,16 +108,17 @@ u_n = dolfinx.fem.Function(V)
 u_n.name = "u_n"
 u_n.interpolate(initial_condition)
 
-"""
-# Create boundary condition
+# Get the indices of all exterior facets (tagged 1100)
 fdim = domain.topology.dim - 1
-boundary_facets = dolfinx.mesh.locate_entities_boundary(
-    domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool)
+
+# 3. Locate the entity indices of the outer boundary facets
+outer_boundary_facets = dolfinx.mesh.locate_entities_boundary(
+    domain, fdim, cube_boundary_locator
 )
+# 0 Dirichlet condition on outer boundary facets
 bc = dolfinx.fem.dirichletbc(
-    PETSc.ScalarType(0), dolfinx.fem.locate_dofs_topological(V, fdim, boundary_facets), V
+    PETSc.ScalarType(0), dolfinx.fem.locate_dofs_topological(V, fdim, outer_boundary_facets), V
 )
-"""
 
 xdmf = dolfinx.io.XDMFFile(domain.comm, "diffusion_ECS.xdmf", "w")
 xdmf.write_mesh(domain)
@@ -116,7 +136,7 @@ L_form = (u_n + dt * f) * v * ufl.dx
 bilinear_form = dolfinx.fem.form(a)
 linear_form = dolfinx.fem.form(L_form)
 
-A = assemble_matrix(bilinear_form)#, bcs=[bc])
+A = assemble_matrix(bilinear_form, bcs=[bc])
 A.assemble()
 
 # Using explicit template mapping to ensure compatibility across recent dolfinx releases
@@ -139,7 +159,54 @@ msd_form = dolfinx.fem.form(r_sq * u_n * ufl.dx)
 time_list = []
 msd_list = []
 
-for i in range(num_steps):
+# Setup plot profiles
+# ==========================================
+# 4. Preparation for 1D Center-Line Extraction
+# ==========================================
+
+
+# ==========================================
+# 4. Preparation for 1D Center-Line Extraction
+# ==========================================
+num_sampling_points = 200
+x_line = np.linspace(0.0, box_L, num_sampling_points)
+
+# Create an array of 3D coordinates lying along the exact center axis
+sampling_points = np.zeros((num_sampling_points, 3))
+sampling_points[:, 0] = x_line
+sampling_points[:, 1] = y_c
+sampling_points[:, 2] = z_c
+
+bb_tree = dolfinx.geometry.bb_tree(domain, domain.topology.dim)
+cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, sampling_points)
+colliding_cells = dolfinx.geometry.compute_colliding_cells(domain, cell_candidates, sampling_points)
+
+# FIX: Filter out points that fall inside neurons or outside boundaries
+valid_indices = []
+valid_points = []
+cells = []
+
+for i in range(num_sampling_points):
+    links = colliding_cells.links(i)
+    if len(links) > 0:  # Only append if a valid ECS cell is found!
+        valid_indices.append(i)
+        valid_points.append(sampling_points[i])
+        cells.append(links[0])
+
+valid_points = np.array(valid_points)
+cells = np.array(cells, dtype=np.int32)
+
+plot_steps = [0, 2, 5, 20]
+profiles = {}
+
+# Capture initial profile at t = 0 using placeholder arrays
+if 0 in plot_steps:
+    profiles[0] = np.full(num_sampling_points, np.nan)
+    if len(cells) > 0:
+        profiles[0][valid_indices] = u_n.eval(valid_points, cells).flatten()
+
+for step in range(1, num_steps + 1):
+
     t += dt
 
     # Update the right hand side reusing the initial vector
@@ -147,12 +214,10 @@ for i in range(num_steps):
         loc_b.set(0)
     assemble_vector(b, linear_form)
 
-    """
     # Apply Dirichlet boundary condition to the vector
     apply_lifting(b, [bilinear_form], [[bc]])
     b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
     set_bc(b, [bc])
-    """
 
     # Solve system
     solver.solve(b, uh.x.petsc_vec)
@@ -173,6 +238,13 @@ for i in range(num_steps):
 
     time_list.append(t)
     msd_list.append(normalized_msd)
+
+    # Plot profiles
+    # Capture 1D concentration profiles safely
+    if step in plot_steps:
+        profiles[step] = np.full(num_sampling_points, np.nan)
+        if len(cells) > 0:
+            profiles[step][valid_indices] = uh.eval(valid_points, cells).flatten()
 
 xdmf.close()
 
@@ -197,4 +269,33 @@ print(f"True Input D:       {D_K:e}")
 print(f"Calculated D_eff:   {D_eff:e}")
 print(f"Relative Error:     {abs(D_eff - D_K)/D_K * 100:.2f}%")
 print(f"Tortuosity:         {lmda}")
-print("="*30)
+print("\n" + "="*30)
+
+# Plot 1D concentration profiles
+fig1, ax1 = plt.subplots(figsize=(7, 5))
+
+for step in plot_steps:
+    current_time = step * dt
+    ax1.plot(x_line, profiles[step], label=f"$t = {current_time:.3f}$ ms", lw=2)
+
+ax1.set_xlabel(r"Position along center line, $x$ ($\mu$m)", fontsize=11)
+ax1.set_ylabel(r"Concentration, $u$ (arbitrary units)", fontsize=11)
+ax1.set_title("1D Concentration Profiles Over Time Through Domain Center", fontsize=11, fontweight='bold')
+ax1.grid(True, linestyle="--", alpha=0.6)
+ax1.legend(loc="upper right", frameon=True)
+plt.savefig("gaussian_profiles_1d_serial.png", dpi=300, bbox_inches="tight")
+
+# Plot mean squared displacement vs time
+fig2, ax2 = plt.subplots(figsize=(7, 5))
+
+ax2.plot(time_list, msd_list, 'o', label="Simulated MSD Data", color="#1f77b4", markersize=6, alpha=0.8)
+
+fit_line = slope * time_list + intercept
+ax2.plot(time_list, fit_line, '-', label=f"Linear Fit ($\Delta$MSD/$\Delta$t = {slope:.4f})", color="#d62728", lw=2)
+
+ax2.set_xlabel(r"Time, $t$ (ms)", fontsize=11)
+ax2.set_ylabel(r"Mean Squared Displacement, $\langle r^2 \rangle$ ($\mu$m$^2$)", fontsize=11)
+ax2.set_title("Mean Squared Displacement (MSD) vs Time", fontsize=11, fontweight='bold')
+ax2.grid(True, linestyle="--", alpha=0.6)
+ax2.legend(loc="upper left", frameon=True)
+plt.savefig("msd_vs_time_serial.png", dpi=300, bbox_inches="tight")
