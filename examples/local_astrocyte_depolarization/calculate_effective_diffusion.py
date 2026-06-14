@@ -14,35 +14,50 @@ from dolfinx.fem.petsc import (
     set_bc,
 )
 
+"""
 t = 0.0  # Start time (ms)
 #T = 0.1  # Final time (ms)
 #num_steps = 4
-T = 0.5  # Final time (ms)
-num_steps = 2
-dt = T / num_steps  # time step size
+
+#T = 0.1        # Final time (ms)
+#T = 1.0e-3      # Final time (ms)
+#num_steps = 2
+#dt = T / num_steps  # time step size
+
+# If choosing Option B (Fo = 0.5):
+dt = 0.005       # Time step size (ms)
+num_steps = 20  # Increase steps to see a nice progression over time
+T = num_steps * dt  # Final time (ms)
 
 L = 5e-4       # cm
-D_K = 1.98e-8  # cm^2/ms
-#sigma = 0.5e-4 # standard deviation cm
-sigma = 1.0e-4 # standard deviation cm
+D_K = 1.98e-9  # cm^2/ms
+sigma = 5.0e-5 # standard deviation cm
+"""
+
+# Units used: Length = micrometers (um), Time = milliseconds (ms)
+t = 0.0         # Start time (ms)
+dt = 0.005      # Stable time step size (ms)
+num_steps = 10  # Number of steps
+T = num_steps * dt
+
+box_L = 5.0    # 5e-4 cm scaled to 5.0 um
+D_K = 0.5      # 5.0e-9 cm^2/ms scaled to 0.5 um^2/ms
+sigma = 0.8    # 8.0e-5 cm scaled to 0.8 um
+x_c, y_c, z_c = 2.5, 2.5, 2.5
 
 nx, ny, nz = 50, 50, 50
 domain = mesh.create_box(
     MPI.COMM_WORLD,
-    [np.array([0, 0, 0]), np.array([L, L, L])],
+    [np.array([0, 0, 0]), np.array([box_L, box_L, box_L])],
     [nx, ny, nz],
     mesh.CellType.tetrahedron,
 )
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 
-# Shifted center coordinates: 2500e-7 = 2.5e-4 cm
+# Shifted center coordinates: 2.5e-4 cm = 2.5 um
 def initial_condition(x, a=5, sigma=sigma):
-    x_c, y_c, z_c = 2500e-7, 2500e-7, 2500e-7
     return a * np.exp(-a * ((x[0] - x_c) ** 2 + (x[1] - y_c) ** 2 + (x[2] - z_c) ** 2) / (2 * sigma * sigma))
-
-#def initial_condition(x, a=5, sigma=sigma):
-    #return a * np.exp(-a * (x[0] ** 2 + x[1] ** 2 + x[2] ** 2)/(2*sigma*sigma))
 
 u_n = fem.Function(V)
 u_n.name = "u_n"
@@ -83,7 +98,8 @@ solver.getPC().setType(PETSc.PC.Type.LU)
 
 # Define (mean squared displacement) observables
 x_coord = ufl.SpatialCoordinate(domain)
-r_sq = x_coord[0]**2 + x_coord[1]**2 + x_coord[2]**2
+#r_sq = x_coord[0]**2 + x_coord[1]**2 + x_coord[2]**2
+r_sq = (x_coord[0] - x_c)**2 + (x_coord[1] - y_c)**2 + (x_coord[2] - z_c)**2
 # Forms to calculate total mass and variance over the domain
 mass_form = fem.form(u_n * ufl.dx)
 msd_form = fem.form(r_sq * u_n * ufl.dx)
@@ -131,11 +147,16 @@ solver.destroy()
 time_list = np.array(time_list)
 msd_list = np.array(msd_list)
 
-slope, intercept = np.polyfit(6 * time_list[1:], msd_list[1:], 1)
-D_eff = slope
+slope, intercept = np.polyfit(time_list, msd_list, 1)
+D_eff = slope / 6.0
+#slope, intercept = np.polyfit(6 * time_list[1:], msd_list[1:], 1)
+#D_eff = slope
+
+lmda = np.sqrt(D_K/D_eff)
 
 print("\n" + "="*30)
 print(f"True Input D:       {D_K:e}")
 print(f"Calculated D_eff:   {D_eff:e}")
 print(f"Relative Error:     {abs(D_eff - D_K)/D_K * 100:.2f}%")
+print(f"Tortuosity:         {lmda}")
 print("="*30)

@@ -18,31 +18,6 @@ from dolfinx.fem.petsc import (
 
 comm = MPI.COMM_WORLD
 
-def create_measures(mesh, ct, ft):
-    """ Create measures, all measure defined on parent mesh """
-    # Define measures
-    dx = Measure('dx', domain=mesh, subdomain_data=ct)
-    ds = Measure('ds', domain=mesh, subdomain_data=ft)
-
-    # Get interface/membrane tags
-    gamma_tags = np.unique(ft.values)
-
-    subdomain_data = []
-    # Define measures on membrane interface gamma
-    for tag in gamma_tags:
-        ordered_integration_data = scifem.compute_interface_data(ct, ft.find(tag))
-        # Define measure for tag
-        subdomain_data.append((tag, ordered_integration_data.flatten()))
-
-    # Define measures on facet
-    dS = Measure(
-            "dS",
-            domain=mesh,
-            subdomain_data=subdomain_data,
-        )
-
-    return dx, dS, ds
-
 def read_mesh(mesh_file):
 
     # Set ghost mode
@@ -68,37 +43,41 @@ def read_mesh(mesh_file):
 mesh_file = "meshes/remarked_mesh/mesh.xdmf"
 mesh, ct, ft = read_mesh(mesh_file)
 
-ECS = {"name":"ECS",
-       "tag":0,              # NB! ECS tag must always be zero.
-}
+# Convert mesh from cm to um
+mesh.geometry.x[:] *= 1e4
 
-neuron = {"name":"neuron",
-          "tag":1,
-          "membrane_tags":[1],
-}
+ECS = {"name":"ECS", "tag":0}
 
-domain_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
-mesh_sub_1, sub_to_parent_1, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ct, neuron['tag'])
-mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, neuron['membrane_tags'])
+domain_0, _, _, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
 
+"""
 t = 0.0  # Start time (ms)
 T = 0.5  # Final time (ms)
 num_steps = 2
-
-#T = 0.1  # Final time (ms)
-#num_steps = 4
 #sigma = 5e-5 # standard deviation cm
 
 dt = T / num_steps  # time step size
 
 D_K = 1.98e-8  # cm^2/ms
-sigma = 1.0e-4 # standard deviation cm
+#sigma = 1.0e-4 # standard deviation cm
+#sigma = 0.5e-4 # standard deviation cm
+sigma = 5.0e-5 # standard deviation cm
+x_c, y_c, z_c = 2500e-7, 2500e-7, 2500e-7
+"""
+
+# Scales units
+t = 0.0         # Start time (ms)
+dt = 0.005      # Stable time step size (ms)
+num_steps = 10  # Number of steps
+T = num_steps * dt
+
+D_K = 0.5       # 1.98e-9 cm^2/ms scaled to 0.198 um^2/ms
+sigma = 0.8     # 8.0e-5 cm scaled to 0.8 u
+x_c, y_c, z_c = 2.5, 2.5, 2.5
 
 V0 = dolfinx.fem.functionspace(domain_0, ("Lagrange", 1))
 
-# Shifted center coordinates: 2500e-7 = 2.5e-4 cm
 def initial_condition(x, a=5, sigma=sigma):
-    x_c, y_c, z_c = 2500e-7, 2500e-7, 2500e-7
     return a * np.exp(-a * ((x[0] - x_c) ** 2 + (x[1] - y_c) ** 2 + (x[2] - z_c) ** 2) / (2 * sigma * sigma))
 
 u_n = dolfinx.fem.Function(V0)
@@ -125,12 +104,15 @@ xdmf.write_function(uh, t)
 u, v = ufl.TrialFunction(V0), ufl.TestFunction(V0)
 f = dolfinx.fem.Constant(domain_0, PETSc.ScalarType(0))
 a = u * v * ufl.dx + dt * D_K * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
-L = (u_n + dt * f) * v * ufl.dx
+L_form = (u_n + dt * f) * v * ufl.dx
+
 bilinear_form = dolfinx.fem.form(a)
-linear_form = dolfinx.fem.form(L)
+linear_form = dolfinx.fem.form(L_form)
 
 A = assemble_matrix(bilinear_form, bcs=[bc])
 A.assemble()
+
+# Using explicit template mapping to ensure compatibility across recent dolfinx releases
 b = create_vector(dolfinx.fem.extract_function_spaces(linear_form))
 
 solver = PETSc.KSP().create(domain_0.comm)
@@ -140,10 +122,12 @@ solver.getPC().setType(PETSc.PC.Type.LU)
 
 # Define (mean squared displacement) observables
 x_coord = ufl.SpatialCoordinate(domain_0)
-r_sq = x_coord[0]**2 + x_coord[1]**2 + x_coord[2]**2
+r_sq = (x_coord[0] - x_c)**2 + (x_coord[1] - y_c)**2 + (x_coord[2] - z_c)**2
+
 # Forms to calculate total mass and variance over the domain
 mass_form = dolfinx.fem.form(u_n * ufl.dx)
 msd_form = dolfinx.fem.form(r_sq * u_n * ufl.dx)
+
 # lists for time and mean squared displacement
 time_list = []
 msd_list = []
@@ -161,7 +145,7 @@ for i in range(num_steps):
     b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
     set_bc(b, [bc])
 
-    # Solve linear problem
+    # Solve system
     solver.solve(b, uh.x.petsc_vec)
     uh.x.scatter_forward()
 
@@ -175,6 +159,7 @@ for i in range(num_steps):
     # spreading Gaussian profile integrated across the entire 3D mesh).
     total_mass = dolfinx.fem.assemble_scalar(mass_form)
     raw_msd = dolfinx.fem.assemble_scalar(msd_form)
+
     normalized_msd = raw_msd / total_mass
     time_list.append(t)
     msd_list.append(normalized_msd)
@@ -188,11 +173,20 @@ solver.destroy()
 time_list = np.array(time_list)
 msd_list = np.array(msd_list)
 
-slope, intercept = np.polyfit(6 * time_list[1:], msd_list[1:], 1)
-D_eff = slope
+#slope, intercept = np.polyfit(6 * time_list[1:], msd_list[1:], 1)
+#D_eff = slope
+
+slope, intercept = np.polyfit(time_list, msd_list, 1)
+D_eff = slope / 6.0
+
+# Tortuosity lambda calculation (with homogeneous micrometer units)
+lmda = np.sqrt(D_K/D_eff)
 
 print("\n" + "="*30)
 print(f"True Input D:       {D_K:e}")
 print(f"Calculated D_eff:   {D_eff:e}")
 print(f"Relative Error:     {abs(D_eff - D_K)/D_K * 100:.2f}%")
+print(f"Tortuosity:         {lmda}")
 print("="*30)
+
+print()
