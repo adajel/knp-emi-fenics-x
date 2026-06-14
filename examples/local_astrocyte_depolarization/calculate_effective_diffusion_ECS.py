@@ -67,8 +67,10 @@ x_c, y_c, z_c = 2500e-7, 2500e-7, 2500e-7
 
 # Scales units
 t = 0.0         # Start time (ms)
-dt = 0.005      # Stable time step size (ms)
-T = 0.05
+#dt = 0.005     # Stable time step size (ms)
+dt = 0.0001     # Stable time step size (ms)
+#dt = 0.00005    # Stable time step size (ms)
+T = 0.1
 
 num_steps = int(T/dt)
 print(num_steps)
@@ -87,6 +89,7 @@ u_n = dolfinx.fem.Function(V)
 u_n.name = "u_n"
 u_n.interpolate(initial_condition)
 
+"""
 # Create boundary condition
 fdim = domain.topology.dim - 1
 boundary_facets = dolfinx.mesh.locate_entities_boundary(
@@ -95,6 +98,7 @@ boundary_facets = dolfinx.mesh.locate_entities_boundary(
 bc = dolfinx.fem.dirichletbc(
     PETSc.ScalarType(0), dolfinx.fem.locate_dofs_topological(V, fdim, boundary_facets), V
 )
+"""
 
 xdmf = dolfinx.io.XDMFFile(domain.comm, "diffusion_ECS.xdmf", "w")
 xdmf.write_mesh(domain)
@@ -112,7 +116,7 @@ L_form = (u_n + dt * f) * v * ufl.dx
 bilinear_form = dolfinx.fem.form(a)
 linear_form = dolfinx.fem.form(L_form)
 
-A = assemble_matrix(bilinear_form, bcs=[bc])
+A = assemble_matrix(bilinear_form)#, bcs=[bc])
 A.assemble()
 
 # Using explicit template mapping to ensure compatibility across recent dolfinx releases
@@ -143,10 +147,12 @@ for i in range(num_steps):
         loc_b.set(0)
     assemble_vector(b, linear_form)
 
+    """
     # Apply Dirichlet boundary condition to the vector
     apply_lifting(b, [bilinear_form], [[bc]])
     b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
     set_bc(b, [bc])
+    """
 
     # Solve system
     solver.solve(b, uh.x.petsc_vec)
