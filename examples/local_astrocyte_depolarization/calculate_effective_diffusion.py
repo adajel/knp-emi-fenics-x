@@ -15,27 +15,34 @@ from dolfinx.fem.petsc import (
 )
 
 t = 0.0  # Start time (ms)
-T = 0.1  # Final time (ms)
-num_steps = 4
+#T = 0.1  # Final time (ms)
+#num_steps = 4
+T = 0.5  # Final time (ms)
+num_steps = 2
 dt = T / num_steps  # time step size
 
-#L = 5e-4       # cm
-L = 10e-4       # cm
+L = 5e-4       # cm
 D_K = 1.98e-8  # cm^2/ms
+#sigma = 0.5e-4 # standard deviation cm
 sigma = 1.0e-4 # standard deviation cm
 
 nx, ny, nz = 50, 50, 50
 domain = mesh.create_box(
     MPI.COMM_WORLD,
-    [np.array([-L/2, -L/2, -L/2]), np.array([L/2, L/2, L/2])],
+    [np.array([0, 0, 0]), np.array([L, L, L])],
     [nx, ny, nz],
     mesh.CellType.tetrahedron,
 )
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 
+# Shifted center coordinates: 2500e-7 = 2.5e-4 cm
 def initial_condition(x, a=5, sigma=sigma):
-    return a * np.exp(-a * (x[0] ** 2 + x[1] ** 2 + x[2] ** 2)/(2*sigma*sigma))
+    x_c, y_c, z_c = 2500e-7, 2500e-7, 2500e-7
+    return a * np.exp(-a * ((x[0] - x_c) ** 2 + (x[1] - y_c) ** 2 + (x[2] - z_c) ** 2) / (2 * sigma * sigma))
+
+#def initial_condition(x, a=5, sigma=sigma):
+    #return a * np.exp(-a * (x[0] ** 2 + x[1] ** 2 + x[2] ** 2)/(2*sigma*sigma))
 
 u_n = fem.Function(V)
 u_n.name = "u_n"

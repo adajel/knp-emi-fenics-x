@@ -5,7 +5,9 @@ import numpy as np
 from petsc4py import PETSc
 from mpi4py import MPI
 
-from dolfinx import fem, mesh, io, plot
+import dolfinx
+import scifem
+
 from dolfinx.fem.petsc import (
     assemble_vector,
     assemble_matrix,
@@ -13,6 +15,33 @@ from dolfinx.fem.petsc import (
     apply_lifting,
     set_bc,
 )
+
+comm = MPI.COMM_WORLD
+
+def create_measures(mesh, ct, ft):
+    """ Create measures, all measure defined on parent mesh """
+    # Define measures
+    dx = Measure('dx', domain=mesh, subdomain_data=ct)
+    ds = Measure('ds', domain=mesh, subdomain_data=ft)
+
+    # Get interface/membrane tags
+    gamma_tags = np.unique(ft.values)
+
+    subdomain_data = []
+    # Define measures on membrane interface gamma
+    for tag in gamma_tags:
+        ordered_integration_data = scifem.compute_interface_data(ct, ft.find(tag))
+        # Define measure for tag
+        subdomain_data.append((tag, ordered_integration_data.flatten()))
+
+    # Define measures on facet
+    dS = Measure(
+            "dS",
+            domain=mesh,
+            subdomain_data=subdomain_data,
+        )
+
+    return dx, dS, ds
 
 def read_mesh(mesh_file):
 
@@ -36,74 +65,85 @@ def read_mesh(mesh_file):
 
     return mesh, ct, ft
 
-
-mesh_file = config['mesh_file'] # path to mesh file
-fname = config["fname"]         # directory for saving results
-
-print(f'{bcolors.OKBLUE}Reading mesh from {mesh_file} ...')
+mesh_file = "meshes/remarked_mesh/mesh.xdmf"
 mesh, ct, ft = read_mesh(mesh_file)
-print(f'mesh read. ms{bcolors.ENDC}')
 
-domian, _, _, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
+ECS = {"name":"ECS",
+       "tag":0,              # NB! ECS tag must always be zero.
+}
+
+neuron = {"name":"neuron",
+          "tag":1,
+          "membrane_tags":[1],
+}
+
+domain_0, sub_to_parent_0, sub_vertex_to_parent_0, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
+mesh_sub_1, sub_to_parent_1, sub_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ct, neuron['tag'])
+mesh_mem_1, mem_to_parent_1, mem_vertex_to_parent_1, _, _ = scifem.extract_submesh(mesh, ft, neuron['membrane_tags'])
 
 t = 0.0  # Start time (ms)
-T = 0.1  # Final time (ms)
-num_steps = 4
+T = 0.5  # Final time (ms)
+num_steps = 2
+
+#T = 0.1  # Final time (ms)
+#num_steps = 4
+#sigma = 5e-5 # standard deviation cm
+
 dt = T / num_steps  # time step size
 
-#L = 5e-4       # cm
-L = 10e-4       # cm
 D_K = 1.98e-8  # cm^2/ms
 sigma = 1.0e-4 # standard deviation cm
 
-V = fem.functionspace(domain, ("Lagrange", 1))
+V0 = dolfinx.fem.functionspace(domain_0, ("Lagrange", 1))
 
+# Shifted center coordinates: 2500e-7 = 2.5e-4 cm
 def initial_condition(x, a=5, sigma=sigma):
-    return a * np.exp(-a * (x[0] ** 2 + x[1] ** 2 + x[2] ** 2)/(2*sigma*sigma))
+    x_c, y_c, z_c = 2500e-7, 2500e-7, 2500e-7
+    return a * np.exp(-a * ((x[0] - x_c) ** 2 + (x[1] - y_c) ** 2 + (x[2] - z_c) ** 2) / (2 * sigma * sigma))
 
-u_n = fem.Function(V)
+u_n = dolfinx.fem.Function(V0)
 u_n.name = "u_n"
 u_n.interpolate(initial_condition)
 
 # Create boundary condition
-fdim = domain.topology.dim - 1
-boundary_facets = mesh.locate_entities_boundary(
-    domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool)
+fdim = domain_0.topology.dim - 1
+boundary_facets = dolfinx.mesh.locate_entities_boundary(
+    domain_0, fdim, lambda x: np.full(x.shape[1], True, dtype=bool)
 )
-bc = fem.dirichletbc(
-    PETSc.ScalarType(0), fem.locate_dofs_topological(V, fdim, boundary_facets), V
+bc = dolfinx.fem.dirichletbc(
+    PETSc.ScalarType(0), dolfinx.fem.locate_dofs_topological(V0, fdim, boundary_facets), V0
 )
 
-xdmf = io.XDMFFile(domain.comm, "diffusion_ECS.xdmf", "w")
-xdmf.write_mesh(domain)
+xdmf = dolfinx.io.XDMFFile(domain_0.comm, "diffusion_ECS.xdmf", "w")
+xdmf.write_mesh(domain_0)
 
-uh = fem.Function(V)
+uh = dolfinx.fem.Function(V0)
 uh.name = "uh"
 uh.interpolate(initial_condition)
 xdmf.write_function(uh, t)
 
-u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-f = fem.Constant(domain, PETSc.ScalarType(0))
+u, v = ufl.TrialFunction(V0), ufl.TestFunction(V0)
+f = dolfinx.fem.Constant(domain_0, PETSc.ScalarType(0))
 a = u * v * ufl.dx + dt * D_K * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
 L = (u_n + dt * f) * v * ufl.dx
-bilinear_form = fem.form(a)
-linear_form = fem.form(L)
+bilinear_form = dolfinx.fem.form(a)
+linear_form = dolfinx.fem.form(L)
 
 A = assemble_matrix(bilinear_form, bcs=[bc])
 A.assemble()
-b = create_vector(fem.extract_function_spaces(linear_form))
+b = create_vector(dolfinx.fem.extract_function_spaces(linear_form))
 
-solver = PETSc.KSP().create(domain.comm)
+solver = PETSc.KSP().create(domain_0.comm)
 solver.setOperators(A)
 solver.setType(PETSc.KSP.Type.PREONLY)
 solver.getPC().setType(PETSc.PC.Type.LU)
 
 # Define (mean squared displacement) observables
-x_coord = ufl.SpatialCoordinate(domain)
+x_coord = ufl.SpatialCoordinate(domain_0)
 r_sq = x_coord[0]**2 + x_coord[1]**2 + x_coord[2]**2
 # Forms to calculate total mass and variance over the domain
-mass_form = fem.form(u_n * ufl.dx)
-msd_form = fem.form(r_sq * u_n * ufl.dx)
+mass_form = dolfinx.fem.form(u_n * ufl.dx)
+msd_form = dolfinx.fem.form(r_sq * u_n * ufl.dx)
 # lists for time and mean squared displacement
 time_list = []
 msd_list = []
@@ -133,8 +173,8 @@ for i in range(num_steps):
 
     # Calculate mean squared displacement (the unnormalized spatial variance of your
     # spreading Gaussian profile integrated across the entire 3D mesh).
-    total_mass = fem.assemble_scalar(mass_form)
-    raw_msd = fem.assemble_scalar(msd_form)
+    total_mass = dolfinx.fem.assemble_scalar(mass_form)
+    raw_msd = dolfinx.fem.assemble_scalar(msd_form)
     normalized_msd = raw_msd / total_mass
     time_list.append(t)
     msd_list.append(normalized_msd)
