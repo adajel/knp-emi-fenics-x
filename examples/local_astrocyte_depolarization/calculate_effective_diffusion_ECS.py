@@ -48,7 +48,7 @@ mesh.geometry.x[:] *= 1e4
 
 ECS = {"name":"ECS", "tag":0}
 
-domain_0, _, _, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
+domain, _, _, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
 
 """
 t = 0.0  # Start time (ms)
@@ -68,41 +68,44 @@ x_c, y_c, z_c = 2500e-7, 2500e-7, 2500e-7
 # Scales units
 t = 0.0         # Start time (ms)
 dt = 0.005      # Stable time step size (ms)
-num_steps = 10  # Number of steps
-T = num_steps * dt
+T = 0.05
+
+num_steps = int(T/dt)
+print(num_steps)
 
 D_K = 0.5       # 1.98e-9 cm^2/ms scaled to 0.198 um^2/ms
 sigma = 0.8     # 8.0e-5 cm scaled to 0.8 u
 x_c, y_c, z_c = 2.5, 2.5, 2.5
 
-V0 = dolfinx.fem.functionspace(domain_0, ("Lagrange", 1))
+V = dolfinx.fem.functionspace(domain, ("Lagrange", 1))
 
+# Shifted center coordinates: 2.5 um
 def initial_condition(x, a=5, sigma=sigma):
     return a * np.exp(-a * ((x[0] - x_c) ** 2 + (x[1] - y_c) ** 2 + (x[2] - z_c) ** 2) / (2 * sigma * sigma))
 
-u_n = dolfinx.fem.Function(V0)
+u_n = dolfinx.fem.Function(V)
 u_n.name = "u_n"
 u_n.interpolate(initial_condition)
 
 # Create boundary condition
-fdim = domain_0.topology.dim - 1
+fdim = domain.topology.dim - 1
 boundary_facets = dolfinx.mesh.locate_entities_boundary(
-    domain_0, fdim, lambda x: np.full(x.shape[1], True, dtype=bool)
+    domain, fdim, lambda x: np.full(x.shape[1], True, dtype=bool)
 )
 bc = dolfinx.fem.dirichletbc(
-    PETSc.ScalarType(0), dolfinx.fem.locate_dofs_topological(V0, fdim, boundary_facets), V0
+    PETSc.ScalarType(0), dolfinx.fem.locate_dofs_topological(V, fdim, boundary_facets), V
 )
 
-xdmf = dolfinx.io.XDMFFile(domain_0.comm, "diffusion_ECS.xdmf", "w")
-xdmf.write_mesh(domain_0)
+xdmf = dolfinx.io.XDMFFile(domain.comm, "diffusion_ECS.xdmf", "w")
+xdmf.write_mesh(domain)
 
-uh = dolfinx.fem.Function(V0)
+uh = dolfinx.fem.Function(V)
 uh.name = "uh"
 uh.interpolate(initial_condition)
 xdmf.write_function(uh, t)
 
-u, v = ufl.TrialFunction(V0), ufl.TestFunction(V0)
-f = dolfinx.fem.Constant(domain_0, PETSc.ScalarType(0))
+u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
+f = dolfinx.fem.Constant(domain, PETSc.ScalarType(0))
 a = u * v * ufl.dx + dt * D_K * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
 L_form = (u_n + dt * f) * v * ufl.dx
 
@@ -115,13 +118,13 @@ A.assemble()
 # Using explicit template mapping to ensure compatibility across recent dolfinx releases
 b = create_vector(dolfinx.fem.extract_function_spaces(linear_form))
 
-solver = PETSc.KSP().create(domain_0.comm)
+solver = PETSc.KSP().create(domain.comm)
 solver.setOperators(A)
 solver.setType(PETSc.KSP.Type.PREONLY)
 solver.getPC().setType(PETSc.PC.Type.LU)
 
 # Define (mean squared displacement) observables
-x_coord = ufl.SpatialCoordinate(domain_0)
+x_coord = ufl.SpatialCoordinate(domain)
 r_sq = (x_coord[0] - x_c)**2 + (x_coord[1] - y_c)**2 + (x_coord[2] - z_c)**2
 
 # Forms to calculate total mass and variance over the domain
@@ -161,6 +164,7 @@ for i in range(num_steps):
     raw_msd = dolfinx.fem.assemble_scalar(msd_form)
 
     normalized_msd = raw_msd / total_mass
+
     time_list.append(t)
     msd_list.append(normalized_msd)
 
@@ -188,5 +192,3 @@ print(f"Calculated D_eff:   {D_eff:e}")
 print(f"Relative Error:     {abs(D_eff - D_K)/D_K * 100:.2f}%")
 print(f"Tortuosity:         {lmda}")
 print("="*30)
-
-print()

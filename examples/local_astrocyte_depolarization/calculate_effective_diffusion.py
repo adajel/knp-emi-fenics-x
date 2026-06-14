@@ -34,11 +34,13 @@ D_K = 1.98e-9  # cm^2/ms
 sigma = 5.0e-5 # standard deviation cm
 """
 
-# Units used: Length = micrometers (um), Time = milliseconds (ms)
+# Scales units
 t = 0.0         # Start time (ms)
 dt = 0.005      # Stable time step size (ms)
-num_steps = 10  # Number of steps
-T = num_steps * dt
+T = 0.05
+
+num_steps = int(T/dt)
+print(num_steps)
 
 box_L = 5.0    # 5e-4 cm scaled to 5.0 um
 D_K = 0.5      # 5.0e-9 cm^2/ms scaled to 0.5 um^2/ms
@@ -55,7 +57,7 @@ domain = mesh.create_box(
 
 V = fem.functionspace(domain, ("Lagrange", 1))
 
-# Shifted center coordinates: 2.5e-4 cm = 2.5 um
+# Shifted center coordinates: 2.5 um
 def initial_condition(x, a=5, sigma=sigma):
     return a * np.exp(-a * ((x[0] - x_c) ** 2 + (x[1] - y_c) ** 2 + (x[2] - z_c) ** 2) / (2 * sigma * sigma))
 
@@ -84,6 +86,7 @@ u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 f = fem.Constant(domain, PETSc.ScalarType(0))
 a = u * v * ufl.dx + dt * D_K * ufl.dot(ufl.grad(u), ufl.grad(v)) * ufl.dx
 L = (u_n + dt * f) * v * ufl.dx
+
 bilinear_form = fem.form(a)
 linear_form = fem.form(L)
 
@@ -98,11 +101,12 @@ solver.getPC().setType(PETSc.PC.Type.LU)
 
 # Define (mean squared displacement) observables
 x_coord = ufl.SpatialCoordinate(domain)
-#r_sq = x_coord[0]**2 + x_coord[1]**2 + x_coord[2]**2
 r_sq = (x_coord[0] - x_c)**2 + (x_coord[1] - y_c)**2 + (x_coord[2] - z_c)**2
+
 # Forms to calculate total mass and variance over the domain
 mass_form = fem.form(u_n * ufl.dx)
 msd_form = fem.form(r_sq * u_n * ufl.dx)
+
 # lists for time and mean squared displacement
 time_list = []
 msd_list = []
@@ -134,7 +138,9 @@ for i in range(num_steps):
     # spreading Gaussian profile integrated across the entire 3D mesh).
     total_mass = fem.assemble_scalar(mass_form)
     raw_msd = fem.assemble_scalar(msd_form)
+
     normalized_msd = raw_msd / total_mass
+
     time_list.append(t)
     msd_list.append(normalized_msd)
 
@@ -149,8 +155,6 @@ msd_list = np.array(msd_list)
 
 slope, intercept = np.polyfit(time_list, msd_list, 1)
 D_eff = slope / 6.0
-#slope, intercept = np.polyfit(6 * time_list[1:], msd_list[1:], 1)
-#D_eff = slope
 
 lmda = np.sqrt(D_K/D_eff)
 
