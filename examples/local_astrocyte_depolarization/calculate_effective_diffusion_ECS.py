@@ -24,22 +24,17 @@ comm = MPI.COMM_WORLD
 box_L = 5.0
 atol = 1e-6  # Absolute tolerance to catch boundary nodes smoothly
 
-# 2. Define the geometric boundary locator
+# Define the (geometric) outer boundary
 def cube_boundary_locator(x):
-    # x[0] is X, x[1] is Y, x[2] is Z
     on_x0 = np.isclose(x[0], 0.0, atol=atol)
     on_xL = np.isclose(x[0], box_L,   atol=atol)
-
     on_y0 = np.isclose(x[1], 0.0, atol=atol)
     on_yL = np.isclose(x[1], box_L,   atol=atol)
-
     on_z0 = np.isclose(x[2], 0.0, atol=atol)
     on_zL = np.isclose(x[2], box_L,   atol=atol)
 
-    # A facet is on the cube boundary if it satisfies ANY of these conditions
+    # a facet is on the cube boundary if it satisfies any of these conditions
     return on_x0 | on_xL | on_y0 | on_yL | on_z0 | on_zL
-
-
 
 def read_mesh(mesh_file):
 
@@ -63,6 +58,22 @@ def read_mesh(mesh_file):
 
     return mesh, ct, ft
 
+"""
+#-------------------------------------------
+# Cube mesh of open space with no cells (no tortuosity) to test that code and
+# parameters make sense.
+nx, ny, nz = 50, 50, 50
+domain = dolfinx.mesh.create_box(
+    MPI.COMM_WORLD,
+    [np.array([0, 0, 0]), np.array([box_L, box_L, box_L])],
+    [nx, ny, nz],
+    dolfinx.mesh.CellType.tetrahedron,
+)
+#-------------------------------------------
+
+"""
+#-------------------------------------------
+# Realistic cube mesh of ECS subdomian to calculate tortuosity
 mesh_file = "meshes/remarked_mesh/mesh.xdmf"
 mesh, ct, ft = read_mesh(mesh_file)
 
@@ -72,37 +83,23 @@ mesh.geometry.x[:] *= 1e4
 ECS = {"name":"ECS", "tag":0}
 
 domain, _, _, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
+#-------------------------------------------
 
-"""
-t = 0.0  # Start time (ms)
-T = 0.5  # Final time (ms)
-num_steps = 2
-#sigma = 5e-5 # standard deviation cm
-
-dt = T / num_steps  # time step size
-
-D_K = 1.98e-8  # cm^2/ms
-#sigma = 1.0e-4 # standard deviation cm
-#sigma = 0.5e-4 # standard deviation cm
-sigma = 5.0e-5 # standard deviation cm
-x_c, y_c, z_c = 2500e-7, 2500e-7, 2500e-7
-"""
-
-# Scales units
+# Scaled units
 t = 0.0        # Start time (ms)
 dt = 0.005     # Stable time step size (ms)
-T = 0.1
+T = 0.1        # End time (ms)
 
 num_steps = int(T/dt)
 print(num_steps)
 
-D_K = 0.5       # 1.98e-9 cm^2/ms scaled to 0.198 um^2/ms
-sigma = 0.8     # 8.0e-5 cm scaled to 0.8 u
-x_c, y_c, z_c = 2.5, 2.5, 2.5
+D_K = 1.0                     # 1e-8 cm^2/ms scaled to 1.0 um^2/ms
+sigma = 0.8                   # 8.0e-5 cm scaled to 0.8 um
+x_c, y_c, z_c = 2.5, 2.5, 2.5 # mid point of mesh
 
 V = dolfinx.fem.functionspace(domain, ("Lagrange", 1))
 
-# Shifted center coordinates: 2.5 um
+# Shifted center coordinates to 2.5 um
 def initial_condition(x, a=5, sigma=sigma):
     return a * np.exp(-a * ((x[0] - x_c) ** 2 + (x[1] - y_c) ** 2 + (x[2] - z_c) ** 2) / (2 * sigma * sigma))
 
@@ -113,11 +110,11 @@ u_n.interpolate(initial_condition)
 # Get the indices of all exterior facets (tagged 1100)
 fdim = domain.topology.dim - 1
 
-# 3. Locate the entity indices of the outer boundary facets
+# Locate the entity indices of the outer boundary facets
 outer_boundary_facets = dolfinx.mesh.locate_entities_boundary(
     domain, fdim, cube_boundary_locator
 )
-# 0 Dirichlet condition on outer boundary facets
+# Dirichlet condition on outer boundary facets
 bc = dolfinx.fem.dirichletbc(
     PETSc.ScalarType(0), dolfinx.fem.locate_dofs_topological(V, fdim, outer_boundary_facets), V
 )
@@ -161,29 +158,21 @@ msd_form = dolfinx.fem.form(r_sq * u_n * ufl.dx)
 time_list = []
 msd_list = []
 
-# Setup plot profiles
-# ==========================================
-# 4. Preparation for 1D Center-Line Extraction
-# ==========================================
-
-
-# ==========================================
-# 4. Preparation for 1D Center-Line Extraction
-# ==========================================
+# Prep for plotting gaussian curves along 1D line through center of domain
 num_sampling_points = 200
-x_line = np.linspace(0.0, box_L, num_sampling_points)
+y_line = np.linspace(0.0, box_L, num_sampling_points)
 
 # Create an array of 3D coordinates lying along the exact center axis
 sampling_points = np.zeros((num_sampling_points, 3))
-sampling_points[:, 0] = x_line
-sampling_points[:, 1] = y_c
+sampling_points[:, 0] = x_c
+sampling_points[:, 1] = y_line
 sampling_points[:, 2] = z_c
 
 bb_tree = dolfinx.geometry.bb_tree(domain, domain.topology.dim)
 cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, sampling_points)
 colliding_cells = dolfinx.geometry.compute_colliding_cells(domain, cell_candidates, sampling_points)
 
-# FIX: Filter out points that fall inside neurons or outside boundaries
+# Filter out points that fall inside neurons or outside boundaries
 valid_indices = []
 valid_points = []
 cells = []
@@ -198,7 +187,7 @@ for i in range(num_sampling_points):
 valid_points = np.array(valid_points)
 cells = np.array(cells, dtype=np.int32)
 
-plot_steps = [0, 2, 5, 20]
+plot_steps = [0, 5, 10, 20]
 profiles = {}
 
 # Capture initial profile at t = 0 using placeholder arrays
@@ -241,8 +230,7 @@ for step in range(1, num_steps + 1):
     time_list.append(t)
     msd_list.append(normalized_msd)
 
-    # Plot profiles
-    # Capture 1D concentration profiles safely
+    # Capture 1D concentration profiles
     if step in plot_steps:
         profiles[step] = np.full(num_sampling_points, np.nan)
         if len(cells) > 0:
@@ -257,13 +245,11 @@ solver.destroy()
 time_list = np.array(time_list)
 msd_list = np.array(msd_list)
 
-#slope, intercept = np.polyfit(6 * time_list[1:], msd_list[1:], 1)
-#D_eff = slope
-
+# Find effective diffusion
 slope, intercept = np.polyfit(time_list, msd_list, 1)
 D_eff = slope / 6.0
 
-# Tortuosity lambda calculation (with homogeneous micrometer units)
+# Calculate tortuosity
 lmda = np.sqrt(D_K/D_eff)
 
 print("\n" + "="*30)
@@ -281,7 +267,7 @@ times = [r"$\rm t=t_0$", r"$\rm t=t_1$", r"$\rm t=t_2$", r"$\rm t=t_3$"]
 i = 0
 for step in plot_steps:
     current_time = step * dt
-    ax1.plot(x_line, profiles[step], label=times[i],
+    ax1.plot(y_line, profiles[step], label=times[i],
             lw=4, color=colors[i])
     # Print time index and actual time
     print(f"{times[i]}: $t = {current_time:.3f}$ ms")
@@ -290,7 +276,7 @@ for step in plot_steps:
 ax1.set_xlabel(r"$\rm x$ ($\mu$m)", fontsize=11)
 ax1.set_ylabel(r"$\rm c_e$ (mM)", fontsize=11)
 ax1.legend(loc="upper right", frameon=True)
-plt.savefig("gaussian_profiles_1d_serial.svg", dpi=300, bbox_inches="tight")
+plt.savefig("diffusion_gaussian_profiles.svg", dpi=300, bbox_inches="tight")
 
 # Plot mean squared displacement vs time
 fig2, ax2 = plt.subplots(figsize=(7*0.7, 5*0.7))
@@ -303,4 +289,4 @@ ax2.set_xlabel(r"$\rm t$ (ms)", fontsize=11)
 ax2.set_ylabel(r"MSD ($\mu$m$^2$)", fontsize=11)
 ax2.grid(True, linestyle="--", alpha=0.6)
 ax2.legend(loc="upper left", frameon=True)
-plt.savefig("msd_vs_time_serial.svg", dpi=300, bbox_inches="tight")
+plt.savefig("diffusion_msd.svg", dpi=300, bbox_inches="tight")
