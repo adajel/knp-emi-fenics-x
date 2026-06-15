@@ -16,6 +16,8 @@ from dolfinx.fem.petsc import (
     set_bc,
 )
 
+colors = ['#B30000', '#E34A33', '#FC8D59', '#FDBB84']
+
 comm = MPI.COMM_WORLD
 
 # Define your box size (using your rescaled L = 5.0 um)
@@ -272,30 +274,33 @@ print(f"Tortuosity:         {lmda}")
 print("\n" + "="*30)
 
 # Plot 1D concentration profiles
-fig1, ax1 = plt.subplots(figsize=(7, 5))
+fig1, ax1 = plt.subplots(figsize=(7*0.7, 5*0.7))
 
+times = [r"$\rm t=t_0$", r"$\rm t=t_1$", r"$\rm t=t_2$", r"$\rm t=t_3$"]
+
+i = 0
 for step in plot_steps:
     current_time = step * dt
-    ax1.plot(x_line, profiles[step], label=f"$t = {current_time:.3f}$ ms", lw=2)
+    ax1.plot(x_line, profiles[step], label=times[i],
+            lw=4, color=colors[i])
+    # Print time index and actual time
+    print(f"{times[i]}: $t = {current_time:.3f}$ ms")
+    i += 1
 
-ax1.set_xlabel(r"Position along center line, $x$ ($\mu$m)", fontsize=11)
-ax1.set_ylabel(r"Concentration, $u$ (arbitrary units)", fontsize=11)
-ax1.set_title("1D Concentration Profiles Over Time Through Domain Center", fontsize=11, fontweight='bold')
-ax1.grid(True, linestyle="--", alpha=0.6)
+ax1.set_xlabel(r"$\rm x$ ($\mu$m)", fontsize=11)
+ax1.set_ylabel(r"$\rm c_e$ (mM)", fontsize=11)
 ax1.legend(loc="upper right", frameon=True)
-plt.savefig("gaussian_profiles_1d_serial.png", dpi=300, bbox_inches="tight")
+plt.savefig("gaussian_profiles_1d_serial.svg", dpi=300, bbox_inches="tight")
 
 # Plot mean squared displacement vs time
-fig2, ax2 = plt.subplots(figsize=(7, 5))
-
-ax2.plot(time_list, msd_list, 'o', label="Simulated MSD Data", color="#1f77b4", markersize=6, alpha=0.8)
+fig2, ax2 = plt.subplots(figsize=(7*0.7, 5*0.7))
 
 fit_line = slope * time_list + intercept
-ax2.plot(time_list, fit_line, '-', label=f"Linear Fit ($\Delta$MSD/$\Delta$t = {slope:.4f})", color="#d62728", lw=2)
+ax2.plot(time_list, fit_line, '-', label=f"Linear fit", color="#d62728", lw=2)
+ax2.plot(time_list, msd_list, 'o', label="Simulation data", color="#1f77b4", markersize=6, alpha=0.8)
 
-ax2.set_xlabel(r"Time, $t$ (ms)", fontsize=11)
-ax2.set_ylabel(r"Mean Squared Displacement, $\langle r^2 \rangle$ ($\mu$m$^2$)", fontsize=11)
-ax2.set_title("Mean Squared Displacement (MSD) vs Time", fontsize=11, fontweight='bold')
+ax2.set_xlabel(r"$\rm t$ (ms)", fontsize=11)
+ax2.set_ylabel(r"MSD ($\mu$m$^2$)", fontsize=11)
 ax2.grid(True, linestyle="--", alpha=0.6)
 ax2.legend(loc="upper left", frameon=True)
-plt.savefig("msd_vs_time_serial.png", dpi=300, bbox_inches="tight")
+plt.savefig("msd_vs_time_serial.svg", dpi=300, bbox_inches="tight")
