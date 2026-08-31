@@ -277,7 +277,7 @@ for step in plot_steps:
 ax1.set_xlabel(r"$\rm x$ ($\mu$m)", fontsize=11)
 ax1.set_ylabel(r"$\rm c_e$ (mM)", fontsize=11)
 ax1.legend(loc="upper right", frameon=True)
-plt.savefig("diffusion_gaussian_profiles.svg", dpi=300, bbox_inches="tight")
+plt.savefig("results/diffusion_gaussian_profiles.svg", dpi=300, bbox_inches="tight")
 
 # Plot mean squared displacement vs time
 fig2, ax2 = plt.subplots(figsize=(7*0.7, 5*0.7))
@@ -290,4 +290,13 @@ ax2.set_xlabel(r"$\rm t$ (ms)", fontsize=11)
 ax2.set_ylabel(r"MSD ($\mu$m$^2$)", fontsize=11)
 ax2.grid(True, linestyle="--", alpha=0.6)
 ax2.legend(loc="upper left", frameon=True)
-plt.savefig("diffusion_msd.svg", dpi=300, bbox_inches="tight")
+plt.savefig("results/diffusion_msd.svg", dpi=300, bbox_inches="tight")
+
+# Plot mean squared displacement vs time
+fig2, ax2 = plt.subplots(figsize=(7*0.7, 5*0.7))
+
+# Generate 1000 evenly spaced points between -4 and 4
+x_g = np.linspace(-6, 6, 1000)
+# Calculate the 1D Gaussian (Probability Density Function)
+y_g = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
+plt.savefig("results/gauss.svg", dpi=300, bbox_inches="tight")

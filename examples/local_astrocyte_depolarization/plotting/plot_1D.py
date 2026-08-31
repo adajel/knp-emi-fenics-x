@@ -160,6 +160,9 @@ fig = plt.figure(figsize=(15, 15))
 ax = plt.gca()
 
 phi_M_norm_1D = get_normalized_phi_M(phi_M_1D)
+phi_M_norm_roi_1D = get_normalized_phi_M(phi_M_roi_1D)
+phi_M_norm_global_1D = get_normalized_phi_M(phi_M_global_1D)
+
 phi_M_norm_3D = get_normalized_phi_M(phi_M_3D)
 
 indices_3D = [i for i, x in enumerate(phi_M_norm_3D) if (x > 0.499 and x < 0.501)]
@@ -221,6 +224,8 @@ plt.xlabel(r"time (ms)")
 ax1 = fig.add_subplot(3,3,6, xlim=[98, 305])
 plt.plot(t_normalized, phi_M_norm_3D, linewidth=lw, color=pink, label=r"3D")
 plt.plot(t_normalized, phi_M_norm_1D, linewidth=lw, color=green, label=r'1D')
+plt.plot(t_normalized, phi_M_norm_global_1D, linewidth=lw, color=green_light,linestyle="dashed")
+plt.plot(t_normalized, phi_M_norm_roi_1D, linewidth=lw, color=green_light, linestyle="dotted")
 plt.plot([stimuli_end * dt * save_frequency, Tstop], [0.5, 0.5], color='grey', linestyle="dotted", linewidth=lw*1.2)
 plt.ylabel(r"normalized $\rm \phi_M$")
 plt.yticks([0.0, 0.25, 0.5, 0.75, 1.0])

@@ -54,13 +54,13 @@ cmap_glial = "plasma"
 #y_L = 2100e-7; y_U = 2900e-7
 #z_L = 2100e-7; z_U = 2500e-7
 
-x_L = 2000e-7; x_U = 3000e-7
-y_L = 2000e-7; y_U = 3000e-7
-z_L = 2100e-7; z_U = 2700e-7
+x_L = 2100e-7; x_U = 2900e-7
+y_L = 2100e-7; y_U = 2900e-7
+z_L = 2100e-7; z_U = 2500e-7
 
-x_M = 2683e-7
-y_M = 2889e-7
-z_M = 2206e-7
+x_M = 2608.23094e-07
+y_M = 2859.73746e-07
+z_M = 2184.86686e-07
 
 roi_bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
 roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
@@ -238,7 +238,8 @@ def plot_ECS_and_glial(fname, grid_ECS, grid_ECS_init, grid_glial, grid_glial_in
     p.screenshot(f"results/{fname}_roi.png", transparent_background=True)
     p.close()
 
-def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, custom_labels, text, i):
+def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, \
+        custom_labels, text, i, dir):
 
     # Then assign it back to a mesh to plot it
     diff_array = grid_glial.point_data["phi_M_2"] - grid_glial_init.point_data["phi_M_2"]
@@ -291,7 +292,7 @@ def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, custom_la
     #p.reset_camera()
 
     # Save screenshot
-    p.screenshot(f"results/{fname}.png", transparent_background=True)
+    p.screenshot(f"results/{dir}/{fname}.png", transparent_background=True)
     p.close()
 
     # PLot glial potential in roi
@@ -330,7 +331,7 @@ def plot_astrocyte_potential(fname, grid_glial, grid_glial_init, clim, custom_la
     p.close()
 
 def plot_ECS_concentration(ion, x, position_bar, position_text, origin, camera_position,
-        grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim):
+        grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim, dir):
 
     slice_plane_ECS = grid_ECS.slice(normal=x, origin=origin)
     slice_roi_box = roi_box.slice(normal=x, origin=origin)
@@ -378,7 +379,7 @@ def plot_ECS_concentration(ion, x, position_bar, position_text, origin, camera_p
     p.camera_position = camera_position
 
     # 4. Save the screenshot
-    p.screenshot(f"results/2D_ECS_{ion}_{x}.png", transparent_background=True)
+    p.screenshot(f"results/{dir}/2D_ECS_{ion}_{x}.png", transparent_background=True)
     p.close()
 
     # Zoom in
@@ -427,10 +428,13 @@ def plot_ECS_concentration(ion, x, position_bar, position_text, origin, camera_p
 
 # ICS tort up
 #------------------------------------#
-clim = [6.88, 9.05]
-custom_labels = {6.9:"6.9", 7.2:"7.2", 7.5:"7.5", 7.8:"7.8", 8.1:"8.1", 8.4:"8.4", 8.7:"8.7", 9.0:"9.0"}
+#clim = [6.88, 9.05]
+#custom_labels = {6.9:"6.9", 7.2:"7.2", 7.5:"7.5", 7.8:"7.8", 8.1:"8.1", 8.4:"8.4", 8.7:"8.7", 9.0:"9.0"}
 
-dir = "baseline"
+clim = [2, 2.5]
+custom_labels = {2:"2", 2.5:"2.5"}
+
+dir = "baseline_new_mesh"
 text = r"$\rm baseline$"
 fname = "astrocyte_potential_I_bs"
 
@@ -497,9 +501,9 @@ fname = "astrocyte_potential_I_bs"
 ##clim = [0.01, 8.87]     # adjusted ECS
 
 i = 1
-index_1 = 184
-index_2 = 185
-index_3 = 186
+index_1 = 24#184
+index_2 = 24#185
+index_3 = 24#186
 #times = [r't = 92.1 ms', r't = 92.6 ms', r't = 93.1 ms']
 
 # Make plots
@@ -517,7 +521,8 @@ for time_index in [index_1, index_3]:
     ri_grid_glial = grid_glial.connectivity(extraction_mode='largest')
     ri_grid_glial_init = grid_glial_init.connectivity(extraction_mode='largest')
     # Plot membrane potential
-    plot_astrocyte_potential(fname_i, ri_grid_glial, ri_grid_glial_init, clim, custom_labels, text, i)
+    plot_astrocyte_potential(fname_i, ri_grid_glial, ri_grid_glial_init, clim,\
+            custom_labels, text, i, dir)
 
     """
     # -------- plot ECS K+ ------------- "
@@ -538,7 +543,7 @@ for time_index in [index_1, index_3]:
 
     i += 1
 
-# Plot ECS K field
+#. Plot ECS K field
 grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
 grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_K_0", 0)
 custom_labels = {5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "10", 11: "11"}
@@ -546,7 +551,8 @@ cmap_ECS = "kbc"
 clim_K = [4, 11]
 position_bar=[0.15, 0.25]
 position_text=(0.2, 0.60)
-plot_ECS_concentration('K', 'x', position_bar, position_text, [x_M, c, c], "yz", grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim_K)
+plot_ECS_concentration('K', 'x', position_bar, position_text, [x_M, c, c], \
+        "yz", grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim_K, dir)
 
 # Plot ECS Na field
 grid_ECS = get_grid_field(dir, "results_sub_0", "c_Na_0", time_index)
@@ -556,7 +562,8 @@ cmap_ECS = "kgy"
 clim_Na = [135, 143]
 position_bar=[0.82, 0.25]
 position_text=(0.87, 0.60)
-plot_ECS_concentration('Na', 'x', position_bar, position_text, [x_M, c, c], "yz", grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim_Na)
+plot_ECS_concentration('Na', 'x', position_bar, position_text, [x_M, c, c], \
+        "yz", grid_ECS, grid_ECS_init, custom_labels, cmap_ECS, clim_Na, dir)
 
 """
 # Calculate averages

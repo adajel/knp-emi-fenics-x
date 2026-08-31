@@ -126,7 +126,7 @@ def read_mesh(mesh_file):
 
     with dolfinx.io.XDMFFile(comm, mesh_file, 'r') as xdmf:
         # Read mesh and cell tags
-        mesh = xdmf.read_mesh(ghost_mode=ghost_mode)
+        mesh = xdmf.read_mesh(ghost_mode=ghost_mode, name="Grid")
         ct = xdmf.read_meshtags(mesh, name='cell_marker')
 
         # Create facet entities, facet-to-cell connectivity and cell-to-cell connectivity

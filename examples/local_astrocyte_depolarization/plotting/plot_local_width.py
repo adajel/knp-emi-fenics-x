@@ -32,17 +32,17 @@ c_point = "#ffff00"
 #y_L = 2100.0; y_U = 2900.0
 #z_L = 2100.0; z_U = 2500.0
 
-x_L = 2000; x_U = 3000
-y_L = 2000; y_U = 3000
-z_L = 2100; z_U = 2700
+x_L = 2100; x_U = 2900
+y_L = 2100; y_U = 2900
+z_L = 2100; z_U = 2500
 
 roi_bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
 roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
 
 # Coordinates of point
-x_M = 2683.0
-y_M = 2889.0
-z_M = 2206.0
+x_M = 2608
+y_M = 2859
+z_M = 2184
 
 # Center point (c,c,c) in mesh
 c = 2500.0

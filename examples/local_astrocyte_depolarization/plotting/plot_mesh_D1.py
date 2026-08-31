@@ -29,20 +29,21 @@ sargs = dict(
 )
 
 # Region in which to apply the source term (cm)
-#x_L = 2100.0; x_U = 2900.0
-#y_L = 2100.0; y_U = 2900.0
-#z_L = 2100.0; z_U = 2500.0
+x_L = 2100.0e-7; x_U = 2900.0e-7
+y_L = 2100.0e-7; y_U = 2900.0e-7
+z_L = 2100.0e-7; z_U = 2500.0e-7
 
-x_L = 2500e-7; x_U = 3500e-7
-y_L = 2500e-7; y_U = 3500e-7
-z_L = 2600e-7; z_U = 3200e-7
+#x_L = 2500e-7; x_U = 3500e-7
+#y_L = 2500e-7; y_U = 3500e-7
+#z_L = 2600e-7; z_U = 3200e-7
 
 x_M = 2683.0e-7
 y_M = 2889.0e-7
 z_M = 2206.0e-7
 
 # center point (c,c,c)
-c = 3000.0
+#c = 3000.0
+c = 2500
 
 roi_bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
 roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))

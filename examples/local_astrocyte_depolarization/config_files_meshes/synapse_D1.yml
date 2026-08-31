@@ -1,0 +1,24 @@
+name : "synapse_D1"
+raw:
+  cloudpath : "precomputed://gs://iarpa_microns/minnie/minnie65/seg_m1300"
+  position : "162258-200928-20530"
+  mip : 2   # 2 is 40x40. Lower mip levels, higher resolution (the datasets comes with different levels of resolution and we can choose a fine or a coarse one)
+  size : 5000
+processing:
+  dx :  8 # With 8, the mesh was same size as old mesh (remarked mesh)
+  operation :
+    - "ncells ncells=90 keep_cell_labels='[864691137020428398, 864691136144674612, 864691135384117978]'"
+    - "removeislands minsize=5000"
+    - "dilate radius=2"
+    - "smooth iterations=2 radius=2 labels='[864691137020428398]'"
+    - "smooth iterations=2 radius=2 labels='[864691136144674612]'"
+    - "smooth iterations=2 radius=2 labels='[864691135384117978]'"
+    - "smooth iterations=3 radius=4" # increasing radius, iterations does not do much
+    - "erode radius=3" # Erode more that dilate to get ECS share of approx. 20%
+    - "removeislands minsize=5000"
+meshing:
+    envelopsize : 6 # 4 looks very nice, but big mesh. Smaller env size, smoother nicer mesh but bigger (closer to image?)
+
+# presyn: 864691136092833460  # tag 5
+# postsyn: 864691136144674612 # tag 39
+# astro: 864691135384117978   # tag 3
