@@ -2,6 +2,9 @@ from pathlib import Path
 import meshio
 import pyvista
 
+# Allow to plot empty meshes
+pyvista.global_theme.allow_empty_mesh = True
+
 COLORS = {
     "ECS": "#4e5f70",
     "neuron": "#16a085",
@@ -74,8 +77,7 @@ def plot_2D(mesh_name, x, origin, camera_position, grid_ECS, grid_neuron, grid_g
     p.add_mesh(slice_neuron, scalar_bar_args=sargs, color=COLORS['neuron'])
     p.add_mesh(slice_glial, scalar_bar_args=sargs, color=COLORS['glial'])
     p.add_mesh(slice_syn_1, scalar_bar_args=sargs, color=COLORS['synapse_1'])
-    if x != 'z':
-        p.add_mesh(slice_syn_2, scalar_bar_args=sargs, color=COLORS['synapse_2'])
+    p.add_mesh(slice_syn_2, scalar_bar_args=sargs, color=COLORS['synapse_2'])
     p.add_mesh(slice_roi_box, color="black", style="wireframe", line_width=3)
 
     # Make pretty and save
@@ -133,7 +135,10 @@ def plot_astrocyte_synapse(mesh_name, x, origin, grid_glial, grid_syn_1, grid_sy
 
     # Make pretty and save
     p.camera_position = 'yz'
-    p.camera.azimuth += 225
+    if mesh_name == "D1":
+        p.camera.azimuth += 225
+    elif mesh_name == "D2":
+        p.camera.azimuth += 225-180-90
     p.camera.elevation += 15
     p.reset_camera()
     p.screenshot(f"results/astrocyte_synapse_{mesh_name}.png", transparent_background=True)
@@ -183,6 +188,25 @@ grid_syn_2 = get_grid (filename, [39, 39])
 grid_neuron = get_grid(filename, [2, 2]) \
             + get_grid(filename, [6, 38]) \
             + get_grid(filename, [40, 90])
+
+plot_2D(mesh_name, 'x', [x_M, c, c], "yz", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
+plot_2D(mesh_name, 'y', [c, y_M, c], "xz", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
+plot_2D(mesh_name, 'z', [c, c, z_M], "xy", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
+plot_ECS(mesh_name, 'y', [c, x_M, c], grid_ECS)
+plot_neurons(mesh_name, 'y', [c, x_M, c], grid_neuron)
+plot_astrocyte_synapse(mesh_name, 'y', [c, x_M, c], grid_glial, grid_syn_1, grid_syn_2)
+
+# Plot D2
+filename = f"../../meshes/synapse_D2/meshes/mesh.xdmf"
+mesh_name = 'D2'
+grid_ECS = get_grid(filename, [1, 1])
+grid_glial = get_grid (filename, [2, 2])        # glial cell of interest that has PAPs in ROI
+grid_glial_other = get_grid (filename, [3, 3])  # other glial cell
+grid_syn_1 = get_grid (filename, [4, 4])
+grid_syn_2 = get_grid (filename, [47, 47])
+
+# get grids for remaining neurons and add them together to one grid
+grid_neuron = get_grid(filename, [5, 46]) + get_grid(filename, [48, 90])
 
 plot_2D(mesh_name, 'x', [x_M, c, c], "yz", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
 plot_2D(mesh_name, 'y', [c, y_M, c], "xz", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)

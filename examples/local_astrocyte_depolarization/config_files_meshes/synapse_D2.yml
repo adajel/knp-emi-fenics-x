@@ -1,0 +1,25 @@
+name : "synapse_D2"
+raw:
+  cloudpath : "precomputed://gs://iarpa_microns/minnie/minnie65/seg_m1300"
+  position : "155139-158739-22920"
+  mip : 2       # 2 is 40x40. Lower mip levels, higher resolution (the datasets comes with different levels of resolution and we can choose a fine or a coarse one)
+  size : 5000
+processing:
+  dx : 8
+  operation :
+    - "ncells ncells=90 keep_cell_labels='[864691135509288969, 864691136144674612, 864691135610629775]'"
+    - "removeislands minsize=5000"
+    - "dilate radius=2"
+    - "smooth iterations=2 radius=2 labels='[864691135509288969]'"
+    - "smooth iterations=2 radius=2 labels='[864691136144674612]'"
+    - "smooth iterations=2 radius=2 labels='[864691135610629775]'"
+    - "smooth iterations=3 radius=4" # increasing radius, iterations does not do much
+    - "erode radius=3" # Erode more that dilate to get ECS share of approx. 20%
+    - "removeislands minsize=5000"
+meshing:
+    envelopsize : 6
+
+# s2: 864691135509288969 # 4
+# s2: 864691136144674612 # 47
+# main astrocyte: 864691135610629775 # 2
+# other astrocyte: # 3

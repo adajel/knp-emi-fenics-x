@@ -6,16 +6,20 @@ with open(filename) as meshstats:
     print(ms['ecs_share'])
     print("\n")
 
-    print("surface_to_vol_astro", (ms['cell_surface'][0] + ms['cell_surface'][1])/ \
-                                  (ms['cell_volume'][0] + ms['cell_volume'][1])*1000)
-    print("surface_to_vol_neuro", sum(ms['cell_surface'][2:])/sum(ms['cell_volume'][2:])*1000)
+    surface_astro = ms['cell_surface'][1] + ms['cell_surface'][2]
+    vol_astro = ms['cell_volume'][1] + ms['cell_volume'][2]
+    surface_neuro = ms['cell_surface'][0] + sum(ms['cell_surface'][3:])
+    vol_neuro = ms['cell_volume'][0] + sum(ms['cell_volume'][3:])
+
+    print("surface_to_vol_astro", surface_astro/vol_astro*1000)
+    print("surface_to_vol_neuro", surface_neuro/vol_neuro*1000)
 
     for key in ms.keys():
         if key == "cell_volume":
 
-            vol_g_no = ms[key][0]*1.0e-9
             vol_g = ms[key][1]*1.0e-9
-            vol_n = sum((ms[key][2:]))*1.0e-9
+            vol_g_no = ms[key][2]*1.0e-9
+            vol_n = (ms[key][0] + sum((ms[key][3:])))*1.0e-9
             vol_a = sum((ms[key]))*1.0e-9
 
             print("---------------------------")
@@ -32,7 +36,7 @@ with open(filename) as meshstats:
             vol_e = ms[key]*1.0e-9
 
     print("volume total:", vol_g + vol_n + vol_e + vol_g_no)
-    print("volume total:",vol_a + vol_e)
+    print("volume total:", vol_a + vol_e)
 
     print("---------------------------")
     print("Sanity check:")
@@ -40,10 +44,10 @@ with open(filename) as meshstats:
     print("glial vol share", (vol_g + vol_g_no) / (vol_a + vol_e)*100)
     print("neuorn vol share", vol_n / (vol_a + vol_e)*100)
 
-    print("sum", vol_e / (vol_a + vol_e)*100 \
-               + (vol_g + vol_g_no) / (vol_a + vol_e)*100 \
-               + vol_n / (vol_a + vol_e)*100)
 
+    print("sum", vol_e / (vol_a + vol_e) * 100 +
+                (vol_g + vol_g_no) / (vol_a + vol_e) * 100 +
+                 vol_n / (vol_a + vol_e) * 100)
     print("---------------------------")
 
     for key in ms.keys():
@@ -51,9 +55,9 @@ with open(filename) as meshstats:
         #print(ms['cell_surface'][-2]/ms['cell_volume'][-2]*1000)
         if key == "cell_surface":
 
-            surf_g_no = ms[key][0]*1.0e-6
-            surf_g = ms[key][1]*1.0e-6
-            surf_n = sum((ms[key][2:]))*1.0e-6
+            surf_g = ms[key][2]*1.0e-6
+            surf_g_no = ms[key][3]*1.0e-6
+            surf_n = (sum(ms[key][0:2]) + sum((ms[key][4:])))*1.0e-6
             surf_a = sum((ms[key]))*1.0e-6
 
 
