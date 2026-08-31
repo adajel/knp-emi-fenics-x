@@ -26,9 +26,9 @@ sargs = dict(
 )
 
 # Region in which to apply the source term (cm)
-x_L = 2100.0; x_U = 2900.0
-y_L = 2100.0; y_U = 2900.0
-z_L = 2100.0; z_U = 2500.0
+x_L = 2000.0; x_U = 3000.0
+y_L = 2000.0; y_U = 3000.0
+z_L = 2200.0; z_U = 2600.0
 
 x_M = 2683.0
 y_M = 2889.0
@@ -174,7 +174,8 @@ def plot_neurons(mesh_name, x, origin, grid_neuron):
 filename = f"../../meshes/synapse_D1/meshes/mesh.xdmf"
 mesh_name = 'D1'
 grid_ECS = get_grid(filename, [1, 1])
-grid_glial = get_grid (filename, [3, 3])
+grid_glial = get_grid (filename, [3, 3])        # glial cell of interest that has PAPs in ROI
+grid_glial_other = get_grid (filename, [4, 4])  # other glial cell
 grid_syn_1 = get_grid (filename, [5, 5])
 grid_syn_2 = get_grid (filename, [39, 39])
 
@@ -183,9 +184,9 @@ grid_neuron = get_grid(filename, [2, 2]) \
             + get_grid(filename, [6, 38]) \
             + get_grid(filename, [40, 90])
 
-plot_2D(mesh_name, 'x', [x_M, c, c], "yz", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
-plot_2D(mesh_name, 'y', [c, y_M, c], "xz", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
-plot_2D(mesh_name, 'z', [c, c, z_M], "xy", grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2)
+plot_2D(mesh_name, 'x', [x_M, c, c], "yz", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
+plot_2D(mesh_name, 'y', [c, y_M, c], "xz", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
+plot_2D(mesh_name, 'z', [c, c, z_M], "xy", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
 plot_ECS(mesh_name, 'y', [c, x_M, c], grid_ECS)
 plot_neurons(mesh_name, 'y', [c, x_M, c], grid_neuron)
 plot_astrocyte_synapse(mesh_name, 'y', [c, x_M, c], grid_glial, grid_syn_1, grid_syn_2)
