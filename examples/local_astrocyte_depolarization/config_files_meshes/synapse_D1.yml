@@ -19,6 +19,7 @@ processing:
 meshing:
     envelopsize : 6 # 4 looks very nice, but big mesh. Smaller env size, smoother nicer mesh but bigger (closer to image?)
 
-# presyn: 864691136092833460  # tag 5
-# postsyn: 864691136144674612 # tag 39
-# astro: 864691135384117978   # tag 3
+# presyn: 864691136092833460            # tag 5
+# postsyn: 864691136144674612           # tag 39
+# main astrocyte: 864691135384117978    # tag 3
+# other astrocyte: 864691135384117978   # tag 4
