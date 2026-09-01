@@ -5,7 +5,7 @@ import dolfinx
 from dolfinx.io import XDMFFile
 
 input_filename = "meshes/mesh.xdmf"
-output_filename = "meshes/remarked_mesh.xdmf"
+output_filename = "meshes/remarked_mesh_D2.xdmf"
 
 # Load mesh and cell tags
 with XDMFFile(MPI.COMM_WORLD, input_filename, "r") as xdmf:
@@ -105,3 +105,91 @@ with dolfinx.io.XDMFFile(MPI.COMM_WORLD, output_filename, "w") as xdmf:
     xdmf.write_meshtags(facet_markers, mesh.geometry)
 
     xdmf.close()
+
+# ------------------------------------ #
+# Print points for plotting
+# ------------------------------------ #
+# Define Region of Interest (ROI) boundaries in transformed spatial scale (cm)
+roi = {
+    "x_L": 2000.0e-7, "x_U": 3000.0e-7,
+    "y_L": 2000.0e-7, "y_U": 3000.0e-7,
+    "z_L": 2300.0e-7, "z_U": 2700.0e-7,
+}
+
+# Initialize lists to store node IDs and coordinates
+membrane_points = []      # Facet nodes tagged 2
+intracellular_points = [] # Adjacent nodes in Astrocyte cells (Tag 2)
+extracellular_points = [] # Adjacent nodes in ECS cells (Tag 0)
+
+# Build topology connectivity for vertex mapping
+mesh.topology.create_connectivity(fdim, 0)  # Facet to Node
+mesh.topology.create_connectivity(tdim, 0)  # Cell to Node
+
+f_to_v = mesh.topology.connectivity(fdim, 0)
+c_to_v = mesh.topology.connectivity(tdim, 0)
+
+coords = mesh.geometry.x
+
+# Extract all facet indices marked as membrane (Tag 2)
+membrane_facet_mask = facet_markers.values == 2
+membrane_facets = facet_markers.indices[membrane_facet_mask]
+
+# Sets to avoid collecting duplicate node IDs across neighboring elements
+seen_membrane_ids = set()
+seen_intra_ids = set()
+seen_extra_ids = set()
+
+for facet in membrane_facets:
+    facet_nodes = f_to_v.links(facet)
+    facet_coords = coords[facet_nodes]
+
+    # Verify if ALL nodes of the facet are inside the ROI
+    in_roi = np.all(
+        (facet_coords[:, 0] >= roi["x_L"]) & (facet_coords[:, 0] <= roi["x_U"]) &
+        (facet_coords[:, 1] >= roi["y_L"]) & (facet_coords[:, 1] <= roi["y_U"]) &
+        (facet_coords[:, 2] >= roi["z_L"]) & (facet_coords[:, 2] <= roi["z_U"])
+    )
+
+    if in_roi:
+        # 1. Collect membrane nodes
+        for node_id in facet_nodes:
+            if node_id not in seen_membrane_ids:
+                seen_membrane_ids.add(node_id)
+                membrane_points.append({"id": node_id, "coord": coords[node_id]})
+
+        # 2. Collect adjacent intra/extra nodes from connected cells
+        cells_sharing_facet = f_to_c.links(facet)
+
+        for cell in cells_sharing_facet:
+            cell_tag = cell_marker_lookup[cell]
+            cell_nodes = c_to_v.links(cell)
+
+            # Find nodes in this cell that are not on the membrane facet
+            off_membrane_nodes = np.setdiff1d(cell_nodes, facet_nodes)
+
+            for node_id in off_membrane_nodes:
+                if cell_tag == 2 and node_id not in seen_intra_ids:
+                    seen_intra_ids.add(node_id)
+                    intracellular_points.append({"id": node_id, "coord": coords[node_id]})
+                elif cell_tag == 0 and node_id not in seen_extra_ids:
+                    seen_extra_ids.add(node_id)
+                    extracellular_points.append({"id": node_id, "coord": coords[node_id]})
+
+
+# Function to cleanly print point collections
+def print_point_list(name, points_list):
+    print(f"\n==========================================")
+    print(f" {name} (Total: {len(points_list)})")
+    print(f"==========================================")
+    print(f"{'Node ID':<10} | {'X Coordinate':<16} | {'Y Coordinate':<16} | {'Z Coordinate':<16}")
+    print("-" * 66)
+
+    for item in points_list:
+        node_id = item["id"]
+        x, y, z = item["coord"]
+        print(f"{node_id:<10} | {x:<16.8e} | {y:<16.8e} | {z:<16.8e}")
+
+# Call the print function for each category
+print_point_list("Membrane Points (Tag 2)", membrane_points)
+print_point_list("Intracellular Points (Tag 2 Cell)", intracellular_points)
+print_point_list("Extracellular Points (Tag 0 Cell)", extracellular_points)

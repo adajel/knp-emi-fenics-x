@@ -1,6 +1,8 @@
 from pathlib import Path
 import meshio
 import pyvista
+import argparse
+import yaml
 
 # Allow to plot empty meshes
 pyvista.global_theme.allow_empty_mesh = True
@@ -11,37 +13,8 @@ COLORS = {
     "glial": "#ff67ff",
     "synapse_1": "#00ff00",
     "synapse_2": "#a0c991",
-    "point": "#ffff00",
+    "point": "#FF073A",
 }
-
-sargs = dict(
-    title=r"$\rm [Na]_e$",
-    n_labels=3,                # Number of labels
-    fmt="%.2f",                # Decimal formatting
-    font_family="arial",
-    vertical=True,            # Horizontal orientation
-    position_x=0.8,           # Move left/right (0 to 1)
-    position_y=0.25,           # Move up/down (0 to 1)
-    width=0.1,                 # Width of the bar
-    height=0.6,                 # Height of the bar
-    title_font_size=50,
-    label_font_size=50,
-)
-
-# Region in which to apply the source term (cm)
-x_L = 2000.0; x_U = 3000.0
-y_L = 2000.0; y_U = 3000.0
-z_L = 2200.0; z_U = 2600.0
-
-x_M = 2683.0
-y_M = 2889.0
-z_M = 2206.0
-
-# center point (c,c,c)
-c = 2500
-
-roi_bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
-roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
 
 def get_grid(filename, mesh_tags):
 
@@ -73,11 +46,11 @@ def plot_2D(mesh_name, x, origin, camera_position, grid_ECS, grid_neuron, grid_g
 
     # Plot 2D slices
     p = pyvista.Plotter(off_screen=True)
-    p.add_mesh(slice_ECS, scalar_bar_args=sargs, color=COLORS['ECS'])
-    p.add_mesh(slice_neuron, scalar_bar_args=sargs, color=COLORS['neuron'])
-    p.add_mesh(slice_glial, scalar_bar_args=sargs, color=COLORS['glial'])
-    p.add_mesh(slice_syn_1, scalar_bar_args=sargs, color=COLORS['synapse_1'])
-    p.add_mesh(slice_syn_2, scalar_bar_args=sargs, color=COLORS['synapse_2'])
+    p.add_mesh(slice_ECS, color=COLORS['ECS'])
+    p.add_mesh(slice_neuron, color=COLORS['neuron'])
+    p.add_mesh(slice_glial, color=COLORS['glial'])
+    p.add_mesh(slice_syn_1, color=COLORS['synapse_1'])
+    p.add_mesh(slice_syn_2, color=COLORS['synapse_2'])
     p.add_mesh(slice_roi_box, color="black", style="wireframe", line_width=3)
 
     # Make pretty and save
@@ -105,11 +78,32 @@ def plot_2D(mesh_name, x, origin, camera_position, grid_ECS, grid_neuron, grid_g
     p.screenshot(f"results/2D_roi_{x}_{mesh_name}.png", transparent_background=True)
     p.close()
 
-def plot_ECS(mesh_name, x, origin, grid_ECS):
+    return
+
+
+def plot_neurons(mesh_name, grid_neuron):
+
+    # Plot neurons
+    p = pyvista.Plotter(off_screen=True)
+    p.add_mesh(grid_neuron, color=COLORS['neuron'])
+    p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
+
+    # Make pretty and save
+    p.camera_position = 'yz'
+    p.camera.azimuth += 225
+    p.camera.elevation += 15
+    p.reset_camera()
+    p.screenshot(f"results/neurons_{mesh_name}.png", transparent_background=True)
+    p.close()
+
+    return
+
+
+def plot_ECS(mesh_name, grid_ECS):
 
     # Plot ECS
     p = pyvista.Plotter(off_screen=True)
-    p.add_mesh(grid_ECS, scalar_bar_args=sargs, color=COLORS['ECS'])
+    p.add_mesh(grid_ECS, color=COLORS['ECS'])
 
     # Make pretty and save
     p.camera_position = 'yz'
@@ -119,7 +113,7 @@ def plot_ECS(mesh_name, x, origin, grid_ECS):
     p.screenshot(f"results/ECS_{mesh_name}.png", transparent_background=True)
     p.close()
 
-def plot_astrocyte_synapse(mesh_name, x, origin, grid_glial, grid_syn_1, grid_syn_2):
+def plot_astrocyte_synapse(mesh_name, grid_glial, grid_syn_1, grid_syn_2):
 
     # Clip grids to zoom in on ROI
     clipped_glial = grid_glial.clip_box(bounds=roi_bounds, invert=False)
@@ -159,58 +153,124 @@ def plot_astrocyte_synapse(mesh_name, x, origin, grid_glial, grid_syn_1, grid_sy
     p.screenshot(f"results/astrocyte_synapse_roi_{mesh_name}.png", transparent_background=True)
     p.close()
 
+    return
 
-def plot_neurons(mesh_name, x, origin, grid_neuron):
+def visualize_plotting_points(mesh_name, config, grid_glial, grid_syn_1, grid_syn_2):
 
-    # Plot neurons
+    # Get membrane point for plotting
+    x_M = config["x_M"]*1.0e7
+    y_M = config["y_M"]*1.0e7
+    z_M = config["z_M"]*1.0e7
+    # Get ICS point for plotting
+    x_i = config["x_i"]*1.0e7
+    y_i = config["y_i"]*1.0e7
+    z_i = config["z_i"]*1.0e7
+    # Get ECS point for plotting
+    x_e = config["x_e"]*1.0e7
+    y_e = config["y_e"]*1.0e7
+    z_e = config["z_e"]*1.0e7
+
+    roi_point_M = pyvista.PolyData([x_M, y_M, z_M])
+    roi_point_i = pyvista.PolyData([x_i, y_i, z_i])
+    roi_point_e = pyvista.PolyData([x_e, y_e, z_e])
+
+    # Clip grids to zoom in on ROI
+    clipped_glial = grid_glial.clip_box(bounds=roi_bounds, invert=False)
+    clipped_syn_1 = grid_syn_1.clip_box(bounds=roi_bounds, invert=False)
+    clipped_syn_2 = grid_syn_2.clip_box(bounds=roi_bounds, invert=False)
+
+    # Plot astrocyte and synapse zoom in on ROI
     p = pyvista.Plotter(off_screen=True)
-    p.add_mesh(grid_neuron, color=COLORS['neuron'])
-    p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
+    p.add_mesh(clipped_glial, color=COLORS['glial'], opacity=0.7)
+    p.add_mesh(clipped_syn_1, color=COLORS['synapse_1'], opacity=0.4)
+    p.add_mesh(clipped_syn_2, color=COLORS['synapse_2'], opacity=0.4)
+    #p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
+
+    p.add_mesh(roi_point_M, color=COLORS['point'], point_size=20, render_points_as_spheres=True)
+    p.add_mesh(roi_point_i, color=COLORS['point'], point_size=20, render_points_as_spheres=True)
+    p.add_mesh(roi_point_e, color=COLORS['point'], point_size=20, render_points_as_spheres=True)
 
     # Make pretty and save
     p.camera_position = 'yz'
-    p.camera.azimuth += 225
+    p.camera.azimuth += 225-180-90
     p.camera.elevation += 15
     p.reset_camera()
-    p.screenshot(f"results/neurons_{mesh_name}.png", transparent_background=True)
+    p.screenshot(f"results/point_roi_{mesh_name}.png", transparent_background=True)
     p.close()
 
-# Plot D1
-filename = f"../../meshes/synapse_D1/meshes/mesh.xdmf"
-mesh_name = 'D1'
-grid_ECS = get_grid(filename, [1, 1])
-grid_glial = get_grid (filename, [3, 3])        # glial cell of interest that has PAPs in ROI
-grid_glial_other = get_grid (filename, [4, 4])  # other glial cell
-grid_syn_1 = get_grid (filename, [5, 5])
-grid_syn_2 = get_grid (filename, [39, 39])
+    return
 
-# get grids for remaining neurons and add them together to one grid
-grid_neuron = get_grid(filename, [2, 2]) \
-            + get_grid(filename, [6, 38]) \
-            + get_grid(filename, [40, 90])
 
-plot_2D(mesh_name, 'x', [x_M, c, c], "yz", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
-plot_2D(mesh_name, 'y', [c, y_M, c], "xz", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
-plot_2D(mesh_name, 'z', [c, c, z_M], "xy", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
-plot_ECS(mesh_name, 'y', [c, x_M, c], grid_ECS)
-plot_neurons(mesh_name, 'y', [c, x_M, c], grid_neuron)
-plot_astrocyte_synapse(mesh_name, 'y', [c, x_M, c], grid_glial, grid_syn_1, grid_syn_2)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-c",
+        metavar="config.yml",
+        help="path to config file",
+        type=str,
+    )
+    conf_arg = vars(parser.parse_args())
+    config_file_path = conf_arg["c"]
 
-# Plot D2
-filename = f"../../meshes/synapse_D2/meshes/mesh.xdmf"
-mesh_name = 'D2'
-grid_ECS = get_grid(filename, [1, 1])
-grid_glial = get_grid (filename, [2, 2])        # glial cell of interest that has PAPs in ROI
-grid_glial_other = get_grid (filename, [3, 3])  # other glial cell
-grid_syn_1 = get_grid (filename, [4, 4])
-grid_syn_2 = get_grid (filename, [47, 47])
+    with open(f"../../config_files/{config_file_path}.yml") as conf_file:
+        config = yaml.load(conf_file, Loader=yaml.FullLoader)
 
-# get grids for remaining neurons and add them together to one grid
-grid_neuron = get_grid(filename, [5, 46]) + get_grid(filename, [48, 90])
+    # Get ROI
+    x_L = config["x_L"]*1.0e7; x_U = config["x_U"]*1.0e7
+    y_L = config["y_L"]*1.0e7; y_U = config["y_U"]*1.0e7
+    z_L = config["z_L"]*1.0e7; z_U = config["z_U"]*1.0e7
 
-plot_2D(mesh_name, 'x', [x_M, c, c], "yz", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
-plot_2D(mesh_name, 'y', [c, y_M, c], "xz", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
-plot_2D(mesh_name, 'z', [c, c, z_M], "xy", grid_ECS, grid_neuron, grid_glial + grid_glial_other, grid_syn_1, grid_syn_2)
-plot_ECS(mesh_name, 'y', [c, x_M, c], grid_ECS)
-plot_neurons(mesh_name, 'y', [c, x_M, c], grid_neuron)
-plot_astrocyte_synapse(mesh_name, 'y', [c, x_M, c], grid_glial, grid_syn_1, grid_syn_2)
+    # Define ROI bounds and box
+    roi_bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
+    roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
+
+    # Get membrane point for plotting
+    x_M = config["x_M"]*1.0e7
+    y_M = config["y_M"]*1.0e7
+    z_M = config["z_M"]*1.0e7
+    # Get center point (c,c,c)
+    c = config["c"]*1.0e7
+
+    # get filename and mesh name
+    filename = f"../../{config['mesh_file_original']}"
+    mesh_name = config['mesh_name']
+
+    # get ECS grid
+    grid_ECS = get_grid(filename, [1, 1])
+
+    # get neuronal and glial grids
+    if mesh_name == 'D1':
+        grid_glial_roi = get_grid(filename, [3, 3])        # glial cell of interest that has PAPs in ROI
+        grid_glial_other = get_grid(filename, [4, 4])  # other glial cell
+        grid_syn_1 = get_grid(filename, [5, 5])
+        grid_syn_2 = get_grid(filename, [39, 39])
+        # get grids for remaining neurons and add them together to one grid
+        grid_neuron_all = get_grid(filename, [2, 2]) + get_grid(filename, [6, 38]) + get_grid(filename, [40, 90])
+        grid_glial_all = grid_glial_roi + grid_glial_other
+
+    elif mesh_name == 'D2':
+        grid_glial_roi = get_grid(filename, [2, 2])        # glial cell of interest that has PAPs in ROI
+        grid_glial_other = get_grid(filename, [3, 3])  # other glial cell
+        grid_syn_1 = get_grid(filename, [4, 4])
+        grid_syn_2 = get_grid(filename, [47, 47])
+        # get grids for remaining neurons and add them together to one grid
+        grid_neuron_all = get_grid(filename, [5, 46]) + get_grid(filename, [48, 90])
+        grid_glial_all = grid_glial_roi + grid_glial_other
+
+    elif mesh_name == 'D3':
+        grid_glial_roi = get_grid(filename, [2, 2])        # glial cell of interest that has PAPs in ROI (only one glial cell in this geometry)
+        grid_syn_1 = get_grid(filename, [26, 26])
+        grid_syn_2 = get_grid(filename, [30, 30])
+        # get grids for remaining neurons and add them together to one grid
+        grid_neuron_all = get_grid(filename, [3, 25]) + get_grid(filename, [27, 29]) + get_grid(filename, [31, 90])
+        grid_glial_all = grid_glial_roi
+
+    plot_2D(mesh_name, 'x', [x_M, c, c], "yz", grid_ECS, grid_neuron_all, grid_glial_all, grid_syn_1, grid_syn_2)
+    plot_2D(mesh_name, 'y', [c, y_M, c], "xz", grid_ECS, grid_neuron_all, grid_glial_all, grid_syn_1, grid_syn_2)
+    plot_2D(mesh_name, 'z', [c, c, z_M], "xy", grid_ECS, grid_neuron_all, grid_glial_all, grid_syn_1, grid_syn_2)
+
+    plot_ECS(mesh_name, grid_ECS)
+    plot_neurons(mesh_name, grid_neuron_all)
+    plot_astrocyte_synapse(mesh_name, grid_glial_roi, grid_syn_1, grid_syn_2)
+
+    visualize_plotting_points(mesh_name, config, grid_glial_roi, grid_syn_1, grid_syn_2)

@@ -444,16 +444,26 @@ if __name__ == "__main__":
     dt = 0.1
     Tstop = config["Tstop"]
 
-    # EMI points glial
-    x_M = 0.00026834450833705247
-    y_M = 0.0002889436164406373
-    z_M = 0.00022057539244152102
-    x_i = 0.0002757962756580815
-    y_i = 0.00028978895336808524
-    z_i = 0.00024707838038751177
-    x_e = 0.00027393821446464905
-    y_e = 0.0002511162579901399
-    z_e = 0.0002376715140603816
+    # Points for plotting dynamics in ROI
+    x_M = config["x_M"] # on glial membrane
+    y_M = config["y_M"] # on glial membrane
+    z_M = config["z_M"] # on glial membrane
+    x_i = config["x_i"] # ICS in glial cell
+    y_i = config["y_i"] # ICS in glial cell
+    z_i = config["z_i"] # ICS in glial cell
+    x_e = config["x_e"] # ECS
+    y_e = config["y_e"] # ECS
+    z_e = config["z_e"] # ECS
+
+    #x_M = 0.00026834450833705247 # on glial membrane
+    #y_M = 0.0002889436164406373
+    #z_M = 0.00022057539244152102
+    #x_i = 0.0002757962756580815
+    #y_i = 0.00028978895336808524
+    #z_i = 0.00024707838038751177
+    #x_e = 0.00027393821446464905
+    #y_e = 0.0002511162579901399
+    #z_e = 0.0002376715140603816
     x_G = {'M':[x_M, y_M, z_M],
            'i':[x_i, y_i, z_i],
            'e':[x_e, y_e, z_e],
@@ -463,22 +473,3 @@ if __name__ == "__main__":
     save_frequency = config["save_frequency"]
     plot_3D_concentration(fname_in, fname_out_G, dt, Tstop, x_G, tag_G,
             save_frequency, config)
-
-    """
-    # EMI points neuron
-    x_M = 0.00021805911552094111
-    y_M = 0.00022208269041793245
-    z_M = 0.00023494927229732336
-    x_i = 0.00021895646088814492
-    y_i = 0.00023021958580729074
-    z_i = 0.00023207341100176107
-    x_e = 0.00025308818813279027
-    y_e = 0.00023698776419221233
-    z_e = 0.00023301680991154913
-    x_N = {'M':[x_M, y_M, z_M],
-           'i':[x_i, y_i, z_i],
-           'e':[x_e, y_e, z_e],
-    }
-
-    plot_3D_concentration(fname_in, fname_out_N, dt, Tstop, x_N, tag_N)
-    """
