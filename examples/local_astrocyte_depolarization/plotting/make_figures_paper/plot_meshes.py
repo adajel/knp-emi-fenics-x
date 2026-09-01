@@ -181,14 +181,14 @@ def visualize_plotting_points(mesh_name, config, grid_glial, grid_syn_1, grid_sy
 
     # Plot astrocyte and synapse zoom in on ROI
     p = pyvista.Plotter(off_screen=True)
-    p.add_mesh(clipped_glial, color=COLORS['glial'], opacity=0.7)
+    p.add_mesh(clipped_glial, color=COLORS['glial'], opacity=0.8)
     p.add_mesh(clipped_syn_1, color=COLORS['synapse_1'], opacity=0.4)
     p.add_mesh(clipped_syn_2, color=COLORS['synapse_2'], opacity=0.4)
-    #p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
+    p.add_mesh(roi_box, color="black", style="wireframe", line_width=5)
 
-    p.add_mesh(roi_point_M, color=COLORS['point'], point_size=20, render_points_as_spheres=True)
-    p.add_mesh(roi_point_i, color=COLORS['point'], point_size=20, render_points_as_spheres=True)
-    p.add_mesh(roi_point_e, color=COLORS['point'], point_size=20, render_points_as_spheres=True)
+    p.add_mesh(roi_point_M, color=COLORS['point'], point_size=10, render_points_as_spheres=True)
+    p.add_mesh(roi_point_i, color=COLORS['point'], point_size=10, render_points_as_spheres=True)
+    p.add_mesh(roi_point_e, color=COLORS['point'], point_size=10, render_points_as_spheres=True)
 
     # Make pretty and save
     p.camera_position = 'yz'
@@ -199,7 +199,6 @@ def visualize_plotting_points(mesh_name, config, grid_glial, grid_syn_1, grid_sy
     p.close()
 
     return
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -265,6 +264,8 @@ if __name__ == "__main__":
         grid_neuron_all = get_grid(filename, [3, 25]) + get_grid(filename, [27, 29]) + get_grid(filename, [31, 90])
         grid_glial_all = grid_glial_roi
 
+    visualize_plotting_points(mesh_name, config, grid_glial_roi, grid_syn_1, grid_syn_2)
+
     plot_2D(mesh_name, 'x', [x_M, c, c], "yz", grid_ECS, grid_neuron_all, grid_glial_all, grid_syn_1, grid_syn_2)
     plot_2D(mesh_name, 'y', [c, y_M, c], "xz", grid_ECS, grid_neuron_all, grid_glial_all, grid_syn_1, grid_syn_2)
     plot_2D(mesh_name, 'z', [c, c, z_M], "xy", grid_ECS, grid_neuron_all, grid_glial_all, grid_syn_1, grid_syn_2)
@@ -273,4 +274,3 @@ if __name__ == "__main__":
     plot_neurons(mesh_name, grid_neuron_all)
     plot_astrocyte_synapse(mesh_name, grid_glial_roi, grid_syn_1, grid_syn_2)
 
-    visualize_plotting_points(mesh_name, config, grid_glial_roi, grid_syn_1, grid_syn_2)

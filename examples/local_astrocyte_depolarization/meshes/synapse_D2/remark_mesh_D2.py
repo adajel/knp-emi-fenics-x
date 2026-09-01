@@ -175,7 +175,6 @@ for facet in membrane_facets:
                     seen_extra_ids.add(node_id)
                     extracellular_points.append({"id": node_id, "coord": coords[node_id]})
 
-
 # Function to cleanly print point collections
 def print_point_list(name, points_list):
     print(f"\n==========================================")
@@ -184,7 +183,10 @@ def print_point_list(name, points_list):
     print(f"{'Node ID':<10} | {'X Coordinate':<16} | {'Y Coordinate':<16} | {'Z Coordinate':<16}")
     print("-" * 66)
 
-    for item in points_list:
+    # Sort points by X coordinate (item["coord"][0]) in ascending order
+    sorted_points = sorted(points_list, key=lambda item: item["coord"][0])
+
+    for item in sorted_points:
         node_id = item["id"]
         x, y, z = item["coord"]
         print(f"{node_id:<10} | {x:<16.8e} | {y:<16.8e} | {z:<16.8e}")
@@ -193,3 +195,4 @@ def print_point_list(name, points_list):
 print_point_list("Membrane Points (Tag 2)", membrane_points)
 print_point_list("Intracellular Points (Tag 2 Cell)", intracellular_points)
 print_point_list("Extracellular Points (Tag 0 Cell)", extracellular_points)
+
