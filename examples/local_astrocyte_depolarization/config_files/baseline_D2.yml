@@ -1,0 +1,36 @@
+mesh_file_original : 'meshes/synapse_D2/meshes/mesh.xdmf'
+mesh_file : 'meshes/synapse_D2/meshes/remarked_mesh_D2.xdmf'
+mesh_name : 'D2'
+fname : "baseline_D2"
+Tstop : 15          # end time (ms)
+f_value : 90        # strength of source term
+period: 10          # period source term stimuli
+delay: 1.0          # delay source term stimuli
+pulse_width: 1      # 1 ms duration
+end_time : 100      # turn source term off after 100 ms
+lambda_e : 1.2      # ECS tortuosity (75% of 1.6)
+lambda_i : 2.55     # ICS tortuosity (75% of 3.4)
+#x_L : 2000.0e-7     # lower bound x - region in which to apply the source term
+#x_U : 3000.0e-7     # upper bound x - region in which to apply the source term
+#y_L : 2000.0e-7     # lower bound y - region in which to apply the source term
+#y_U : 3000.0e-7     # upper bound y - region in which to apply the source term
+#z_L : 2300.0e-7     # lower bound z - region in which to apply the source term
+#z_U : 2700.0e-7     # upper bound z - region in which to apply the source term
+x_L : 2300.0e-7     # lower bound x - region in which to apply the source term
+x_U : 2850.0e-7     # upper bound x - region in which to apply the source term
+y_L : 2250.0e-7     # lower bound y - region in which to apply the source term
+y_U : 2750.0e-7     # upper bound y - region in which to apply the source term
+z_L : 2350.0e-7     # lower bound z - region in which to apply the source term
+z_U : 2650.0e-7     # upper bound z - region in which to apply the source term
+# Points in which to plot solution
+x_M : 2544.1823e-07 # point on glial membrane in roi
+y_M : 2740.9954e-07 # point on glial membrane in roi
+z_M : 2506.7745e-07 # point on glial membrane in roi
+x_i : 2503.1380e-07 # point in glial cell in roi
+y_i : 2738.7593e-07 # point in glial cell in roi
+z_i : 2477.0516e-07 # point in glial cell in roi
+x_e : 2509.1536e-07 # point outside glial cell in roi
+y_e : 2692.0499e-07 # point outside glial cell in roi
+z_e : 2512.8644e-07 # point outside glial cell in roi
+c : 2500.0e-7       # center point in domain
+save_frequency : 5  # save solution every 5th time-step
