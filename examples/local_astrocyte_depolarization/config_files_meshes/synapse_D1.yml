@@ -1,7 +1,7 @@
 name : "synapse_D1"
 raw:
   cloudpath : "precomputed://gs://iarpa_microns/minnie/minnie65/seg_m1300"
-  position : "162258-200928-20530"
+  position : "162250-200932-20525"
   mip : 2   # 2 is 40x40. Lower mip levels, higher resolution (the datasets comes with different levels of resolution and we can choose a fine or a coarse one)
   size : 5000
 processing:
@@ -19,7 +19,7 @@ processing:
 meshing:
     envelopsize : 6 # 4 looks very nice, but big mesh. Smaller env size, smoother nicer mesh but bigger (closer to image?)
 
-# presyn: 864691136092833460            # tag 5
-# postsyn: 864691136144674612           # tag 39
-# main astrocyte: 864691135384117978    # tag 3
-# other astrocyte:                      # tag 4
+# presyn: 864691136092833460        # tag 5
+# postsyn: 864691136144674612       # tag 41
+# main astro: 864691135384117978    # tag 3
+# other astro:                      # tag 4

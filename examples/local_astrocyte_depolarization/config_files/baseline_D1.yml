@@ -2,7 +2,7 @@ mesh_file_original : 'meshes/synapse_D1/meshes/mesh.xdmf'
 mesh_file : 'meshes/synapse_D1/meshes/remarked_mesh_D1.xdmf'
 mesh_name : "D1"
 fname : "baseline_D1"
-Tstop : 105         # end time (ms)
+Tstop : 15          # end time (ms)
 f_value : 95        # strength of source term
 period: 10          # period source term stimuli
 delay: 1.0          # delay source term stimuli
@@ -16,12 +16,6 @@ y_L : 2050.0e-7     # lower bound y - region in which to apply the source term
 y_U : 2900.0e-7     # upper bound y - region in which to apply the source term
 z_L : 2300.0e-7     # lower bound z - region in which to apply the source term
 z_U : 2700.0e-7     # upper bound z - region in which to apply the source term
-#x_L : 2000.0e-7     # lower bound x - region in which to apply the source term
-#x_U : 3000.0e-7     # upper bound x - region in which to apply the source term
-#y_L : 2000.0e-7     # lower bound y - region in which to apply the source term
-#y_U : 3000.0e-7     # upper bound y - region in which to apply the source term
-#z_L : 2300.0e-7     # lower bound z - region in which to apply the source term
-#z_U : 2700.0e-7     # upper bound z - region in which to apply the source term
 # Points in which to plot solution
 x_M : 2672.6222e-07 # point on glial membrane in roi
 y_M : 2046.7539e-07 # point on glial membrane in roi

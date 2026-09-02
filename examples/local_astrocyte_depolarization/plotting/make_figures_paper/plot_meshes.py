@@ -133,6 +133,8 @@ def plot_astrocyte_synapse(mesh_name, grid_glial, grid_syn_1, grid_syn_2):
         p.camera.azimuth += 225
     elif mesh_name == "D2":
         p.camera.azimuth += 225-180-90
+    elif mesh_name == "D4":
+        p.camera.azimuth += 225-180
     p.camera.elevation += 15
     p.reset_camera()
     p.screenshot(f"results/astrocyte_synapse_{mesh_name}.png", transparent_background=True)
@@ -148,6 +150,8 @@ def plot_astrocyte_synapse(mesh_name, grid_glial, grid_syn_1, grid_syn_2):
     # Make pretty and save
     p.camera_position = 'yz'
     p.camera.azimuth += 225-180-90
+    if mesh_name == "D4":
+        p.camera.azimuth += 225-90-45
     p.camera.elevation += 15
     p.reset_camera()
     p.screenshot(f"results/astrocyte_synapse_roi_{mesh_name}.png", transparent_background=True)
@@ -263,6 +267,15 @@ if __name__ == "__main__":
         # get grids for remaining neurons and add them together to one grid
         grid_neuron_all = get_grid(filename, [3, 25]) + get_grid(filename, [27, 29]) + get_grid(filename, [31, 90])
         grid_glial_all = grid_glial_roi
+
+    elif mesh_name == 'D4':
+        grid_glial_roi = get_grid(filename, [2, 2])        # glial cell of interest that has PAPs in ROI (only one glial cell in this geometry)
+        grid_glial_other = get_grid(filename, [3, 3])      # other glial cell
+        grid_syn_1 = get_grid(filename, [4, 4])
+        grid_syn_2 = get_grid(filename, [14, 14])
+        # get grids for remaining neurons and add them together to one grid
+        grid_neuron_all = get_grid(filename, [5, 13]) + get_grid(filename, [15, 90])
+        grid_glial_all = grid_glial_roi + grid_glial_other
 
     visualize_plotting_points(mesh_name, config, grid_glial_roi, grid_syn_1, grid_syn_2)
 

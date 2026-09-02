@@ -11,10 +11,10 @@ c_D3 = "#7993ad"
 labels = [r'D1', r'D2', r'D3']
 
 vol_D1 = 0.052
-vol_D2 = 0.082
-vol_D3 = 0.0
+vol_D2 = 0.04
+vol_D3 = 0.072
 values = [vol_D1, vol_D2, vol_D3]
-percentages = ['0.052', '0.082', '0.0']
+percentages = ['0.052', '0.04', '0.072']
 
 colors = [c_D1, c_D2, c_D3]
 
