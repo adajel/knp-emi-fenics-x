@@ -91,8 +91,8 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
     diff_array = grid_glial.point_data["phi_M_2"] - grid_glial_init.point_data["phi_M_2"]
     grid_glial["diff"] = diff_array
 
-    position_bar=[0.9, 0.27]
-    position_text=(0.95, 0.60)
+    position_bar=[0.91, 0.27]
+    position_text=(0.96, 0.60)
     position_x = position_bar[0]
     position_y = position_bar[1]
 
@@ -165,7 +165,7 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
 
     # Set the camera position and zoom in and save
     p.camera_position = camera_position
-    p.camera.zoom(5)
+    p.camera.zoom(2.5)
     p.screenshot(f"{fname}_roi.png", transparent_background=True)
     p.close()
 
@@ -285,7 +285,8 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Set color maps for glial potential and ECS K+ concentration
-    cmap_glial = seaborn.color_palette("inferno", as_cmap=True)
+    #cmap_glial = seaborn.color_palette("inferno", as_cmap=True)
+    cmap_glial = seaborn.color_palette("magma", as_cmap=True)
     cmap_ECS_K = seaborn.color_palette("crest", as_cmap=True)
 
     if mesh_name == "D2":
@@ -297,7 +298,7 @@ if __name__ == "__main__":
         ]
 
         clim_glial = [4.5, 5.6]
-        custom_labels_glial = {5:"5"}
+        custom_labels_glial = {4.5:"4.5", 4.7:"4.7", 4.9:"4.9", 5.1:"5.1", 5.3:"5.3", 5.5:"5.5"}
 
         # Plot ECS K field
         clim_ECS_K = [4, 11]
