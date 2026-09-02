@@ -107,7 +107,7 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
     )
 
     # Plot glial membrane potential
-    p = pyvista.Plotter(off_screen=True)
+    p = pyvista.Plotter(window_size=[1000, 800], off_screen=True)
 
     # Add glial membrane potential
     p.add_mesh(grid_glial,
@@ -116,6 +116,7 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
               cmap=cmap_glial,
               clim=clim,
               annotations=custom_labels,
+              show_scalar_bar=False,
     )
     # Add ROI box
     p.add_mesh(roi_box,
@@ -123,18 +124,12 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
                style="wireframe",
                line_width=5
     )
-    # Add title to colorbar
-    p.add_text(r"$\Delta \phi_M \rm (mV)$",
-               position=position_text,
-               font_size=14,
-               color="black",
-               viewport=True,
-               orientation=-90,
-    )
 
     # Set the camera position and save
+    p.set_background("#311e34ff")
     p.camera_position = camera_position
-    p.screenshot(f"{fname}.png", transparent_background=True)
+    p.camera.zoom(1.25)
+    p.screenshot(f"{fname}.png")
     p.close()
 
     # Plot glial potential in roi
@@ -164,13 +159,13 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
     )
 
     # Set the camera position and zoom in and save
+    p.set_background("#311e34ff")
     p.camera_position = camera_position
     p.camera.zoom(2.5)
     p.screenshot(f"{fname}_roi.png", transparent_background=True)
     p.close()
 
     return
-
 
 def plot_ECS_concentration(fname, ion, ECS_bounds, roi_box, origin, grid_ECS, \
                            grid_ECS_init, custom_labels, cmap, clim):
@@ -202,7 +197,8 @@ def plot_ECS_concentration(fname, ion, ECS_bounds, roi_box, origin, grid_ECS, \
                cmap=cmap,
                scalar_bar_args=sargs,
                annotations=custom_labels,
-               clim=clim
+               clim=clim,
+               show_scalar_bar=False,
     )
     # Add ROI box
     p.add_mesh(slice_roi_box,
@@ -210,18 +206,105 @@ def plot_ECS_concentration(fname, ion, ECS_bounds, roi_box, origin, grid_ECS, \
                style="wireframe",
                line_width=5
     )
-    # Add title to color bar
-    p.add_text(r"$[$" + f"{ion}" + r"$]_{\rm e}$ (mM)",
-               position=position_text,
-               orientation=-90,
-               font_size=14,
-               viewport=True
-    )
 
     # Make pretty and save
     p.reset_camera()
     p.camera.zoom(1.0) # Increase zoom to 'crop' out the edges
     p.camera_position = "yz"
+    p.screenshot(f"{fname}.png", transparent_background=True)
+    p.close()
+
+    return
+
+
+def plot_glial_colorbar(fname, clim, custom_labels, cmap_glial, title=r"$\Delta \phi_M \rm (mV)$"):
+    """
+    Renders and exports a standalone colorbar for the glial potential plot.
+    """
+    # 1. Setup a dedicated canvas size for the colorbar
+    p = pyvista.Plotter(window_size=[200, 700], off_screen=True)
+
+    # Configure colorbar arguments
+    sargs = dict(
+        title="",
+        n_labels=0,
+        vertical=True,
+        position_x=0.4,
+        position_y=0.1,
+        width=0.5,
+        height=0.85,
+        label_font_size=30,
+    )
+
+    # Create and add a dummy mesh to bind the colorbar properties
+    dummy_mesh = pyvista.PolyData([0.0, 0.0, 0.0])
+    dummy_mesh.point_data["diff"] = np.array([clim[0]])
+    actor = p.add_mesh(
+        dummy_mesh,
+        scalars="diff",
+        cmap=cmap_glial,
+        clim=clim,
+        annotations=custom_labels,
+        scalar_bar_args=sargs,
+        show_scalar_bar=True
+    )
+    # Add title to colorbar
+    p.add_text(r"$\Delta \phi_M \rm (mV)$",
+               position=(0.625, 0.6),
+               font_size=16,
+               viewport=True,
+               orientation=-90,
+    )
+
+    # Make pretty and save
+    p.screenshot(f"{fname}.png", transparent_background=True)
+    p.close()
+
+    return
+
+
+def plot_ECS_colorbar(fname, ion, custom_labels, cmap, clim):
+    """
+    Renders and exports a standalone colorbar for the ECS concentration plot.
+    """
+    # 1. Setup a dedicated canvas size for the colorbar
+    p = pyvista.Plotter(window_size=[700, 200], off_screen=True)
+
+    # 2. Configure scalar bar arguments (centered layout)
+    sargs = dict(
+        title="",
+        n_labels=0,
+        vertical=False,
+        position_x=0.1,
+        position_y=0.4,
+        width=0.85,
+        height=0.5,
+        label_font_size=30,
+    )
+
+    # 3. Create a dummy PolyData mesh to bind the colorbar properties
+    dummy_mesh = pyvista.PolyData([0.0, 0.0, 0.0])
+    dummy_mesh.point_data["c_K_0"] = np.array([clim[0]])
+
+    p.add_mesh(
+        dummy_mesh,
+        scalars="c_K_0",
+        cmap=cmap,
+        clim=clim,
+        annotations=custom_labels,
+        scalar_bar_args=sargs,
+        show_scalar_bar=True
+    )
+
+    # 4. Add the ion concentration title matching plot_ECS_concentration
+    p.add_text(
+        r"$[$" + f"{ion}" + r"$]_{\rm e}$ (mM)",
+        position=(0.4, 0.6),
+        font_size=16,
+        viewport=True
+    )
+
+    # 5. Render and export with a transparent background
     p.screenshot(f"{fname}.png", transparent_background=True)
     p.close()
 
@@ -285,8 +368,7 @@ if __name__ == "__main__":
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Set color maps for glial potential and ECS K+ concentration
-    #cmap_glial = seaborn.color_palette("inferno", as_cmap=True)
-    cmap_glial = seaborn.color_palette("magma", as_cmap=True)
+    cmap_glial = seaborn.color_palette("rocket", as_cmap=True)
     cmap_ECS_K = seaborn.color_palette("crest", as_cmap=True)
 
     if mesh_name == "D2":
@@ -304,6 +386,11 @@ if __name__ == "__main__":
         clim_ECS_K = [4, 11]
         custom_labels_ECS_K = {5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "10", 11: "11"}
 
+    fname_gc = f"{output_dir}/glial_colorbar"
+    plot_glial_colorbar(fname_gc, clim_glial, custom_labels_glial, cmap_glial, title=r"$\Delta \phi_M \rm (mV)$")
+    fname_ec = f"{output_dir}/ECS_colorbar"
+    plot_ECS_colorbar(fname_ec, 'K', custom_labels_ECS_K, cmap_ECS_K, clim_ECS_K)
+
     i = 1
     #for time_index in [184, 185]:
     for time_index in [24, 25]:
@@ -320,6 +407,7 @@ if __name__ == "__main__":
         plot_glial_potential(fname_glial, roi_box, roi_bounds, \
                 roi_point_membrane, ri_grid_glial, ri_grid_glial_init, \
                 clim_glial, custom_labels_glial, camera_position)
+
 
         # Get solution ECS K+ concentration at time time_index and time 0
         grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
