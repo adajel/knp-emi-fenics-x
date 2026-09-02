@@ -242,9 +242,9 @@ if __name__ == "__main__":
         grid_glial_roi = get_grid(filename, [3, 3])        # glial cell of interest that has PAPs in ROI
         grid_glial_other = get_grid(filename, [4, 4])  # other glial cell
         grid_syn_1 = get_grid(filename, [5, 5])
-        grid_syn_2 = get_grid(filename, [39, 39])
+        grid_syn_2 = get_grid(filename, [41, 41])
         # get grids for remaining neurons and add them together to one grid
-        grid_neuron_all = get_grid(filename, [2, 2]) + get_grid(filename, [6, 38]) + get_grid(filename, [40, 90])
+        grid_neuron_all = get_grid(filename, [2, 2]) + get_grid(filename, [6, 40]) + get_grid(filename, [42, 90])
         grid_glial_all = grid_glial_roi + grid_glial_other
 
     elif mesh_name == 'D2':

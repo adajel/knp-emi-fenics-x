@@ -189,7 +189,7 @@ def print_point_list(name, points_list):
     for item in sorted_points:
         node_id = item["id"]
         x, y, z = item["coord"]
-        if (2400e-7 < x < 2600e-7) and (2650e-7 < y < 2750e-7) and (z > 2400e-7):
+        if (2500e-7 < x < 2700e-7) and (2650e-7 < y < 2750e-7) and (z > 2400e-7):
             print(f"{node_id:<10} | {x:<16.8e} | {y:<16.8e} | {z:<16.8e}")
 
 # Call the print function for each category
