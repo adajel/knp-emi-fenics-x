@@ -2,7 +2,7 @@ mesh_file_original : 'meshes/synapse_D1/meshes/mesh.xdmf'
 mesh_file : 'meshes/synapse_D1/meshes/remarked_mesh_D1.xdmf'
 mesh_name : "D1"
 fname : "baseline_D1"
-Tstop : 150         # end time (ms)
+Tstop : 105         # end time (ms)
 f_value : 95        # strength of source term
 period: 10          # period source term stimuli
 delay: 1.0          # delay source term stimuli
