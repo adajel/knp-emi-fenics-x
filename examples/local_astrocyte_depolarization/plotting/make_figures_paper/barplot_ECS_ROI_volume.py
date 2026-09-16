@@ -10,11 +10,11 @@ c_D3 = "#7993ad"
 # --- Data ---
 labels = [r'D1', r'D2', r'D3']
 
-vol_D1 = 0.052
-vol_D2 = 0.04
-vol_D3 = 0.072
+vol_D1 = 0.056
+vol_D2 = 0.084
+vol_D3 = 0.021
 values = [vol_D1, vol_D2, vol_D3]
-percentages = ['0.052', '0.04', '0.072']
+percentages = ['0.056', '0.084', '0.021']
 
 colors = [c_D1, c_D2, c_D3]
 
@@ -32,7 +32,7 @@ bars = ax.bar(x, values, color=colors, width=bar_width, align='edge', edgecolor=
 # Add percentage labels above bars
 for bar, pct in zip(bars, percentages):
     height = bar.get_height()
-    ax.text(bar.get_x() + bar.get_width()/2, height + 0.001, pct,
+    ax.text(bar.get_x() + bar.get_width()/2, height + 0.0025, pct,
             ha='center', va='bottom', fontsize=16)
 
 # --- Styling ---
@@ -54,7 +54,7 @@ ax.set_axisbelow(False)
 # Place ticks directly in the center of each edge-aligned bar
 tick_positions = x + (bar_width / 2)
 plt.xticks(tick_positions, labels, fontsize=15)
-plt.yticks([0.03, 0.06, 0.09], fontsize=15)
+plt.yticks([0.02, 0.05, 0.08], fontsize=15)
 ax.tick_params(direction='out', length=10, width=2)
 
 plt.tight_layout()

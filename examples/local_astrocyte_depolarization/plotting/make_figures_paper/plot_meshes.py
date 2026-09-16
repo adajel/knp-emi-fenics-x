@@ -27,7 +27,9 @@ def get_grid(filename, mesh_tags):
 
     return subdomain_grid
 
-def plot_2D(mesh_name, x, origin, camera_position, grid_ECS, grid_neuron, grid_glial, grid_syn_1, grid_syn_2):
+
+def plot_2D(mesh_name, x, origin, camera_position, grid_ECS, grid_neuron, \
+            grid_glial, grid_syn_1, grid_syn_2):
 
     # slice grids
     slice_ECS = grid_ECS.slice(normal=x, origin=origin)
@@ -38,11 +40,11 @@ def plot_2D(mesh_name, x, origin, camera_position, grid_ECS, grid_neuron, grid_g
     slice_roi_box = roi_box.slice(normal=x, origin=origin)
 
     # clip grids (zoom in on ROI)
-    clipped_ECS = slice_ECS.clip_box(bounds=roi_bounds, invert=False)
-    clipped_glial = slice_glial.clip_box(bounds=roi_bounds, invert=False)
-    clipped_neuron = slice_neuron.clip_box(bounds=roi_bounds, invert=False)
-    clipped_syn_1 = slice_syn_1.clip_box(bounds=roi_bounds, invert=False)
-    clipped_syn_2 = slice_syn_2.clip_box(bounds=roi_bounds, invert=False)
+    clipped_ECS = slice_ECS.clip_box(roi_box, invert=False)
+    clipped_glial = slice_glial.clip_box(roi_box, invert=False)
+    clipped_neuron = slice_neuron.clip_box(roi_box, invert=False)
+    clipped_syn_1 = slice_syn_1.clip_box(roi_box, invert=False)
+    clipped_syn_2 = slice_syn_2.clip_box(roi_box, invert=False)
 
     # Plot 2D slices
     p = pyvista.Plotter(off_screen=True)
@@ -113,12 +115,12 @@ def plot_ECS(mesh_name, grid_ECS):
     p.screenshot(f"results/ECS_{mesh_name}.png", transparent_background=True)
     p.close()
 
-def plot_astrocyte_synapse(mesh_name, grid_glial, grid_syn_1, grid_syn_2):
+def plot_astrocyte_synapse(mesh_name, grid_glial, grid_syn_1, grid_syn_2, roi_box):
 
     # Clip grids to zoom in on ROI
-    clipped_glial = grid_glial.clip_box(bounds=roi_bounds, invert=False)
-    clipped_syn_1 = grid_syn_1.clip_box(bounds=roi_bounds, invert=False)
-    clipped_syn_2 = grid_syn_2.clip_box(bounds=roi_bounds, invert=False)
+    clipped_glial = grid_glial.clip_box(roi_box, invert=False)
+    clipped_syn_1 = grid_syn_1.clip_box(roi_box, invert=False)
+    clipped_syn_2 = grid_syn_2.clip_box(roi_box, invert=False)
 
     # Plot astrocyte and synapse
     p = pyvista.Plotter(off_screen=True)
@@ -131,11 +133,14 @@ def plot_astrocyte_synapse(mesh_name, grid_glial, grid_syn_1, grid_syn_2):
     p.camera_position = 'yz'
     if mesh_name == "D1":
         p.camera.azimuth += 225
+        p.camera.elevation += 15
     elif mesh_name == "D2":
         p.camera.azimuth += 225-180-90
+        p.camera.elevation += 15
     elif mesh_name == "D4":
-        p.camera.azimuth += 225-180
-    p.camera.elevation += 15
+        p.camera_position = 'yx'
+        p.camera.azimuth += 225-180-90-45
+        p.camera.elevation += 15
     p.reset_camera()
     p.screenshot(f"results/astrocyte_synapse_{mesh_name}.png", transparent_background=True)
     p.close()
@@ -151,7 +156,8 @@ def plot_astrocyte_synapse(mesh_name, grid_glial, grid_syn_1, grid_syn_2):
     p.camera_position = 'yz'
     p.camera.azimuth += 225-180-90
     if mesh_name == "D4":
-        p.camera.azimuth += 225-90-45
+        p.camera_position = 'yx'
+        p.camera.azimuth += 225-90
     p.camera.elevation += 15
     p.reset_camera()
     p.screenshot(f"results/astrocyte_synapse_roi_{mesh_name}.png", transparent_background=True)
@@ -179,9 +185,9 @@ def visualize_plotting_points(mesh_name, config, grid_glial, grid_syn_1, grid_sy
     roi_point_e = pyvista.PolyData([x_e, y_e, z_e])
 
     # Clip grids to zoom in on ROI
-    clipped_glial = grid_glial.clip_box(bounds=roi_bounds, invert=False)
-    clipped_syn_1 = grid_syn_1.clip_box(bounds=roi_bounds, invert=False)
-    clipped_syn_2 = grid_syn_2.clip_box(bounds=roi_bounds, invert=False)
+    clipped_glial = grid_glial.clip_box(roi_box, invert=False)
+    clipped_syn_1 = grid_syn_1.clip_box(roi_box, invert=False)
+    clipped_syn_2 = grid_syn_2.clip_box(roi_box, invert=False)
 
     # Plot astrocyte and synapse zoom in on ROI
     p = pyvista.Plotter(off_screen=True)
@@ -224,7 +230,6 @@ if __name__ == "__main__":
     z_L = config["z_L"]*1.0e7; z_U = config["z_U"]*1.0e7
 
     # Define ROI bounds and box
-    roi_bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
     roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
 
     # Get membrane point for plotting
@@ -285,5 +290,4 @@ if __name__ == "__main__":
 
     plot_ECS(mesh_name, grid_ECS)
     plot_neurons(mesh_name, grid_neuron_all)
-    plot_astrocyte_synapse(mesh_name, grid_glial_roi, grid_syn_1, grid_syn_2)
-
+    plot_astrocyte_synapse(mesh_name, grid_glial_roi, grid_syn_1, grid_syn_2, roi_box)

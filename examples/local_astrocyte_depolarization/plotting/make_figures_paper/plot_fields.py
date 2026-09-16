@@ -106,6 +106,11 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
                  label_font_size=27,
     )
 
+    # Explicit Plotter workflow (to see range)
+    plotter = pyvista.Plotter()
+    plotter.add_mesh(grid_glial, scalars="diff", cmap="viridis")
+    #plotter.show()
+
     # Plot glial membrane potential
     p = pyvista.Plotter(window_size=[1000, 800], off_screen=True)
 
@@ -174,6 +179,11 @@ def plot_ECS_concentration(fname, ion, ECS_bounds, roi_box, origin, grid_ECS, \
     slice_roi_box = roi_box.slice(normal='x', origin=origin)
     clipped_ECS = slice_ECS.clip_box(bounds=ECS_bounds, invert=False)
 
+    # Explicit Plotter workflow (to see range)
+    plotter = pyvista.Plotter()
+    plotter.add_mesh(grid_ECS, cmap="viridis")
+    #plotter.show()
+
     position_bar=[0.83, 0.25]
     position_text=(0.88, 0.60)
     position_x = position_bar[0]
@@ -231,9 +241,9 @@ def plot_glial_colorbar(fname, clim, custom_labels, cmap_glial, title=r"$\Delta 
         vertical=True,
         position_x=0.4,
         position_y=0.1,
-        width=0.5,
+        width=0.7,
         height=0.85,
-        label_font_size=30,
+        label_font_size=40,
     )
 
     # Create and add a dummy mesh to bind the colorbar properties
@@ -250,8 +260,8 @@ def plot_glial_colorbar(fname, clim, custom_labels, cmap_glial, title=r"$\Delta 
     )
     # Add title to colorbar
     p.add_text(r"$\Delta \phi_M \rm (mV)$",
-               position=(0.625, 0.6),
-               font_size=16,
+               position=(0.75, 0.65),
+               font_size=20,
                viewport=True,
                orientation=-90,
     )
@@ -278,8 +288,8 @@ def plot_ECS_colorbar(fname, ion, custom_labels, cmap, clim):
         position_x=0.1,
         position_y=0.4,
         width=0.85,
-        height=0.5,
-        label_font_size=30,
+        height=0.7,
+        label_font_size=40,
     )
 
     # 3. Create a dummy PolyData mesh to bind the colorbar properties
@@ -299,8 +309,8 @@ def plot_ECS_colorbar(fname, ion, custom_labels, cmap, clim):
     # 4. Add the ion concentration title matching plot_ECS_concentration
     p.add_text(
         r"$[$" + f"{ion}" + r"$]_{\rm e}$ (mM)",
-        position=(0.4, 0.6),
-        font_size=16,
+        position=(0.4, 0.75),
+        font_size=20,
         viewport=True
     )
 
@@ -371,20 +381,35 @@ if __name__ == "__main__":
     cmap_glial = seaborn.color_palette("rocket", as_cmap=True)
     cmap_ECS_K = seaborn.color_palette("crest", as_cmap=True)
 
-    if mesh_name == "D2":
+    if mesh_name == "D1":
         # Set camera position for plotting mesh of domain D2
         camera_position = [
-        (0.0011148767713648874, -0.0007533038582797973, -0.0000159169912591045),  # Position[cite: 3]
-        (0.0002497464765838219, 0.0002511593568215165, 0.00025144041546809587),  # Focal Point[cite: 3]
-        (-0.13157707833462606, 0.14758908754156708, -0.9802575853802773)          # View Up[cite: 3]
+            (-0.00011517364079806842, 0.00024376547885331383, -0.0012564308959739084),  # Camera Position[cite: 2]
+            (0.00025121222006418975, 0.0002493467488875467, 0.00027849867910845205),    # Focal Point[cite: 2]
+            (-0.0014184291078634015, 0.9999935570161623, -0.0032975725965616793)       # View Up Vector[cite: 2]
         ]
 
-        clim_glial = [4.5, 5.6]
-        custom_labels_glial = {4.5:"4.5", 4.7:"4.7", 4.9:"4.9", 5.1:"5.1", 5.3:"5.3", 5.5:"5.5"}
+        clim_glial = [5.7, 6.5]
+        custom_labels_glial = {5.8:"5.8", 6.0:"6.0", 6.2:"6.2", 6.4:"6.4"}
 
         # Plot ECS K field
-        clim_ECS_K = [4, 11]
-        custom_labels_ECS_K = {5: "5", 6: "6", 7: "7", 8: "8", 9: "9", 10: "10", 11: "11"}
+        clim_ECS_K = [3.1, 10.1]
+        custom_labels_ECS_K = {4: "4", 6: "6", 8: "8", 10: "10"}
+
+    elif mesh_name == "D2":
+        # Set camera position for plotting mesh of domain D2
+        camera_position = [
+            (0.0011148767713648874, -0.0007533038582797973, -0.0000159169912591045),  # Position[cite: 3]
+            (0.0002497464765838219, 0.0002511593568215165, 0.00025144041546809587),  # Focal Point[cite: 3]
+            (-0.13157707833462606, 0.14758908754156708, -0.9802575853802773)          # View Up[cite: 3]
+        ]
+
+        clim_glial = [8.6, 9.4]
+        custom_labels_glial = {8.7:"8.7", 8.9:"8.9", 9.1:"9.1", 9.3:"9.3"}
+
+        # Plot ECS K field
+        clim_ECS_K = [3.1, 10.4]
+        custom_labels_ECS_K = {4: "4", 6: "6", 8: "8", 10: "10"}
 
     fname_gc = f"{output_dir}/glial_colorbar"
     plot_glial_colorbar(fname_gc, clim_glial, custom_labels_glial, cmap_glial, title=r"$\Delta \phi_M \rm (mV)$")
@@ -392,9 +417,7 @@ if __name__ == "__main__":
     plot_ECS_colorbar(fname_ec, 'K', custom_labels_ECS_K, cmap_ECS_K, clim_ECS_K)
 
     i = 1
-    #for time_index in [184, 185]:
-    for time_index in [24, 25]:
-
+    for time_index in [184, 185]:
         # Get solution glial membrane potential at time time_index and time 0
         grid_glial = get_grid_field(dir, "results_mem_2", "phi_M_2", time_index)
         grid_glial_init = get_grid_field(dir, "results_mem_2", "phi_M_2", 0)
@@ -407,7 +430,6 @@ if __name__ == "__main__":
         plot_glial_potential(fname_glial, roi_box, roi_bounds, \
                 roi_point_membrane, ri_grid_glial, ri_grid_glial_init, \
                 clim_glial, custom_labels_glial, camera_position)
-
 
         # Get solution ECS K+ concentration at time time_index and time 0
         grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)

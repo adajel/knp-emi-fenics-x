@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from cmap import Colormap
 import ufl
 import numpy as np
 
@@ -16,7 +17,10 @@ from dolfinx.fem.petsc import (
     set_bc,
 )
 
-colors = ['#B30000', '#E34A33', '#FC8D59', '#FDBB84']
+# Extract 5 discrete hex values
+#cm = Colormap('colorbrewer:bupu_5')
+#colors = [cm(i / 4).hex for i in range(5)][::-1]
+colors = ['#810F7C', '#8856A7', '#8C96C6', '#B3CDE3', '#EDF8FB']
 
 comm = MPI.COMM_WORLD
 
@@ -43,7 +47,7 @@ def read_mesh(mesh_file):
 
     with dolfinx.io.XDMFFile(comm, mesh_file, 'r') as xdmf:
         # Read mesh and cell tags
-        mesh = xdmf.read_mesh(ghost_mode=ghost_mode)
+        mesh = xdmf.read_mesh(ghost_mode=ghost_mode, name="Grid")
         ct = xdmf.read_meshtags(mesh, name='cell_marker')
 
         # Create facet entities, facet-to-cell connectivity and cell-to-cell connectivity
@@ -61,7 +65,7 @@ def read_mesh(mesh_file):
 """
 #-------------------------------------------
 # Cube mesh of open space with no cells (no tortuosity) to test that code and
-# parameters make sense.
+# check that parameters make sense.
 nx, ny, nz = 50, 50, 50
 domain = dolfinx.mesh.create_box(
     MPI.COMM_WORLD,
@@ -74,7 +78,7 @@ domain = dolfinx.mesh.create_box(
 """
 #-------------------------------------------
 # Realistic cube mesh of ECS subdomian to calculate tortuosity
-mesh_file = "meshes/remarked_mesh/mesh.xdmf"
+mesh_file = "meshes/synapse_D1/meshes/remarked_mesh_D1.xdmf"
 mesh, ct, ft = read_mesh(mesh_file)
 
 # Convert mesh from cm to um
@@ -88,12 +92,12 @@ domain, _, _, _, _ = scifem.extract_submesh(mesh, ct, ECS['tag'])
 # Scaled units
 t = 0.0        # Start time (ms)
 dt = 0.005     # Stable time step size (ms)
-T = 0.1        # End time (ms)
+T = 0.075      # End time (ms)
 
-plot_steps = [0, 5, 10, 20]
+plot_steps = [0, 5, 10, 15]
 
 num_steps = int(T/dt)
-print(num_steps)
+print(f'number of time steps: {num_steps}')
 
 D_K = 1.0                     # 1e-8 cm^2/ms scaled to 1.0 um^2/ms
 sigma = 0.8                   # 8.0e-5 cm scaled to 0.8 um
@@ -121,7 +125,7 @@ bc = dolfinx.fem.dirichletbc(
     PETSc.ScalarType(0), dolfinx.fem.locate_dofs_topological(V, fdim, outer_boundary_facets), V
 )
 
-xdmf = dolfinx.io.XDMFFile(domain.comm, "diffusion_ECS.xdmf", "w")
+xdmf = dolfinx.io.XDMFFile(domain.comm, "results/ECS_diffusion.xdmf", "w")
 xdmf.write_mesh(domain)
 
 uh = dolfinx.fem.Function(V)
@@ -262,9 +266,7 @@ print("\n" + "="*30)
 
 # Plot 1D concentration profiles
 fig1, ax1 = plt.subplots(figsize=(7*0.7, 5*0.7))
-
 times = [r"$\rm t=t_0$", r"$\rm t=t_1$", r"$\rm t=t_2$", r"$\rm t=t_3$"]
-
 i = 0
 for step in plot_steps:
     current_time = step * dt
@@ -277,9 +279,9 @@ for step in plot_steps:
 ax1.set_xlabel(r"$\rm x$ ($\mu$m)", fontsize=11)
 ax1.set_ylabel(r"$\rm c_e$ (mM)", fontsize=11)
 ax1.legend(loc="upper right", frameon=True)
-plt.savefig("results/diffusion_gaussian_profiles.svg", dpi=300, bbox_inches="tight")
+plt.savefig("plotting/make_figures_paper/results/ECS_diffusion_gaussian_profiles.svg", dpi=300, bbox_inches="tight")
 
-# Plot mean squared displacement vs time
+# Plot point mean squared displacement and linear fit vs time
 fig2, ax2 = plt.subplots(figsize=(7*0.7, 5*0.7))
 
 fit_line = slope * time_list + intercept
@@ -290,13 +292,4 @@ ax2.set_xlabel(r"$\rm t$ (ms)", fontsize=11)
 ax2.set_ylabel(r"MSD ($\mu$m$^2$)", fontsize=11)
 ax2.grid(True, linestyle="--", alpha=0.6)
 ax2.legend(loc="upper left", frameon=True)
-plt.savefig("results/diffusion_msd.svg", dpi=300, bbox_inches="tight")
-
-# Plot mean squared displacement vs time
-fig2, ax2 = plt.subplots(figsize=(7*0.7, 5*0.7))
-
-# Generate 1000 evenly spaced points between -4 and 4
-x_g = np.linspace(-6, 6, 1000)
-# Calculate the 1D Gaussian (Probability Density Function)
-y_g = (1 / (sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
-plt.savefig("results/gauss.svg", dpi=300, bbox_inches="tight")
+plt.savefig("plotting/make_figures_paper/results/ECS_diffusion_msd.svg", dpi=300, bbox_inches="tight")

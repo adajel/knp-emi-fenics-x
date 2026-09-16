@@ -76,11 +76,11 @@ def read_mesh(mesh_file):
 
 
 def calculate_volume_ECS(config):
-    """ Solve system (PDEs and ODEs) """
+    """ Calculate the ECS volume inside ROI """
 
     x_L = config['x_L']; x_U = config['x_U'];
-    y_L = config['x_L']; y_U = config['x_U'];
-    z_L = config['x_L']; z_U = config['x_U'];
+    y_L = config['y_L']; y_U = config['y_U'];
+    z_L = config['z_L']; z_U = config['z_U'];
 
     mesh_file = config['mesh_file'] # path to mesh file
     fname = config["fname"]         # directory for saving results
@@ -93,22 +93,81 @@ def calculate_volume_ECS(config):
     x, y, z = SpatialCoordinate(mesh)
 
     # The region of interest is defined by x_U, x_L, y_U, y_L, z_U, z_L)
-    box_condition = And(gt(x, x_L),
-                    And(lt(x, x_U),
-                    And(lt(y, y_U),
-                    And(gt(y, y_L),
-                    And(gt(z, z_L), lt(z, z_U))))))
+    in_box = And(gt(x, x_L),
+             And(lt(x, x_U),
+             And(lt(y, y_U),
+             And(gt(y, y_L),
+             And(gt(z, z_L), lt(z, z_U))))))
 
     # Convert boolean condition into numerical mask (1.0 inside, 0.0 outside)
-    roi_indicator = conditional(box_condition, 1.0, 0.0)
+    roi_indicator = conditional(in_box, 1.0, 0.0)
 
     # Integrate 1.0 over the tagged subdomain and box ROI
     dx = Measure("dx", domain=mesh, subdomain_data=ct)
-    volume_form = dolfinx.fem.form(roi_indicator * dx(0))
 
-    local_volume = dolfinx.fem.assemble_scalar(volume_form)
-    global_volume = mesh.comm.allreduce(local_volume, op=MPI.SUM)*1.0e12
-    print(f"Volume of subdomain ECS inside ROI: {global_volume} um^3")
+    form_ECS = dolfinx.fem.form(roi_indicator * dx(0))
+    form_glia = dolfinx.fem.form(roi_indicator * dx(2))
+    form_neuro = dolfinx.fem.form(roi_indicator * dx(1))
+
+    vol_ECS = dolfinx.fem.assemble_scalar(form_ECS)*1.0e12
+    vol_glia = dolfinx.fem.assemble_scalar(form_glia)*1.0e12
+    vol_neuro = dolfinx.fem.assemble_scalar(form_neuro)*1.0e12
+    vol_tot = vol_ECS + vol_glia + vol_neuro
+
+    print(f"ECS volume in ROI: {vol_ECS} um^3")
+    print(f"Total volume of ROI: {vol_tot} um^3")
+
+    # Strength of source term
+    f_value = config["f_value"]
+    # Frequency of source term (application of source term)
+    period = config["period"]           # repeat every period (frequency)
+    pulse_width = config["pulse_width"] # duration (ms)
+    delay = config["delay"]             # start offset (ms)
+    end_time = config["end_time"]       # turn source term off after end_time (ms)
+
+    # Time variables
+    t = dolfinx.fem.Constant(mesh, 0.0)
+    Tstop = config["Tstop"]
+    dt = 0.1
+
+    # NB! As modulo is not supported by UFL, the source term is defined as a
+    # constant, and updated in the time-loop further down. If the
+    # source term is changed, the time loop further down must also be updated.
+    # To be fixed..
+    source_active = dolfinx.fem.Constant(mesh, 0.0)
+    source_active.value = 1 if (t.value - delay) % period < pulse_width else 0
+
+    # Define when (t) and where (x, y, z) source term is applied. The source
+    # terms is on for 1 ms every 10th ms with a delay of 0.2 ms, i.e. the pulse
+    # is on if: (t >= delay) and ((t - delay) % period < pulse_width). The
+    # source  term is applied in a region of interest defined by x_U, x_L, y_U,
+    # y_L, z_U, z_L)
+    f_condition = And(ge(t, delay),
+                  And(le(t, end_time),
+                  And(gt(x, x_L),
+                  And(lt(x, x_U),
+                  And(lt(y, y_U),
+                  And(gt(y, y_L),
+                  And(gt(z, z_L), lt(z, z_U))))))))
+
+    # Define source term
+    f_source_K = conditional(f_condition, f_value, 0) * source_active
+    form_source = dolfinx.fem.form(f_source_K * dx(0))
+
+    K_injected = 0
+
+    for k in range(int(round(Tstop/float(dt)))):
+        # add contribution from source term
+        K_injected += dolfinx.fem.assemble_scalar(form_source)*dt
+
+        # Update time and source terms
+        t.value = float(t + dt)
+        source_active.value = 1 if (t.value - delay) % period < pulse_width else 0
+
+    print(f"Total K+ injection in ROI: {K_injected} mM")
+
+    return
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

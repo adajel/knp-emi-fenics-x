@@ -9,11 +9,11 @@ c_D3 = "#AE69BF"
 # --- Data ---
 labels = [r'D1', r'D2', r'D3']
 
-vol_a = 5.2
-vol_n = 4
-vol_e = 4.5
-values = [vol_e, vol_a, vol_n]
-percentages = ['5.2', '4', '4.5']
+vol_D1 = 4.8
+vol_D2 = 7.2
+vol_D3 = 1.8
+values = [vol_D1, vol_D2, vol_D3]
+percentages = ['4.8', '7.2', '1.8']
 
 colors = [c_D1, c_D2, c_D3]
 
@@ -30,12 +30,12 @@ bars = ax.bar(x, values, color=colors, width=bar_width, align='edge', edgecolor=
 
 # Add percentage labels above bars
 for bar, pct in zip(bars, percentages):
-    height = bar.get_height()
+    height = bar.get_height() + 0.2
     ax.text(bar.get_x() + bar.get_width()/2, height + 0.001, pct,
             ha='center', va='bottom', fontsize=16)
 
 # --- Styling ---
-ax.set_ylabel(r'$\rm K^{+}$ ions injected (mM)', fontsize=20)
+ax.set_ylabel(r'$\rm K^{+}$ ions injected ($\times 10^{-12}$ mM)', fontsize=20)
 
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
@@ -53,7 +53,7 @@ ax.set_axisbelow(False)
 # Place ticks directly in the center of each edge-aligned bar
 tick_positions = x + (bar_width / 2)
 plt.xticks(tick_positions, labels, fontsize=15)
-plt.yticks([1, 3, 5], fontsize=15)
+plt.yticks([2, 4, 6], fontsize=15)
 ax.tick_params(direction='out', length=10, width=2)
 
 plt.tight_layout()
