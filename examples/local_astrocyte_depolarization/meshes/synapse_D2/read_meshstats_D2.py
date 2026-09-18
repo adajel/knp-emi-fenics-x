@@ -6,6 +6,9 @@ with open(filename) as meshstats:
     print(ms['ecs_share'])
     print("\n")
 
+    # Main glial cell tagged 2 in mesh, tagged 1 below as list start at 0
+    # Other glial cell tagged 3 in mesh, tagged 2 below as list start at 0
+
     surface_astro = ms['cell_surface'][1] + ms['cell_surface'][2]
     vol_astro = ms['cell_volume'][1] + ms['cell_volume'][2]
     surface_neuro = ms['cell_surface'][0] + sum(ms['cell_surface'][3:])

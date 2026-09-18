@@ -3,6 +3,7 @@ mesh_file : 'meshes/synapse_D2/meshes/remarked_mesh_D2.xdmf'
 mesh_name : 'D2'
 fname : "baseline_D2"
 Tstop : 101         # end time (ms)
+dt : 0.1            # time step (ms)
 f_value : 75        # strength of source term
 period: 10          # period source term stimuli
 delay: 1.0          # delay source term stimuli
@@ -17,14 +18,24 @@ y_U : 2900.0e-7     # upper bound y - region in which to apply the source term
 z_L : 2300.0e-7     # lower bound z - region in which to apply the source term
 z_U : 2700.0e-7     # upper bound z - region in which to apply the source term
 # Points in which to plot solution
-x_M : 2544.1823e-07 # point on glial membrane in roi
-y_M : 2740.9954e-07 # point on glial membrane in roi
-z_M : 2506.7745e-07 # point on glial membrane in roi
-x_i : 2503.1380e-07 # point in glial cell in roi
-y_i : 2738.7593e-07 # point in glial cell in roi
-z_i : 2477.0516e-07 # point in glial cell in roi
-x_e : 2509.1536e-07 # point outside glial cell in roi
-y_e : 2692.0499e-07 # point outside glial cell in roi
-z_e : 2512.8644e-07 # point outside glial cell in roi
+x_M : 2561.0e-7     # point on glial membrane in roi
+y_M : 2739.0e-7     # point on glial membrane in roi
+z_M : 2542.0e-7     # point on glial membrane in roi
+x_i : 2561.0e-7     # point in glial cell in roi
+y_i : 2739.0e-7     # point in glial cell in roi
+z_i : 2542.0e-7     # point in glial cell in roi
+x_e : 2502.0e-7     # point outside glial cell in roi
+y_e : 2414.0e-7     # point outside glial cell in roi
+z_e : 2678.0e-7     # point outside glial cell in roi
 c : 2500.0e-7       # center point in domain
 save_frequency : 5  # save solution every 5th time-step
+
+
+
+
+
+
+
+
+
+

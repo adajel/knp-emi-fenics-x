@@ -208,7 +208,7 @@ def solve_system(config):
     # Time variables (PDEs)
     t = dolfinx.fem.Constant(mesh, 0.0)
 
-    dt = 0.1                         # global time step (ms)
+    dt = config["dt"]                # global time step
     Tstop = config["Tstop"]          # ms
     n_steps_ODE = 25                 # number of ODE steps
 

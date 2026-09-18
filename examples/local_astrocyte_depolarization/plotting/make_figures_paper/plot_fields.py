@@ -13,6 +13,9 @@ from mpi4py import MPI
 pyvista.global_theme.allow_empty_mesh = True
 
 c_point = "#00FFFF"
+#c_background = "#311e34ff"
+#c_background = "#DBD5D5"
+c_background = "#FFFFFF"
 
 def get_vw_average(mesh, ARRAY_NAME):
 
@@ -91,6 +94,12 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
     diff_array = grid_glial.point_data["phi_M_2"] - grid_glial_init.point_data["phi_M_2"]
     grid_glial["diff"] = diff_array
 
+    # Remove small islands in plot
+    grid_glial_clean = grid_glial.connectivity(extraction_mode='largest')
+
+    # Show grid for setting range - can be removed!
+    #grid_glial_clean.plot(show_edges=True, scalars="diff")
+
     position_bar=[0.91, 0.27]
     position_text=(0.96, 0.60)
     position_x = position_bar[0]
@@ -108,14 +117,14 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
 
     # Explicit Plotter workflow (to see range)
     plotter = pyvista.Plotter()
-    plotter.add_mesh(grid_glial, scalars="diff", cmap="viridis")
+    plotter.add_mesh(grid_glial_clean, scalars="diff", cmap="viridis")
     #plotter.show()
 
     # Plot glial membrane potential
     p = pyvista.Plotter(window_size=[1000, 800], off_screen=True)
 
     # Add glial membrane potential
-    p.add_mesh(grid_glial,
+    p.add_mesh(grid_glial_clean,
               scalars="diff",
               scalar_bar_args=sargs,
               cmap=cmap_glial,
@@ -130,15 +139,16 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
                line_width=5
     )
 
+
     # Set the camera position and save
-    p.set_background("#311e34ff")
+    p.set_background(c_background)
     p.camera_position = camera_position
     p.camera.zoom(1.25)
     p.screenshot(f"{fname}.png")
     p.close()
 
     # Plot glial potential in roi
-    grid_glial_roi = grid_glial.clip_box(bounds=roi_bounds, invert=False)
+    grid_glial_roi = grid_glial_clean.clip_box(bounds=roi_bounds, invert=False)
     p = pyvista.Plotter(off_screen=True)
 
     # Add membrane potential
@@ -164,7 +174,7 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
     )
 
     # Set the camera position and zoom in and save
-    p.set_background("#311e34ff")
+    p.set_background(c_background)
     p.camera_position = camera_position
     p.camera.zoom(2.5)
     p.screenshot(f"{fname}_roi.png", transparent_background=True)
@@ -173,11 +183,14 @@ def plot_glial_potential(fname, roi_box, roi_bounds, roi_point, ri_grid_glial, \
     return
 
 def plot_ECS_concentration(fname, ion, ECS_bounds, roi_box, origin, grid_ECS, \
-                           grid_ECS_init, custom_labels, cmap, clim):
+                           custom_labels, cmap, clim):
 
     slice_ECS = grid_ECS.slice(normal='x', origin=origin)
     slice_roi_box = roi_box.slice(normal='x', origin=origin)
     clipped_ECS = slice_ECS.clip_box(bounds=ECS_bounds, invert=False)
+
+    # Show grid for setting range - can be removed!
+    #slice_ECS.plot(show_edges=True)
 
     # Explicit Plotter workflow (to see range)
     plotter = pyvista.Plotter()
@@ -231,7 +244,7 @@ def plot_glial_colorbar(fname, clim, custom_labels, cmap_glial, title=r"$\Delta 
     """
     Renders and exports a standalone colorbar for the glial potential plot.
     """
-    # 1. Setup a dedicated canvas size for the colorbar
+    # Setup a dedicated canvas size for the colorbar
     p = pyvista.Plotter(window_size=[200, 700], off_screen=True)
 
     # Configure colorbar arguments
@@ -277,10 +290,10 @@ def plot_ECS_colorbar(fname, ion, custom_labels, cmap, clim):
     """
     Renders and exports a standalone colorbar for the ECS concentration plot.
     """
-    # 1. Setup a dedicated canvas size for the colorbar
+    # Setup a dedicated canvas size for the colorbar
     p = pyvista.Plotter(window_size=[700, 200], off_screen=True)
 
-    # 2. Configure scalar bar arguments (centered layout)
+    # Configure scalar bar arguments (centered layout)
     sargs = dict(
         title="",
         n_labels=0,
@@ -292,7 +305,7 @@ def plot_ECS_colorbar(fname, ion, custom_labels, cmap, clim):
         label_font_size=40,
     )
 
-    # 3. Create a dummy PolyData mesh to bind the colorbar properties
+    # Create a dummy PolyData mesh to bind the colorbar properties
     dummy_mesh = pyvista.PolyData([0.0, 0.0, 0.0])
     dummy_mesh.point_data["c_K_0"] = np.array([clim[0]])
 
@@ -306,7 +319,7 @@ def plot_ECS_colorbar(fname, ion, custom_labels, cmap, clim):
         show_scalar_bar=True
     )
 
-    # 4. Add the ion concentration title matching plot_ECS_concentration
+    # Add the ion concentration title
     p.add_text(
         r"$[$" + f"{ion}" + r"$]_{\rm e}$ (mM)",
         position=(0.4, 0.75),
@@ -314,7 +327,7 @@ def plot_ECS_colorbar(fname, ion, custom_labels, cmap, clim):
         viewport=True
     )
 
-    # 5. Render and export with a transparent background
+    # Save
     p.screenshot(f"{fname}.png", transparent_background=True)
     p.close()
 
@@ -369,8 +382,6 @@ if __name__ == "__main__":
     filename = f"../../{config['mesh_file_original']}"
     mesh_name = config['mesh_name']
 
-    #times = [r't = 92.1 ms', r't = 92.6 ms', r't = 93.1 ms']
-
     dir = f"baseline_{mesh_name}"
 
     # Create directory for plots if it doesn't exist
@@ -381,6 +392,10 @@ if __name__ == "__main__":
     cmap_glial = seaborn.color_palette("rocket", as_cmap=True)
     cmap_ECS_K = seaborn.color_palette("crest", as_cmap=True)
 
+    # Plot ECS K field
+    clim_ECS_K = [4.1, 10.3]
+    custom_labels_ECS_K = {6: "6", 8: "8", 10: "10"}
+
     if mesh_name == "D1":
         # Set camera position for plotting mesh of domain D2
         camera_position = [
@@ -389,12 +404,8 @@ if __name__ == "__main__":
             (-0.0014184291078634015, 0.9999935570161623, -0.0032975725965616793)       # View Up Vector[cite: 2]
         ]
 
-        clim_glial = [5.7, 6.5]
-        custom_labels_glial = {5.8:"5.8", 6.0:"6.0", 6.2:"6.2", 6.4:"6.4"}
-
-        # Plot ECS K field
-        clim_ECS_K = [3.1, 10.1]
-        custom_labels_ECS_K = {4: "4", 6: "6", 8: "8", 10: "10"}
+        clim_glial = [6.1, 6.45]
+        custom_labels_glial = {6.1:"6.1", 6.2:"6.2", 6.3:"6.3", 6.4:"6.4"}
 
     elif mesh_name == "D2":
         # Set camera position for plotting mesh of domain D2
@@ -404,12 +415,8 @@ if __name__ == "__main__":
             (-0.13157707833462606, 0.14758908754156708, -0.9802575853802773)          # View Up[cite: 3]
         ]
 
-        clim_glial = [8.6, 9.4]
-        custom_labels_glial = {8.7:"8.7", 8.9:"8.9", 9.1:"9.1", 9.3:"9.3"}
-
-        # Plot ECS K field
-        clim_ECS_K = [3.1, 10.4]
-        custom_labels_ECS_K = {4: "4", 6: "6", 8: "8", 10: "10"}
+        clim_glial = [8.75, 9.32]
+        custom_labels_glial = {8.8:"8.8", 9.0:"9.0", 9.2:"9.2"}
 
     fname_gc = f"{output_dir}/glial_colorbar"
     plot_glial_colorbar(fname_gc, clim_glial, custom_labels_glial, cmap_glial, title=r"$\Delta \phi_M \rm (mV)$")
@@ -421,23 +428,19 @@ if __name__ == "__main__":
         # Get solution glial membrane potential at time time_index and time 0
         grid_glial = get_grid_field(dir, "results_mem_2", "phi_M_2", time_index)
         grid_glial_init = get_grid_field(dir, "results_mem_2", "phi_M_2", 0)
-        # Remove small islands in plot
-        ri_grid_glial = grid_glial.connectivity(extraction_mode='largest')
-        ri_grid_glial_init = grid_glial_init.connectivity(extraction_mode='largest')
 
         # Plot glial membrane potential
         fname_glial = f"results/{dir}/glial_{i}"
         plot_glial_potential(fname_glial, roi_box, roi_bounds, \
-                roi_point_membrane, ri_grid_glial, ri_grid_glial_init, \
+                roi_point_membrane, grid_glial, grid_glial_init, \
                 clim_glial, custom_labels_glial, camera_position)
 
         # Get solution ECS K+ concentration at time time_index and time 0
         grid_ECS = get_grid_field(dir, "results_sub_0", "c_K_0", time_index)
-        grid_ECS_init = get_grid_field(dir, "results_sub_0", "c_K_0", 0)
 
         fname_ECS = f"results/{dir}/ECS_{i}"
         plot_ECS_concentration(fname_ECS, 'K', ECS_bounds, roi_box, \
-                [x_M, c, c], grid_ECS, grid_ECS_init, custom_labels_ECS_K, 
+                [x_M, c, c], grid_ECS, custom_labels_ECS_K, 
                 cmap_ECS_K, clim_ECS_K)
 
         i += 1
