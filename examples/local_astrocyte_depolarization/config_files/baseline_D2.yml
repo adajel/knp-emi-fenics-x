@@ -24,18 +24,12 @@ z_M : 2542.0e-7     # point on glial membrane in roi
 x_i : 2561.0e-7     # point in glial cell in roi
 y_i : 2739.0e-7     # point in glial cell in roi
 z_i : 2542.0e-7     # point in glial cell in roi
-x_e : 2502.0e-7     # point outside glial cell in roi
-y_e : 2414.0e-7     # point outside glial cell in roi
-z_e : 2678.0e-7     # point outside glial cell in roi
+x_e : 2552.0e-7     # point outside glial cell in roi
+y_e : 2555.0e-7     # point outside glial cell in roi
+z_e : 2526.0e-7     # point outside glial cell in roi
 c : 2500.0e-7       # center point in domain
 save_frequency : 5  # save solution every 5th time-step
-
-
-
-
-
-
-
-
-
-
+tag_glial: 2        # tag main glial cell
+tag_glial_other: 3  # tag other glial cell (optional)
+tag_syn_pre: 4      # tag pre-synaptic neuron
+tag_syn_post: 47    # tag post-synaptic neuron

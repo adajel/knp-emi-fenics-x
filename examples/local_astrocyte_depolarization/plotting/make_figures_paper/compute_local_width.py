@@ -38,7 +38,7 @@ def compute_local_width(mesh, domain_id, labelname="marker", width_bins=None):
     return ecs
 
 def main():
-    datasets = [("D1", 3), ("D2", 3), ("D3", 3)]
+    datasets = [("D1", 3), ("D2", 2), ("D4", 2)]
 
     for dname, glial_id in datasets:
         filename = f"../../meshes/synapse_{dname}/meshes/mesh.xdmf"

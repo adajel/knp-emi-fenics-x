@@ -13,9 +13,9 @@ colors_p3 = [astro_colors[2], neuron_colors[2]]
 # --- Data ---
 labels = ['astro', 'neuron']
 
-pillar_1 = [11.7, 8.6]     # D1
-pillar_2 = [9.9, 10.31]   # D2
-pillar_3 = [10.28, 9.6]    # D3
+pillar_1 = [9.0, 10.4]    # D1 (glial, neuron)
+pillar_2 = [8.6, 11.6]    # D2 (glial, neuron)
+pillar_3 = [13.1, 11.3]   # D3 (glial, neuron)
 
 # --- Spacing Controls ---
 group_spacing = 0.7   # Lower this number to bring the 3 categories closer together

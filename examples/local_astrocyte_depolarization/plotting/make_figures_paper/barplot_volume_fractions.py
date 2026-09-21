@@ -14,9 +14,9 @@ colors_p3 = [ecs_colors[2], astro_colors[2], neuron_colors[2]]
 # --- Data ---
 labels = ['ECS', 'astro', 'neuron']
 
-pillar_1 = [16.5, 11.6, 71.8]        # D1
-pillar_2 = [19.1, 15.6, 65.2]    # D2
-pillar_3 = [18.3, 13.7,  68]     # D3
+pillar_1 = [20.9, 9.8, 69.4]     # D1 (ECS, glial, neuro)
+pillar_2 = [22.5, 11.6, 66]      # D2 (ECS, glial, neuro)
+pillar_3 = [18.9, 5.7,  75.4]    # D3 (ECS, glial, neuro)
 
 # --- Spacing Controls ---
 group_spacing = 0.70  # Lower this number to bring the 3 categories closer together

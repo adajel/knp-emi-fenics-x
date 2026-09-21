@@ -291,17 +291,17 @@ def plot_ECS_colorbar(fname, ion, custom_labels, cmap, clim):
     Renders and exports a standalone colorbar for the ECS concentration plot.
     """
     # Setup a dedicated canvas size for the colorbar
-    p = pyvista.Plotter(window_size=[700, 200], off_screen=True)
+    p = pyvista.Plotter(window_size=[200, 700], off_screen=True)
 
     # Configure scalar bar arguments (centered layout)
     sargs = dict(
         title="",
         n_labels=0,
-        vertical=False,
-        position_x=0.1,
-        position_y=0.4,
-        width=0.85,
-        height=0.7,
+        vertical=True,
+        position_x=0.4,
+        position_y=0.1,
+        width=0.7,
+        height=0.85,
         label_font_size=40,
     )
 
@@ -322,9 +322,10 @@ def plot_ECS_colorbar(fname, ion, custom_labels, cmap, clim):
     # Add the ion concentration title
     p.add_text(
         r"$[$" + f"{ion}" + r"$]_{\rm e}$ (mM)",
-        position=(0.4, 0.75),
+        position=(0.75, 0.65),
         font_size=20,
-        viewport=True
+        viewport=True,
+        orientation=-90,
     )
 
     # Save
@@ -393,8 +394,8 @@ if __name__ == "__main__":
     cmap_ECS_K = seaborn.color_palette("crest", as_cmap=True)
 
     # Plot ECS K field
-    clim_ECS_K = [4.1, 10.3]
-    custom_labels_ECS_K = {6: "6", 8: "8", 10: "10"}
+    clim_ECS_K = [4.0, 10.3]
+    custom_labels_ECS_K = {4: "4", 6: "6", 8: "8", 10: "10"}
 
     if mesh_name == "D1":
         # Set camera position for plotting mesh of domain D2
@@ -405,7 +406,7 @@ if __name__ == "__main__":
         ]
 
         clim_glial = [6.1, 6.45]
-        custom_labels_glial = {6.1:"6.1", 6.2:"6.2", 6.3:"6.3", 6.4:"6.4"}
+        custom_labels_glial = {6.2:"6.2", 6.3:"6.3", 6.4:"6.4"}
 
     elif mesh_name == "D2":
         # Set camera position for plotting mesh of domain D2

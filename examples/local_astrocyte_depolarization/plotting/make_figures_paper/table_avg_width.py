@@ -9,10 +9,10 @@ plt.rcParams.update({
 })
 
 # 2. Define your exact 4 columns and 2 rows
-columns = ["", "D1", "D2", "D2"]
+columns = ["", "D1", "D2", "D3"]
 data = [
-    ["Avg. width ECS (nm)",   "68 (30)"  , "68 (30)"  , "68 (30)"],
-    ["Avg. width glial (nm)", "241 (145)", "241 (145)", "241 (145)"]
+    ["Avg. width ECS (nm)",   "53 (38)"  , "51 (43)"  , "70 (17)"],
+    ["Avg. width glial (nm)", "183 (64)", "247 (105)", "208 (99)"]
 ]
 df = pd.DataFrame(data, columns=columns)
 

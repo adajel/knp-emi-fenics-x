@@ -64,11 +64,11 @@ def print_points(name, points_dict):
         y = round(y)
         z = round(z)
         # where ish we would like to get ECS point from
-        #if (2400 < x < 2600) and (2400 < y < 2600) and (z > 2600):
+        #if (2500 < x < 2600) and (2500 < y < 2600) and (2500 < z < 2600):
         # where ish we would like to get ICS and membrane point from
-        if (2550 < x < 2650) and (2700 < y < 2800) and (2450 < z < 2550):
+        if (2300 < x < 2400) and (2700 < y < 2800) and (2300 < z < 2400):
             print(f"{x} | {y} | {z}")
 
-print_points("Membrane Points (tag 2)", membrane_points)
-print_points("Intracellular Points (tag 2)", intracellular_points)
+#print_points("Membrane Points (tag 2)", membrane_points)
+#print_points("Intracellular Points (tag 2)", intracellular_points)
 print_points("Extracellular Points (tag 0)", extracellular_points)

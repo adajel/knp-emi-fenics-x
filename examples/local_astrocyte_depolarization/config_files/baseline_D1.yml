@@ -18,17 +18,21 @@ y_U : 2900.0e-7     # upper bound y - region in which to apply the source term
 z_L : 2300.0e-7     # lower bound z - region in which to apply the source term
 z_U : 2700.0e-7     # upper bound z - region in which to apply the source term
 # Points in which to plot solution
-x_M : 2248.0e-7     # point on glial membrane in roi
-y_M : 2785.0e-7     # point on glial membrane in roi
-z_M : 2586.0e-7     # point on glial membrane in roi
-x_i : 2248.0e-7     # point in glial cell in roi
-y_i : 2785.0e-7     # point in glial cell in roi
-z_i : 2586.0e-7     # point in glial cell in roi
+x_M : 2390.0e-7     # point on glial membrane in roi
+y_M : 2775.0e-7     # point on glial membrane in roi
+z_M : 2340.0e-7     # point on glial membrane in roi
+x_i : 2390.0e-7     # point in glial cell in roi
+y_i : 2776.0e-7     # point in glial cell in roi
+z_i : 2340.0e-7     # point in glial cell in roi
 x_e : 2429.0e-7     # point outside glial cell in roi
 y_e : 2575.0e-7     # point outside glial cell in roi
 z_e : 2445.0e-7     # point outside glial cell in roi
 c : 2500.0e-7       # center point in domain
 save_frequency : 5  # save solution every 5th time-step
+tag_glial: 3        # tag main glial cell
+tag_glial_other: 4  # tag other glial cell (optional)
+tag_syn_pre: 5      # tag pre-synaptic neuron
+tag_syn_post: 41    # tag post-synaptic neuron
 
 
 

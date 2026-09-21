@@ -1,6 +1,8 @@
 import pyvista
 import numpy as np
 import meshio
+import argparse
+import yaml
 
 c_ECS = "#4e5f70"
 c_neuron = "#16a085"
@@ -9,20 +11,8 @@ c_synapse_1 = "#00ff00"
 c_synapse_2 = "#e1fae1"
 c_point = "#ffff00"
 
-x_L = 2000; x_U = 3000
-y_L = 2000; y_U = 3000
-z_L = 2200; z_U = 2600
-
-roi_bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
-roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
-
-# Coordinates of point
-x_M = 2608
-y_M = 2859
-z_M = 2184
-
-# Center point in domain
-c = 2500.0
+# Allow plotting empty meshes
+pyvista.global_theme.allow_empty_mesh = True
 
 def get_grid(filename, mesh_tags):
 
@@ -35,37 +25,37 @@ def get_grid(filename, mesh_tags):
 
     return subdomain_grid
 
-def print_vw_avg(mesh, box_bounds=None):
+def print_avg(mesh, box_bounds, label):
+    """ Print avg of local width """
 
     scalar_name = 'local_width'
 
-    # Apply box clip if bounds are provided
-    if box_bounds is not None:
-        working_mesh = mesh.clip_box(bounds=box_bounds, invert=False)
-    else:
-        working_mesh = mesh.copy()
+    working_mesh_roi = mesh.clip_box(bounds=box_bounds, invert=False)
+    working_mesh_global = mesh.copy()
 
-    # Ensure data is mapped onto cells (elements) for volume weighting
-    if scalar_name in working_mesh.point_data:
-        working_mesh = working_mesh.point_data_to_cell_data()
+    true_spatial_average = []
 
-    # Compute cell sizes explicitly
-    mesh_with_sizes = working_mesh.compute_cell_sizes()
+    for working_mesh in [working_mesh_global, working_mesh_roi]:
 
-    # Extract arrays and enforce positive volumes using np.abs()
-    volumes = np.abs(mesh_with_sizes.cell_data['Volume'])
-    scalars = mesh_with_sizes.cell_data[scalar_name]
+        # Ensure data is mapped onto cells (elements) for volume weighting
+        if scalar_name in working_mesh.point_data:
+            working_mesh = working_mesh.point_data_to_cell_data()
 
-    # Final math
-    true_total_volume = np.sum(volumes)
-    true_spatial_average = np.sum(scalars * volumes) / true_total_volume
+        # Compute cell sizes explicitly
+        mesh_with_sizes = working_mesh.compute_cell_sizes()
 
-    print("------")
-    print(f"Calculated Volume : {true_total_volume:.4f}")
-    print(f"Spatial Average   : {true_spatial_average:.4f}")
+        # Extract arrays and enforce positive volumes using np.abs()
+        volumes = np.abs(mesh_with_sizes.cell_data['Volume'])
+        scalars = mesh_with_sizes.cell_data[scalar_name]
+
+        # Final math
+        true_total_volume = np.sum(volumes)
+        true_spatial_average.append(np.sum(scalars * volumes) / true_total_volume)
+
+    formatted_label = f"{label:<18}"
+    print(f"{formatted_label} {true_spatial_average[0]:.0f} ({true_spatial_average[1]:.0f}) nm")
 
     return
-
 
 def plot_local_width_ECS(mesh_name, x, clim, origin, camera_position, grid_syn_1, grid_syn_2, grid_ECS_width):
 
@@ -251,30 +241,71 @@ def plot_local_width_glial(mesh_name, x, clim, origin, camera_position, grid_gli
     p.screenshot(f"results/local_width_glial_roi_{mesh_name}.png", transparent_background=True)
     p.close()
 
-# Plot D1
-filename = f"../../meshes/synapse_D1/meshes/mesh.xdmf"
-mesh_name = 'D1'
-grid_ECS = get_grid(filename, [1, 1])
-grid_glial = get_grid (filename, [3, 3]) + get_grid (filename, [4, 4])
-grid_syn_1 = get_grid (filename, [5, 5])
-grid_syn_2 = get_grid (filename, [39, 39])
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-c",
+        metavar="config.yml",
+        help="path to config file",
+        type=str,
+    )
+    conf_arg = vars(parser.parse_args())
+    config_file_path = conf_arg["c"]
 
-# get grids for remaining neurons and add them together to one grid
-grid_neuron = get_grid(filename, [2, 2]) \
-            + get_grid(filename, [6, 38]) \
-            + get_grid(filename, [40, 90])
+    with open(f"../../config_files/{config_file_path}.yml") as conf_file:
+        config = yaml.load(conf_file, Loader=yaml.FullLoader)
 
-# Read and plot local width ECS
-grid_ECS_width = pyvista.read('results/ecs_D1.vtk')
-clim=[10, 250]
-plot_local_width_ECS(mesh_name, 'x', clim, [x_M, c, c], "yz", grid_syn_1, grid_syn_2, grid_ECS_width)
+    # Get ROI
+    x_L = config["x_L"]*1.0e7; x_U = config["x_U"]*1.0e7
+    y_L = config["y_L"]*1.0e7; y_U = config["y_U"]*1.0e7
+    z_L = config["z_L"]*1.0e7; z_U = config["z_U"]*1.0e7
 
-# Read and plot local width glial
-grid_glial_width = pyvista.read('results/glial_D1.vtk')
-clim=[20, 370]
-plot_local_width_glial(mesh_name, 'z', clim, [c, c, z_M], "xy", grid_glial_width)
+    # Define ROI bounds and box
+    roi_box = pyvista.Box(bounds=(x_L, x_U, y_L, y_U, z_L, z_U))
+    roi_bounds = [x_L, x_U, y_L, y_U, z_L, z_U]
 
-print_vw_avg(grid_glial_width)
-print_vw_avg(grid_glial_width, roi_bounds)
-print_vw_avg(grid_ECS_width)
-print_vw_avg(grid_ECS_width, roi_bounds)
+    # Get membrane point for plotting
+    x_M = config["x_M"]*1.0e7
+    y_M = config["y_M"]*1.0e7
+    z_M = config["z_M"]*1.0e7
+    # Get center point (c,c,c)
+    c = config["c"]*1.0e7
+
+    # get filename and mesh name
+    filename = f"../../{config['mesh_file_original']}"
+    mesh_name = config['mesh_name']
+
+    # Get cell tags
+    tag_glial = config['tag_glial']
+    tag_glial_other = config['tag_glial_other']
+    tag_syn_pre = config['tag_syn_pre']
+    tag_syn_post = config['tag_syn_post']
+
+    grid_ECS = get_grid(filename, [1, 1])
+    grid_glial = get_grid (filename, [tag_glial, tag_glial]) + get_grid (filename, [tag_glial_other, tag_glial_other])
+    grid_syn_1 = get_grid (filename, [tag_syn_pre, tag_syn_pre])
+    grid_syn_2 = get_grid (filename, [tag_syn_post, tag_syn_post])
+
+    # Find all other tags (e.g. tags for remaining neurons)
+    full_range = set(range(2, 91))
+    tags_neurons = sorted(full_range - set([tag_glial, tag_glial_other, tag_syn_pre, tag_syn_post]))
+
+    # get grids for remaining neurons and add them together to one grid
+    grid_neuron = get_grid(filename, [tags_neurons[0], tags_neurons[0]])
+    for tag in tags_neurons[1:]:
+        grid_neuron += get_grid(filename, [tag, tag])
+
+    # Read and plot local width ECS
+    grid_ECS_width = pyvista.read(f'results/ecs_{mesh_name}.vtk')
+    clim=[10, 250]
+    plot_local_width_ECS(mesh_name, 'x', clim, [x_M, c, c], "yz", grid_syn_1, grid_syn_2, grid_ECS_width)
+
+    # Read and plot local width glial
+    grid_glial_width = pyvista.read(f'results/glial_{mesh_name}.vtk')
+    clim=[20, 370]
+    plot_local_width_glial(mesh_name, 'z', clim, [c, c, z_M], "xy", grid_glial_width)
+
+    print(f"Local width averages for mesh {mesh_name}:")
+    print("---------------------------------")
+    print_avg(grid_glial_width, roi_bounds, "Avg. glial:")
+    print_avg(grid_ECS_width, roi_bounds, "Avg. ECS:")
